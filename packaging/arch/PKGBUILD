@@ -1,0 +1,20 @@
+# Licensed under the Apache License, Version 2.0 (ObiWindu <Obi.wandu@proton.me>)
+pkgname=graalmail
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Mail client for Gmail, Outlook, Yahoo, Proton Mail and IMAP"
+arch=('x86_64')
+url="https://github.com/graalmail/graalmail"
+license=('MIT')
+depends=('java-runtime>=21')
+source=("graalmail-${pkgver}.tar.gz")
+sha256sums=('SKIP')
+
+package() {
+  install -d "$pkgdir/opt/graalmail"
+  cp -r "$srcdir"/* "$pkgdir/opt/graalmail/"
+  install -Dm644 "$srcdir/../graalmail.desktop" "$pkgdir/usr/share/applications/graalmail.desktop"
+  install -Dm644 "$srcdir/../graalmail.png" "$pkgdir/usr/share/icons/hicolor/256x256/apps/graalmail.png"
+  install -d "$pkgdir/usr/bin"
+  ln -s /opt/graalmail/bin/graalmail "$pkgdir/usr/bin/graalmail"
+}

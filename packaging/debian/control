@@ -1,0 +1,9 @@
+# Licensed under the Apache License, Version 2.0 (ObiWindu <Obi.wandu@proton.me>)
+Package: graalmail
+Version: 0.1.0
+Section: mail
+Priority: optional
+Architecture: amd64
+Depends: openjdk-21-jre | default-jre
+Maintainer: ObiWindu <Obi.wandu@proton.me>
+Description: Mail client for Gmail, Outlook, Yahoo, Proton Mail and IMAP
