@@ -10,7 +10,7 @@ import java.util.Map;
 /** Creates and migrates the local database schema. */
 public final class SqlSchema {
 
-    public static final int VERSION = 3;
+    public static final int VERSION = 4;
 
     private SqlSchema() {
     }
@@ -33,6 +33,12 @@ public final class SqlSchema {
         }
         if (current < 3) {
             migrateToVersion3(db);
+            db.update("DELETE FROM schema_version");
+            db.update("INSERT INTO schema_version (version) VALUES (?)", 3);
+            current = 3;
+        }
+        if (current < 4) {
+            migrateToVersion4(db);
             db.update("DELETE FROM schema_version");
             db.update("INSERT INTO schema_version (version) VALUES (?)", VERSION);
         }
@@ -100,6 +106,17 @@ public final class SqlSchema {
         } catch (RuntimeException ignored) {}
         try {
             db.execute("ALTER TABLE folders ADD COLUMN sync_state TEXT NOT NULL DEFAULT 'NEVER'");
+        } catch (RuntimeException ignored) {}
+    }
+
+    private static void migrateToVersion4(SqlDatabase db) {
+        // Add local drafts table for autosave/recovery
+        try {
+            db.execute("CREATE TABLE IF NOT EXISTS local_drafts ("
+                    + "id TEXT PRIMARY KEY, account_id TEXT NOT NULL, folder_id TEXT NOT NULL, "
+                    + "draft_json TEXT NOT NULL, updated_at INTEGER NOT NULL, "
+                    + "is_recovered INTEGER NOT NULL DEFAULT 0)");
+            db.execute("CREATE INDEX IF NOT EXISTS idx_drafts_account ON local_drafts (account_id)");
         } catch (RuntimeException ignored) {}
     }
 }

@@ -53,4 +53,17 @@
         android:contentDescription="@string/compose_title"
         android:src="@drawable/ic_mail" />
 
+    <androidx.appcompat.widget.ActionBarContainer
+        android:id="@+id/action_mode_bar"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:background="?attr/colorPrimary"
+        android:visibility="gone">
+
+        <androidx.appcompat.widget.ActionBarContextView
+            android:id="@+id/action_mode"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+    </androidx.appcompat.widget.ActionBarContainer>
+
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

@@ -58,4 +58,17 @@ public final class TextTools {
     public static String lower(Locale locale, String value) {
         return value == null ? "" : value.toLowerCase(locale);
     }
+
+    /**
+     * Formats a byte count as a human-readable string.
+     */
+    public static String formatBytes(long bytes) {
+        if (bytes < 1024) {
+            return bytes + " B";
+        }
+        int exp = (int) (Math.log(bytes) / Math.log(1024));
+        String unit = "KMGTPE".charAt(exp - 1) + "B";
+        double value = bytes / Math.pow(1024, exp);
+        return String.format("%.1f %s", value, unit);
+    }
 }

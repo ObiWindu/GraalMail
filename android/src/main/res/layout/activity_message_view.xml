@@ -58,18 +58,20 @@
                 android:layout_height="wrap_content"
                 android:textIsSelectable="true" />
 
-            <TextView
+            <LinearLayout
                 android:id="@+id/view_attachments"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
-                android:visibility="gone" />
+                android:orientation="vertical"
+                android:visibility="gone">
 
-            <TextView
-                android:id="@+id/view_attachment_count"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:visibility="gone" />
+                <TextView
+                    android:id="@+id/view_attachment_count"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:visibility="gone" />
+            </LinearLayout>
         </LinearLayout>
     </ScrollView>
 

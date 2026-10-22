@@ -57,6 +57,11 @@
             android:parentActivityName=".ui.SettingsActivity" />
 
         <activity
+            android:name=".ui.UnifiedInboxActivity"
+            android:exported="false"
+            android:parentActivityName=".ui.MailboxListActivity" />
+
+        <activity
             android:name=".ui.OAuthRedirectActivity"
             android:exported="true"
             android:launchMode="singleTask"

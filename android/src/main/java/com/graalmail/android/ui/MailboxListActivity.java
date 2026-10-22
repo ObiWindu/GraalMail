@@ -23,6 +23,7 @@ import com.graalmail.android.R;
 import com.graalmail.android.notify.NotificationHelper;
 import com.graalmail.core.domain.Account;
 import com.graalmail.core.domain.Folder;
+import com.graalmail.core.domain.FolderType;
 import com.graalmail.core.util.Log;
 import com.graalmail.sync.SyncReport;
 
@@ -104,6 +105,12 @@ public final class MailboxListActivity extends AppCompatActivity implements Fold
 
     private void reload() {
         List<Account> accounts = context.store().listAccounts();
+        
+        // Add unified inbox entry if there are multiple accounts with inboxes
+        if (accounts.size() > 1) {
+            // We'll handle this in the adapter
+        }
+        
         adapter.submit(accounts, (account, accountId) -> context.store().listFolders(accountId));
         boolean empty = accounts.isEmpty();
         emptyView.setVisibility(empty ? View.VISIBLE : View.GONE);
@@ -146,10 +153,16 @@ public final class MailboxListActivity extends AppCompatActivity implements Fold
 
     @Override
     public void onFolderSelected(Account account, Folder folder) {
-        Intent intent = new Intent(this, MessageListActivity.class);
-        intent.putExtra(MessageListActivity.EXTRA_ACCOUNT_ID, account.id());
-        intent.putExtra(MessageListActivity.EXTRA_FOLDER_ID, folder.id());
-        intent.putExtra(MessageListActivity.EXTRA_FOLDER_NAME, folder.name());
-        startActivity(intent);
+        if (folder.type() == FolderType.UNIFIED_INBOX) {
+            // Open unified inbox - show messages from all account inboxes
+            Intent intent = new Intent(this, UnifiedInboxActivity.class);
+            startActivity(intent);
+        } else {
+            Intent intent = new Intent(this, MessageListActivity.class);
+            intent.putExtra(MessageListActivity.EXTRA_ACCOUNT_ID, account.id());
+            intent.putExtra(MessageListActivity.EXTRA_FOLDER_ID, folder.id());
+            intent.putExtra(MessageListActivity.EXTRA_FOLDER_NAME, folder.name());
+            startActivity(intent);
+        }
     }
 }

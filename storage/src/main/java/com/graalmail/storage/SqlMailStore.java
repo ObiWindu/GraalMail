@@ -7,6 +7,7 @@ package com.graalmail.storage;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.graalmail.core.domain.Account;
+import com.graalmail.core.domain.LocalDraft;
 import com.graalmail.core.domain.Address;
 import com.graalmail.core.domain.Attachment;
 import com.graalmail.core.domain.Folder;
@@ -323,8 +324,47 @@ public final class SqlMailStore implements MailStore {
     }
 
     @Override
+    public void saveLocalDraft(LocalDraft draft) {
+        db.update("INSERT INTO local_drafts (id, account_id, folder_id, draft_json, updated_at, is_recovered) "
+                + "VALUES (?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET "
+                + "account_id=excluded.account_id, folder_id=excluded.folder_id, "
+                + "draft_json=excluded.draft_json, updated_at=excluded.updated_at, "
+                + "is_recovered=excluded.is_recovered",
+                draft.id(), draft.accountId(), draft.folderId(), draft.draftJson(),
+                draft.updatedAt(), draft.recovered() ? 1 : 0);
+    }
+
+    @Override
+    public Optional<LocalDraft> getLocalDraft(String accountId) {
+        List<Map<String, Object>> rows = db.query(
+                "SELECT * FROM local_drafts WHERE account_id = ? ORDER BY updated_at DESC LIMIT 1", accountId);
+        return rows.isEmpty() ? Optional.empty() : Optional.of(toLocalDraft(rows.get(0)));
+    }
+
+    @Override
+    public void deleteLocalDraft(String draftId) {
+        db.update("DELETE FROM local_drafts WHERE id = ?", draftId);
+    }
+
+    @Override
+    public List<LocalDraft> listRecoveredDrafts() {
+        List<Map<String, Object>> rows = db.query(
+                "SELECT * FROM local_drafts WHERE is_recovered = 1 ORDER BY updated_at DESC");
+        List<LocalDraft> drafts = new ArrayList<>();
+        for (Map<String, Object> row : rows) {
+            drafts.add(toLocalDraft(row));
+        }
+        return drafts;
+    }
+
+    @Override
     public void close() {
         db.close();
+    }
+
+    private LocalDraft toLocalDraft(Map<String, Object> row) {
+        return new LocalDraft(str(row, "id"), str(row, "account_id"), str(row, "folder_id"),
+                str(row, "draft_json"), number(row, "updated_at"), number(row, "is_recovered") != 0);
     }
 
     private Account toAccount(Map<String, Object> row) {

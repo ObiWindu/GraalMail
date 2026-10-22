@@ -24,9 +24,22 @@
             android:textAppearance="@style/TextAppearance.GraalMail.Subject" />
 
         <TextView
+            android:id="@+id/message_account_badge"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:background="@drawable/account_badge"
+            android:paddingHorizontal="6dp"
+            android:paddingVertical="2dp"
+            android:textAppearance="@style/TextAppearance.GraalMail.Caption"
+            android:textColor="@android:color/white"
+            android:visibility="gone" />
+
+        <TextView
             android:id="@+id/message_date"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
             android:textAppearance="@style/TextAppearance.GraalMail.Snippet" />
     </LinearLayout>
 

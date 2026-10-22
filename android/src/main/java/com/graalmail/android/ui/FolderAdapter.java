@@ -15,6 +15,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.graalmail.android.R;
 import com.graalmail.core.domain.Account;
 import com.graalmail.core.domain.Folder;
+import com.graalmail.core.domain.FolderType;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -29,6 +30,8 @@ public final class FolderAdapter extends RecyclerView.Adapter<RecyclerView.ViewH
 
     /** The kind of a row in the list. */
     public enum Kind {
+        /** The unified inbox entry. */
+        UNIFIED_INBOX,
         /** The header of an account. */
         ACCOUNT,
         /** A mailbox of an account. */
@@ -71,11 +74,13 @@ public final class FolderAdapter extends RecyclerView.Adapter<RecyclerView.ViewH
         void onFolderSelected(Account account, Folder folder);
     }
 
+    private static final int TYPE_UNIFIED_INBOX = 0;
     private static final int TYPE_ACCOUNT = 1;
     private static final int TYPE_FOLDER = 2;
 
     private final List<Entry> entries = new ArrayList<>();
     private final OnFolderSelected listener;
+    private boolean showUnifiedInbox;
 
     /**
      * Creates the adapter.
@@ -93,6 +98,14 @@ public final class FolderAdapter extends RecyclerView.Adapter<RecyclerView.ViewH
      */
     public void submit(List<Account> accounts, java.util.function.BiFunction<Account, String, List<Folder>> folders) {
         entries.clear();
+        showUnifiedInbox = accounts.size() > 1;
+
+        if (showUnifiedInbox) {
+            // Add unified inbox entry
+            entries.add(new Entry(Kind.UNIFIED_INBOX, null,
+                    new Folder("unified_inbox", "Unified Inbox", "", FolderType.UNIFIED_INBOX, 0, 0, true, false, "")));
+        }
+
         for (Account account : accounts) {
             entries.add(new Entry(Kind.ACCOUNT, account, null));
             for (Folder folder : folders.apply(account, account.id())) {
@@ -104,14 +117,22 @@ public final class FolderAdapter extends RecyclerView.Adapter<RecyclerView.ViewH
 
     @Override
     public int getItemViewType(int position) {
-        return entries.get(position).kind() == Kind.ACCOUNT ? TYPE_ACCOUNT : TYPE_FOLDER;
+        Entry entry = entries.get(position);
+        switch (entry.kind()) {
+            case UNIFIED_INBOX: return TYPE_UNIFIED_INBOX;
+            case ACCOUNT: return TYPE_ACCOUNT;
+            case FOLDER: return TYPE_FOLDER;
+            default: return TYPE_FOLDER;
+        }
     }
 
     @NonNull
     @Override
     public RecyclerView.ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
         LayoutInflater inflater = LayoutInflater.from(parent.getContext());
-        if (viewType == TYPE_ACCOUNT) {
+        if (viewType == TYPE_UNIFIED_INBOX) {
+            return new UnifiedInboxHolder(inflater.inflate(R.layout.item_unified_inbox, parent, false));
+        } else if (viewType == TYPE_ACCOUNT) {
             return new AccountHolder(inflater.inflate(R.layout.item_account, parent, false));
         }
         return new FolderHolder(inflater.inflate(R.layout.item_folder, parent, false));
@@ -120,7 +141,9 @@ public final class FolderAdapter extends RecyclerView.Adapter<RecyclerView.ViewH
     @Override
     public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position) {
         Entry entry = entries.get(position);
-        if (holder instanceof AccountHolder accountHolder) {
+        if (holder instanceof UnifiedInboxHolder unifiedHolder) {
+            unifiedHolder.bind(listener);
+        } else if (holder instanceof AccountHolder accountHolder) {
             accountHolder.bind(entry.account());
         } else if (holder instanceof FolderHolder folderHolder) {
             folderHolder.bind(entry.account(), entry.folder(), listener);
@@ -130,6 +153,31 @@ public final class FolderAdapter extends RecyclerView.Adapter<RecyclerView.ViewH
     @Override
     public int getItemCount() {
         return entries.size();
+    }
+
+    /** Shows the unified inbox entry. */
+    static final class UnifiedInboxHolder extends RecyclerView.ViewHolder {
+        private final TextView name;
+        private final TextView count;
+
+        UnifiedInboxHolder(View view) {
+            super(view);
+            name = view.findViewById(R.id.folder_name);
+            count = view.findViewById(R.id.folder_count);
+        }
+
+        void bind(OnFolderSelected listener) {
+            name.setText("Unified Inbox");
+            count.setText("");
+            itemView.setOnClickListener(view -> {
+                if (listener != null) {
+                    // Create a special unified inbox folder and account
+                    listener.onFolderSelected(
+                            Account.builder("unified", "unified").email("Unified").build(),
+                            Folder.of("unified_inbox", "Unified Inbox", FolderType.UNIFIED_INBOX));
+                }
+            });
+        }
     }
 
     /** Shows the account in the header row. */

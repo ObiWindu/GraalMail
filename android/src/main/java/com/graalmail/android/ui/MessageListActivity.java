@@ -7,12 +7,17 @@ package com.graalmail.android.ui;
 import android.content.Intent;
 import android.os.Bundle;
 import android.view.LayoutInflater;
+import android.view.Menu;
+import android.view.MenuInflater;
+import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.view.ActionMode;
 import androidx.appcompat.widget.SearchView;
 import androidx.appcompat.widget.Toolbar;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -52,6 +57,8 @@ public final class MessageListActivity extends AppCompatActivity {
     private String folderId;
     private MessageAdapter adapter;
     private TextView emptyView;
+    private androidx.appcompat.view.ActionMode actionMode;
+    private final List<Message> selectedMessages = new ArrayList<>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -69,7 +76,13 @@ public final class MessageListActivity extends AppCompatActivity {
         if (getSupportActionBar() != null) {
             getSupportActionBar().setDisplayHomeAsUpEnabled(true);
         }
-        toolbar.setNavigationOnClickListener(view -> finish());
+        toolbar.setNavigationOnClickListener(view -> {
+            if (actionMode != null) {
+                actionMode.finish();
+            } else {
+                finish();
+            }
+        });
 
         SearchView searchView = findViewById(R.id.search_view);
         searchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
@@ -95,7 +108,7 @@ public final class MessageListActivity extends AppCompatActivity {
 
         RecyclerView list = findViewById(R.id.message_list);
         list.setLayoutManager(new LinearLayoutManager(this));
-        adapter = new MessageAdapter(this::openMessage);
+        adapter = new MessageAdapter(this::openMessage, this::onMessageLongClick);
         list.setAdapter(adapter);
         emptyView = findViewById(R.id.message_empty);
 
@@ -132,16 +145,124 @@ public final class MessageListActivity extends AppCompatActivity {
     }
 
     private void openMessage(Message message) {
-        Intent intent = new Intent(this, MessageViewActivity.class);
-        intent.putExtra(MessageViewActivity.EXTRA_ACCOUNT_ID, accountId);
-        intent.putExtra(MessageViewActivity.EXTRA_MESSAGE_ID, message.id());
-        startActivity(intent);
+        if (actionMode != null) {
+            toggleSelection(message);
+        } else {
+            Intent intent = new Intent(this, MessageViewActivity.class);
+            intent.putExtra(MessageViewActivity.EXTRA_ACCOUNT_ID, accountId);
+            intent.putExtra(MessageViewActivity.EXTRA_MESSAGE_ID, message.id());
+            startActivity(intent);
+        }
+    }
+
+    private void onMessageLongClick(Message message) {
+        if (actionMode == null) {
+            actionMode = startSupportActionMode(new ActionModeCallback());
+        }
+        toggleSelection(message);
+    }
+
+    private void toggleSelection(Message message) {
+        if (selectedMessages.contains(message)) {
+            selectedMessages.remove(message);
+        } else {
+            selectedMessages.add(message);
+        }
+        adapter.notifyDataSetChanged();
+        updateActionModeTitle();
+        
+        if (selectedMessages.isEmpty() && actionMode != null) {
+            actionMode.finish();
+        }
+    }
+
+    private void updateActionModeTitle() {
+        if (actionMode != null) {
+            actionMode.setTitle(selectedMessages.size() + " " + getString(R.string.message_list_selection_count));
+        }
     }
 
     private void compose() {
         Intent intent = new Intent(this, ComposeActivity.class);
         intent.putExtra(ComposeActivity.EXTRA_ACCOUNT_ID, accountId);
         startActivity(intent);
+    }
+
+    private class ActionModeCallback implements androidx.appcompat.view.ActionMode.Callback {
+        @Override
+        public boolean onCreateActionMode(ActionMode mode, Menu menu) {
+            MenuInflater inflater = mode.getMenuInflater();
+            inflater.inflate(R.menu.message_list_context, menu);
+            return true;
+        }
+
+        @Override
+        public boolean onPrepareActionMode(ActionMode mode, Menu menu) {
+            return false;
+        }
+
+        @Override
+        public boolean onActionItemClicked(ActionMode mode, MenuItem item) {
+            int id = item.getItemId();
+            if (id == R.id.action_delete) {
+                deleteSelected();
+                mode.finish();
+                return true;
+            } else if (id == R.id.action_archive) {
+                archiveSelected();
+                mode.finish();
+                return true;
+            } else if (id == R.id.action_mark_read) {
+                markSelectedAsRead(true);
+                mode.finish();
+                return true;
+            } else if (id == R.id.action_mark_unread) {
+                markSelectedAsRead(false);
+                mode.finish();
+                return true;
+            } else if (id == R.id.action_select_all) {
+                selectAll();
+                return true;
+            }
+            return false;
+        }
+
+        @Override
+        public void onDestroyActionMode(ActionMode mode) {
+            actionMode = null;
+            selectedMessages.clear();
+            adapter.notifyDataSetChanged();
+        }
+    }
+
+    private void deleteSelected() {
+        for (Message message : selectedMessages) {
+            context.store().deleteMessage(message.id());
+        }
+        load();
+        Toast.makeText(this, selectedMessages.size() + " messages deleted", Toast.LENGTH_SHORT).show();
+    }
+
+    private void archiveSelected() {
+        // Move to archive folder - implementation depends on provider
+        Toast.makeText(this, "Archive not yet implemented", Toast.LENGTH_SHORT).show();
+    }
+
+    private void markSelectedAsRead(boolean read) {
+        for (Message message : selectedMessages) {
+            context.store().updateFlags(message.id(), !read, message.flagged());
+        }
+        load();
+        Toast.makeText(this, selectedMessages.size() + " messages marked as " + (read ? "read" : "unread"), Toast.LENGTH_SHORT).show();
+    }
+
+    private void selectAll() {
+        // For now, select all visible messages
+        List<Message> allMessages = adapter.getMessages();
+        selectedMessages.clear();
+        selectedMessages.addAll(allMessages);
+        adapter.notifyDataSetChanged();
+        updateActionModeTitle();
     }
 
     /**
@@ -151,14 +272,26 @@ public final class MessageListActivity extends AppCompatActivity {
 
         private final List<Message> messages = new ArrayList<>();
         private final OnMessageSelected listener;
+        private final OnMessageLongClick longClickListener;
+        private List<Message> selectedMessages = new ArrayList<>();
 
-        MessageAdapter(OnMessageSelected listener) {
+        MessageAdapter(OnMessageSelected listener, OnMessageLongClick longClickListener) {
             this.listener = listener;
+            this.longClickListener = longClickListener;
         }
 
         void submit(List<Message> values) {
             messages.clear();
             messages.addAll(values);
+            notifyDataSetChanged();
+        }
+
+        List<Message> getMessages() {
+            return new ArrayList<>(messages);
+        }
+
+        void setSelectedMessages(List<Message> selected) {
+            this.selectedMessages = selected;
             notifyDataSetChanged();
         }
 
@@ -172,7 +305,7 @@ public final class MessageListActivity extends AppCompatActivity {
 
         @Override
         public void onBindViewHolder(@NonNull Holder holder, int position) {
-            holder.bind(messages.get(position), listener);
+            holder.bind(messages.get(position), selectedMessages, listener, longClickListener);
         }
 
         @Override
@@ -183,6 +316,11 @@ public final class MessageListActivity extends AppCompatActivity {
         /** The callback that is called when a message is opened. */
         interface OnMessageSelected {
             void onMessageSelected(Message message);
+        }
+
+        /** The callback that is called when a message is long-clicked. */
+        interface OnMessageLongClick {
+            void onMessageLongClick(Message message);
         }
 
         /** One row of the list. */
@@ -200,7 +338,9 @@ public final class MessageListActivity extends AppCompatActivity {
                 date = view.findViewById(R.id.message_date);
             }
 
-            void bind(Message message, OnMessageSelected listener) {
+            void bind(Message message, List<Message> selected, OnMessageSelected listener,
+                      OnMessageLongClick longClickListener) {
+                boolean isSelected = selected.contains(message);
                 sender.setText(message.from().displayLabel());
                 subject.setText(message.subject());
                 snippet.setText(TextTools.snippet(
@@ -208,10 +348,25 @@ public final class MessageListActivity extends AppCompatActivity {
                 date.setText(message.date() == null ? "" : message.date().toString());
                 subject.setTypeface(null, message.unread()
                         ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
+                itemView.setActivated(isSelected);
+                itemView.setBackgroundColor(isSelected 
+                        ? itemView.getContext().getColor(android.R.color.holo_blue_light) 
+                        : itemView.getContext().getColor(android.R.color.transparent));
+                
                 itemView.setOnClickListener(view -> {
-                    if (listener != null) {
+                    if (isSelected) {
+                        // In selection mode, just toggle
+                    } else if (listener != null) {
                         listener.onMessageSelected(message);
                     }
+                });
+                
+                itemView.setOnLongClickListener(view -> {
+                    if (longClickListener != null) {
+                        longClickListener.onMessageLongClick(message);
+                        return true;
+                    }
+                    return false;
                 });
             }
         }

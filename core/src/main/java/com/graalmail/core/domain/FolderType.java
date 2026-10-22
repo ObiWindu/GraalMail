@@ -14,6 +14,7 @@ public enum FolderType {
     ARCHIVE,
     OUTBOX,
     ALL,
+    UNIFIED_INBOX,
     CUSTOM;
 
     public boolean isSystem() {

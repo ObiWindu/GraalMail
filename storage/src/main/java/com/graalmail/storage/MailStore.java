@@ -5,6 +5,7 @@
 package com.graalmail.storage;
 
 import com.graalmail.core.domain.Account;
+import com.graalmail.core.domain.LocalDraft;
 import com.graalmail.core.domain.Folder;
 import com.graalmail.core.domain.Message;
 import com.graalmail.core.domain.MessageListPage;
@@ -66,6 +67,18 @@ public interface MailStore {
 
     /** Removes cached message bodies and headers for a specific folder of an account. */
     void clearMessageCache(String accountId, String folderId);
+
+    /** Saves a local draft for autosave/recovery. */
+    void saveLocalDraft(LocalDraft draft);
+
+    /** Gets the local draft for an account. */
+    Optional<LocalDraft> getLocalDraft(String accountId);
+
+    /** Deletes a local draft. */
+    void deleteLocalDraft(String draftId);
+
+    /** Lists all recovered drafts. */
+    List<LocalDraft> listRecoveredDrafts();
 
     void close();
 }

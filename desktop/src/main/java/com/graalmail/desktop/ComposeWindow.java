@@ -5,7 +5,15 @@
 package com.graalmail.desktop;
 
 import com.graalmail.core.domain.Account;
+import java.util.Optional;
+import com.graalmail.core.domain.LocalDraft;
+import com.graalmail.core.domain.MessageDraft;
+import java.util.Timer;
+import java.util.TimerTask;
+import com.graalmail.core.domain.Account;
 import com.graalmail.core.domain.Address;
+import com.graalmail.core.domain.Attachment;
+import com.graalmail.core.domain.LocalDraft;
 import com.graalmail.core.domain.Message;
 import com.graalmail.core.domain.MessageDraft;
 import com.graalmail.core.error.ProviderException;
@@ -13,15 +21,26 @@ import com.graalmail.core.recipient.RecipientSuggestion;
 import com.graalmail.core.text.AddressParser;
 import com.graalmail.core.text.TextTools;
 import com.graalmail.core.util.Log;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.graalmail.provider.api.ProviderSession;
 import com.graalmail.provider.api.SendResult;
 import com.graalmail.storage.RecipientSuggestionProvider;
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 import javafx.animation.FadeTransition;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
+import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
+import javafx.scene.control.ChoiceDialog;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListView;
 import javafx.scene.control.TextArea;
@@ -30,10 +49,12 @@ import javafx.scene.input.KeyCode;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
+import javafx.stage.FileChooser;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.util.Duration;
 import org.slf4j.Logger;
+import com.graalmail.storage.PendingAction;
 
 /**
  * The compose window of the desktop application.
@@ -45,6 +66,7 @@ import org.slf4j.Logger;
 public final class ComposeWindow {
 
     private static final Logger LOG = Log.of(ComposeWindow.class);
+    private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final int SUGGESTION_LIMIT = 8;
 
     private final DesktopContext context;
@@ -57,13 +79,20 @@ public final class ComposeWindow {
     private final TextField subjectField = new TextField();
     private final TextArea bodyArea = new TextArea();
     private final ListView<RecipientSuggestion> suggestionList = new ListView<>();
+    private final ListView<Attachment> attachmentList = new ListView<>();
     private final Label status = new Label(" ");
     private final Button sendButton = new Button("Send");
     private final Button draftButton = new Button("Save draft");
+    private final Button attachButton = new Button("Attach files…");
+    private final Button accountButton = new Button();
 
     private Account account;
     private Message replyTo;
     private boolean sending;
+    private Timer autosaveTimer;
+    private String lastAutosavedDraftJson;
+    private final List<Attachment> attachments = new ArrayList<>();
+    private Path tempAttachmentsDir;
 
     /**
      * Creates the compose window.
@@ -73,6 +102,11 @@ public final class ComposeWindow {
     public ComposeWindow(DesktopContext context) {
         this.context = context;
         this.suggestions = new RecipientSuggestionProvider(context.store());
+        try {
+            this.tempAttachmentsDir = Files.createTempDirectory("graalmail-attachments-");
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to create temporary directory for attachments", e);
+        }
         stage.setScene(build());
     }
 
@@ -86,15 +120,21 @@ public final class ComposeWindow {
         prepare(owner);
         this.account = account;
         this.replyTo = null;
+        checkAndRecoverDraft(account);
         toField.clear();
         ccField.clear();
         bccField.clear();
         subjectField.clear();
         bodyArea.clear();
+        attachments.clear();
+        attachmentList.getItems().clear();
         status.setText(" ");
         stage.setTitle("New message");
         stage.show();
         toField.requestFocus();
+        if (accountButton.isVisible()) {
+            accountButton.setText("From: " + account.email());
+        }
     }
 
     /**
@@ -111,6 +151,8 @@ public final class ComposeWindow {
         toField.clear();
         ccField.clear();
         bccField.clear();
+        attachments.clear();
+        attachmentList.getItems().clear();
         if (message != null) {
             List<Address> targets = new java.util.ArrayList<>();
             if (message.from().hasEmail()) {
@@ -128,6 +170,9 @@ public final class ComposeWindow {
         stage.setTitle("Reply");
         stage.show();
         bodyArea.requestFocus();
+        if (accountButton.isVisible()) {
+            accountButton.setText("From: " + account.email());
+        }
     }
 
     /**
@@ -144,6 +189,8 @@ public final class ComposeWindow {
         toField.clear();
         ccField.clear();
         bccField.clear();
+        attachments.clear();
+        attachmentList.getItems().clear();
         if (message != null) {
             String subject = message.subject();
             subjectField.setText(subject.toLowerCase(java.util.Locale.ROOT).startsWith("fwd:")
@@ -154,6 +201,9 @@ public final class ComposeWindow {
         stage.setTitle("Forward");
         stage.show();
         bodyArea.requestFocus();
+        if (accountButton.isVisible()) {
+            accountButton.setText("From: " + account.email());
+        }
     }
 
     /**
@@ -164,6 +214,94 @@ public final class ComposeWindow {
     public void showAndWait(Stage owner) {
         prepare(owner);
         stage.showAndWait();
+    }
+
+    private void initAutosave() {
+        autosaveTimer = new Timer(true);
+        autosaveTimer.scheduleAtFixedRate(new TimerTask() {
+            @Override
+            public void run() {
+                javafx.application.Platform.runLater(() -> autosave());
+            }
+        }, 30_000, 30_000); // Autosave every 30 seconds
+    }
+
+    private void autosave() {
+        if (account == null || sending) {
+            return;
+        }
+        MessageDraft draft = buildDraft();
+        if (draft == null) {
+            return;
+        }
+        String draftJson;
+        try {
+            draftJson = MAPPER.writeValueAsString(draft);
+        } catch (Exception e) {
+            return;
+        }
+        if (draftJson.equals(lastAutosavedDraftJson)) {
+            return; // No changes
+        }
+        lastAutosavedDraftJson = draftJson;
+        LocalDraft localDraft = LocalDraft.of(account.id(), "", draftJson);
+        context.store().saveLocalDraft(localDraft);
+        // Update status silently
+        String currentStatus = status.getText();
+        if (!currentStatus.startsWith("Autosaved")) {
+            status.setText("Autosaved at " + java.time.LocalTime.now().toString().substring(0, 5));
+        }
+    }
+
+    private void checkAndRecoverDraft(Account account) {
+        Optional<LocalDraft> draftOpt = context.store().getLocalDraft(account.id());
+        if (draftOpt.isPresent()) {
+            LocalDraft localDraft = draftOpt.get();
+            if (localDraft.recovered()) {
+                return; // Already recovered
+            }
+            javafx.application.Platform.runLater(() -> {
+                javafx.scene.control.Alert alert = new javafx.scene.control.Alert(
+                        javafx.scene.control.Alert.AlertType.CONFIRMATION);
+                alert.setTitle("Recover draft?");
+                alert.setHeaderText("An unsaved draft was found for " + account.email());
+                alert.setContentText("Do you want to restore the draft?");
+                alert.getButtonTypes().setAll(javafx.scene.control.ButtonType.YES, javafx.scene.control.ButtonType.NO);
+                alert.showAndWait().ifPresent(response -> {
+                    if (response == javafx.scene.control.ButtonType.YES) {
+                        restoreDraft(localDraft);
+                    } else {
+                        context.store().deleteLocalDraft(localDraft.id());
+                    }
+                });
+            });
+        }
+    }
+
+    private void restoreDraft(LocalDraft localDraft) {
+        try {
+            MessageDraft draft = MAPPER.readValue(localDraft.draftJson(), MessageDraft.class);
+            toField.setText(AddressParser.formatList(draft.to()));
+            ccField.setText(AddressParser.formatList(draft.cc()));
+            bccField.setText(AddressParser.formatList(draft.bcc()));
+            subjectField.setText(draft.subject());
+            bodyArea.setText(draft.bodyText());
+            
+            // Restore attachments
+            attachments.clear();
+            attachmentList.getItems().clear();
+            if (draft.attachments() != null) {
+                for (Attachment attachment : draft.attachments()) {
+                    attachments.add(attachment);
+                    attachmentList.getItems().add(attachment);
+                }
+            }
+            
+            status.setText("Draft recovered");
+            context.store().saveLocalDraft(localDraft.withRecovered(true));
+        } catch (Exception e) {
+            LOG.warn("Failed to recover draft: {}", e.getMessage());
+        }
     }
 
     private void prepare(Stage owner) {
@@ -197,24 +335,58 @@ public final class ComposeWindow {
             }
         });
 
+        // Account selection
+        List<Account> accounts = context.store().listAccounts();
+        if (accounts.size() > 1) {
+            accountButton.setText("From: " + (account != null ? account.email() : "Select account"));
+            accountButton.setOnAction(e -> showAccountSelection());
+        } else {
+            accountButton.setVisible(false);
+        }
+
         bodyArea.setPrefRowCount(18);
         VBox.setVgrow(bodyArea, Priority.ALWAYS);
 
+        // Attachments
+        attachmentList.setPrefHeight(80);
+        attachmentList.setCellFactory(lv -> new javafx.scene.control.ListCell<>() {
+            @Override
+            protected void updateItem(Attachment item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(null);
+                    setGraphic(null);
+                } else {
+                    HBox box = new HBox(8);
+                    Label name = new Label(item.fileName());
+                    Label size = new Label(TextTools.formatBytes(item.size()));
+                    size.setTextFill(javafx.scene.paint.Color.DIMGREY);
+                    Button remove = new Button("✕");
+                    remove.setOnAction(e -> removeAttachment(item));
+                    box.getChildren().addAll(name, size, remove);
+                    HBox.setHgrow(name, Priority.ALWAYS);
+                    setGraphic(box);
+                }
+            }
+        });
+
         status.setTextFill(javafx.scene.paint.Color.DIMGREY);
 
-        HBox buttons = new HBox(8, draftButton, sendButton);
+        HBox buttons = new HBox(8, accountButton, draftButton, attachButton, sendButton);
         buttons.setAlignment(Pos.CENTER_RIGHT);
 
-        root.getChildren().addAll(suggestionList, bodyArea, status, buttons);
+        root.getChildren().addAll(suggestionList, bodyArea, attachmentList, status, buttons);
 
         sendButton.setDefaultButton(true);
         sendButton.setOnAction(event -> send());
         draftButton.setOnAction(event -> saveDraft());
+        attachButton.setOnAction(event -> pickAttachments());
 
         wireSuggestions();
         wireShortcuts();
 
         stage.setScene(new Scene(root, 720, 640));
+        initAutosave();
         return stage.getScene();
     }
 
@@ -295,14 +467,37 @@ public final class ComposeWindow {
         }
         sending = true;
         sendButton.setDisable(true);
+        draftButton.setDisable(true);
+        attachButton.setDisable(true);
         status.setText("Sending…");
+        
+        String draftJson;
+        try {
+            draftJson = MAPPER.writeValueAsString(draft);
+        } catch (Exception e) {
+            showWarning("Failed to prepare message for sending.");
+            sending = false;
+            sendButton.setDisable(false);
+            draftButton.setDisable(false);
+            attachButton.setDisable(false);
+            return;
+        }
+        
         runInBackground(() -> {
             try (ProviderSession session = context.sessions().open(account)) {
                 SendResult result = session.submission().send(draft);
                 if (!result.accepted() && result.ambiguous()) {
-                    showWarning("The message was sent but the server connection dropped before the "
-                            + "result was confirmed. Check the sent folder before sending again.");
+                    // Queue for retry with ambiguous outcome
+                    String actionId = java.util.UUID.randomUUID().toString();
+                    PendingAction action = PendingAction.of(actionId, account.id(), 
+                            PendingAction.Type.SEND, "", draftJson);
+                    action = action.withSendState(PendingAction.SendState.SUBMISSION_OUTCOME_UNKNOWN);
+                    context.store().enqueue(action);
+                    return "Message sent but delivery not confirmed. Check sent folder before resending.";
                 }
+                // Clear autosaved draft
+                context.store().getLocalDraft(account.id()).ifPresent(d -> context.store().deleteLocalDraft(d.id()));
+                lastAutosavedDraftJson = null;
                 return "Message sent";
             }
         });
@@ -314,11 +509,29 @@ public final class ComposeWindow {
             return;
         }
         sending = true;
+        sendButton.setDisable(true);
         draftButton.setDisable(true);
-        status.setText("Saving draft…");
+        attachButton.setDisable(true);
+        status.setText("Saving draft...");
+        
+        String draftJson;
+        try {
+            draftJson = MAPPER.writeValueAsString(draft);
+        } catch (Exception e) {
+            showWarning("Failed to prepare draft for saving.");
+            sending = false;
+            sendButton.setDisable(false);
+            draftButton.setDisable(false);
+            attachButton.setDisable(false);
+            return;
+        }
+        
         runInBackground(() -> {
             try (ProviderSession session = context.sessions().open(account)) {
                 session.submission().saveDraft(draft);
+                // Clear autosaved draft
+                context.store().getLocalDraft(account.id()).ifPresent(d -> context.store().deleteLocalDraft(d.id()));
+                lastAutosavedDraftJson = null;
                 return "Draft saved";
             }
         });
@@ -346,7 +559,8 @@ public final class ComposeWindow {
                 .cc(cc)
                 .bcc(bcc)
                 .subject(subjectField.getText())
-                .bodyText(bodyArea.getText());
+                .bodyText(bodyArea.getText())
+                .attachments(new ArrayList<>(attachments));
         if (replyTo != null) {
             builder.inReplyTo(replyTo.internetMessageId())
                     .references(replyTo.internetMessageId());
@@ -370,8 +584,9 @@ public final class ComposeWindow {
                 sending = false;
                 sendButton.setDisable(false);
                 draftButton.setDisable(false);
+                attachButton.setDisable(false);
                 status.setText(message);
-                if (message.endsWith("sent") || message.endsWith("saved")) {
+                if (message.endsWith("sent") || message.endsWith("saved") || message.contains("not confirmed")) {
                     stage.close();
                 }
             });
@@ -426,6 +641,82 @@ public final class ComposeWindow {
      */
     public String helpText() {
         return TextTools.snippet("Ctrl+Enter sends the message, Esc closes the window.", 120);
+    }
+
+    private void pickAttachments() {
+        FileChooser fileChooser = new FileChooser();
+        fileChooser.setTitle("Select attachments");
+        fileChooser.getExtensionFilters().addAll(
+                new FileChooser.ExtensionFilter("All Files", "*.*"),
+                new FileChooser.ExtensionFilter("Images", "*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp"),
+                new FileChooser.ExtensionFilter("Documents", "*.pdf", "*.doc", "*.docx", "*.txt", "*.rtf"),
+                new FileChooser.ExtensionFilter("Archives", "*.zip", "*.tar", "*.gz", "*.rar")
+        );
+        List<File> files = fileChooser.showOpenMultipleDialog(stage);
+        if (files != null) {
+            for (File file : files) {
+                addAttachment(file.toPath());
+            }
+        }
+    }
+
+    private void addAttachment(Path path) {
+        try {
+            long size = Files.size(path);
+            if (size > 25 * 1024 * 1024) { // 25 MB limit
+                showWarning("Attachment too large (max 25 MB): " + path.getFileName());
+                return;
+            }
+            // Copy to temp directory for safe keeping
+            Path tempFile = tempAttachmentsDir.resolve(UUID.randomUUID().toString() + "_" + path.getFileName());
+            Files.copy(path, tempFile, StandardCopyOption.REPLACE_EXISTING);
+            
+            String mimeType = Files.probeContentType(path);
+            if (mimeType == null) {
+                mimeType = "application/octet-stream";
+            }
+            
+            Attachment attachment = new Attachment(
+                    tempFile.toString(),
+                    path.getFileName().toString(),
+                    mimeType,
+                    size,
+                    false,
+                    ""
+            );
+            attachments.add(attachment);
+            attachmentList.getItems().add(attachment);
+        } catch (IOException e) {
+            LOG.warn("Failed to add attachment: {}", e.getMessage());
+            showWarning("Failed to add attachment: " + e.getMessage());
+        }
+    }
+
+    private void removeAttachment(Attachment attachment) {
+        attachments.remove(attachment);
+        attachmentList.getItems().remove(attachment);
+        try {
+            Files.deleteIfExists(Path.of(attachment.contentId()));
+        } catch (IOException e) {
+            LOG.warn("Failed to delete temporary attachment file: {}", e.getMessage());
+        }
+    }
+
+    private void showAccountSelection() {
+        List<Account> accounts = context.store().listAccounts();
+        javafx.scene.control.ChoiceDialog<Account> dialog = new javafx.scene.control.ChoiceDialog<>(
+                account != null ? account : accounts.get(0), accounts);
+        dialog.setTitle("Select Account");
+        dialog.setHeaderText("Choose the account to send from");
+        dialog.setContentText("Account:");
+        dialog.showAndWait().ifPresent(selected -> {
+            this.account = selected;
+            accountButton.setText("From: " + selected.email());
+            // Update draft if it exists
+            if (account != null) {
+                checkAndRecoverDraft(account);
+            }
+        });
     }
 
     /**
