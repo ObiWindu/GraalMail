@@ -14,7 +14,16 @@
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
             android:background="?attr/colorPrimary"
-            app:navigationIcon="@android:drawable/ic_menu_revert" />
+            app:navigationIcon="@android:drawable/ic_menu_revert">
+
+            <androidx.appcompat.widget.SearchView
+                android:id="@+id/search_view"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:queryHint="@string/message_list_search_hint"
+                android:iconifiedByDefault="false"
+                android:layout_gravity="center_vertical" />
+        </androidx.appcompat.widget.Toolbar>
     </com.google.android.material.appbar.AppBarLayout>
 
     <androidx.recyclerview.widget.RecyclerView

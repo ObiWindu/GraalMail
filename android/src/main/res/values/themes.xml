@@ -28,4 +28,8 @@
         <item name="android:background">?attr/colorPrimary</item>
         <item name="titleTextColor">@android:color/white</item>
     </style>
+
+    <style name="TextAppearance.GraalMail.Caption" parent="TextAppearance.Material3.LabelSmall">
+        <item name="android:textColor">?android:attr/textColorSecondary</item>
+    </style>
 </resources>

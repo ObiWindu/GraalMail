@@ -149,8 +149,6 @@ val packageDeb by tasks.registering(Exec::class) {
         "--name", "GraalMail",
         "--app-version", appVersion,
         "--input", layout.buildDirectory.dir("native/nativeCompile").get().asFile.absolutePath,
-        "--main-jar", "graalmail",
-        "--main-class", "com.graalmail.desktop.GraalMailApp",
         "--icon", icon.absolutePath,
         "--dest", destDir.get().asFile.absolutePath
     )
@@ -172,8 +170,6 @@ val packageRpm by tasks.registering(Exec::class) {
         "--name", "GraalMail",
         "--app-version", appVersion,
         "--input", layout.buildDirectory.dir("native/nativeCompile").get().asFile.absolutePath,
-        "--main-jar", "graalmail",
-        "--main-class", "com.graalmail.desktop.GraalMailApp",
         "--icon", icon.absolutePath,
         "--dest", destDir.get().asFile.absolutePath
     )
@@ -195,8 +191,6 @@ val packageAppImageNative by tasks.registering(Exec::class) {
         "--name", "GraalMail",
         "--app-version", appVersion,
         "--input", layout.buildDirectory.dir("native/nativeCompile").get().asFile.absolutePath,
-        "--main-jar", "graalmail",
-        "--main-class", "com.graalmail.desktop.GraalMailApp",
         "--icon", icon.absolutePath,
         "--dest", destDir.get().asFile.absolutePath
     )

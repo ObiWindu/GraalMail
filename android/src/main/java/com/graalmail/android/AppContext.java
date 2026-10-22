@@ -10,6 +10,7 @@ import android.content.SharedPreferences;
 import com.graalmail.security.store.AesGcmProtector;
 import com.graalmail.security.store.CredentialStore;
 import com.graalmail.security.store.FileCredentialStore;
+import com.graalmail.storage.EncryptedSqlDatabase;
 import com.graalmail.storage.JdbcSqlDatabase;
 import com.graalmail.storage.MailStore;
 import com.graalmail.storage.SqlMailStore;
@@ -21,6 +22,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.KeyStore;
 import java.util.Base64;
 import java.util.concurrent.ExecutorService;
+import com.graalmail.security.store.SecretProtector;
 import java.util.concurrent.Executors;
 
 import javax.crypto.KeyGenerator;
@@ -36,6 +38,9 @@ import android.security.keystore.KeyProperties;
  * synchronisation engine. The credential store is protected with a key that
  * lives in the Android key store, so the secrets cannot be read from a backup
  * of the application data.</p>
+ *
+ * <p>The database wraps the underlying SQLite connection with column-level
+ * encryption for sensitive message data (bodies, headers, attachments).</p>
  */
 public final class AppContext {
 
@@ -57,11 +62,13 @@ public final class AppContext {
     private AppContext(Context context) {
         this.context = context.getApplicationContext();
         File database = new File(this.context.getFilesDir(), "graalmail.db");
-        JdbcSqlDatabase db = new JdbcSqlDatabase("jdbc:sqlite:" + database.getAbsolutePath());
-        SqlMailStore mailStore = new SqlMailStore(db);
+        JdbcSqlDatabase baseDb = new JdbcSqlDatabase("jdbc:sqlite:" + database.getAbsolutePath());
+        SecretProtector protector = createSecretProtector(this.context);
+        EncryptedSqlDatabase encryptedDb = new EncryptedSqlDatabase(baseDb, protector);
+        SqlMailStore mailStore = new SqlMailStore(encryptedDb);
         mailStore.initialize();
         this.store = mailStore;
-        this.credentialStore = openCredentialStore(this.context);
+        this.credentialStore = openCredentialStore(this.context, protector);
         this.sessions = new AccountSessionFactory(this.credentialStore);
         this.syncEngine = new SyncEngine(this.store, this.sessions);
     }
@@ -115,15 +122,22 @@ public final class AppContext {
         return io;
     }
 
-    private static CredentialStore openCredentialStore(Context context) {
+    private static CredentialStore openCredentialStore(Context context, SecretProtector protector) {
+        try {
+            File file = new File(context.getFilesDir(), "credentials.bin");
+            return new FileCredentialStore(file.toPath(), protector);
+        } catch (Exception e) {
+            throw new IllegalStateException("The credential store could not be opened", e);
+        }
+    }
+
+    private static SecretProtector createSecretProtector(Context context) {
         try {
             char[] passphrase = masterPassphrase(context);
             byte[] salt = salt(context);
-            File file = new File(context.getFilesDir(), "credentials.bin");
-            return new FileCredentialStore(file.toPath(),
-                    new AesGcmProtector(passphrase, salt));
+            return new AesGcmProtector(passphrase, salt);
         } catch (Exception e) {
-            throw new IllegalStateException("The credential store could not be opened", e);
+            throw new IllegalStateException("Could not create secret protector", e);
         }
     }
 

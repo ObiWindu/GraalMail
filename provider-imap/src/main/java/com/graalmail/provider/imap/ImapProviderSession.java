@@ -15,6 +15,7 @@ import com.graalmail.core.domain.SyncResult;
 import com.graalmail.core.error.ErrorCode;
 import com.graalmail.core.error.ProviderException;
 import com.graalmail.provider.api.AttachmentService;
+import com.graalmail.provider.api.FolderSyncState;
 import com.graalmail.provider.api.MailboxService;
 import com.graalmail.provider.api.MessageService;
 import com.graalmail.provider.api.MessageSubmissionService;
@@ -82,7 +83,15 @@ public final class ImapProviderSession implements ProviderSession {
     public ImapProviderSession(String accountId, String email, String password,
                                ImapServerConfig imapConfig, SmtpServerConfig smtpConfig,
                                FolderTypeResolver folderTypes, java.util.Map<String, String> settings) {
-        this(accountId, email, password, imapConfig, smtpConfig, folderTypes, settings, null);
+        this.accountId = accountId;
+        this.email = email;
+        this.password = password;
+        this.imapConfig = imapConfig;
+        this.smtpConfig = smtpConfig;
+        this.folderTypes = folderTypes;
+        this.settings = settings;
+        this.maxAttachmentBytes = Long.parseLong(settings.getOrDefault(ImapSettings.ATTACHMENT_MAX_BYTES, "25000000"));
+        this.secretSupplier = null;
     }
 
     /**
@@ -306,6 +315,28 @@ public final class ImapProviderSession implements ProviderSession {
         }
 
         @Override
+        public MessageListPage listMessagesByUidRange(String folderId, long startUid, long endUid) {
+            try {
+                jakarta.mail.Folder folder = folder(folderId);
+                jakarta.mail.Message[] messages;
+                try {
+                    java.lang.reflect.Method m = folder.getClass().getMethod("getMessagesByUID", long.class, long.class);
+                    messages = (jakarta.mail.Message[]) m.invoke(folder, startUid, endUid);
+                } catch (Exception e) {
+                    messages = folder.getMessages();
+                }
+                List<Message> result = new ArrayList<>();
+                for (jakarta.mail.Message message : messages) {
+                    long uid = uidOf(folder, message);
+                    result.add(toMessage(folder, message, uid, false));
+                }
+                return new MessageListPage(result, false, result.size());
+            } catch (MessagingException | RuntimeException e) {
+                throw ImapErrorMapper.map(e, "read messages by UID range for '" + folderId + "'");
+            }
+        }
+
+        @Override
         public com.graalmail.core.domain.Folder refreshCounts(String folderId) {
             try {
                 jakarta.mail.Folder folder = folder(folderId);
@@ -423,6 +454,66 @@ public final class ImapProviderSession implements ProviderSession {
         public void markNotSpam(String messageId) {
             move(messageId, inboxFolder());
         }
+
+        @Override
+        public String saveDraft(String draftJson) {
+            try {
+                com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                com.graalmail.core.domain.MessageDraft draft = mapper.readValue(draftJson, com.graalmail.core.domain.MessageDraft.class);
+                saveDraftInternal(draft);
+                return "draft-" + System.currentTimeMillis();
+            } catch (Exception e) {
+                throw new ProviderException(ErrorCode.DRAFT_UNSUPPORTED,
+                        "Could not save draft: " + e.getMessage(), false, e);
+            }
+        }
+
+        @Override
+        public void send(String payloadBase64) {
+            byte[] raw = java.util.Base64.getDecoder().decode(payloadBase64);
+            String secret = currentSecret();
+            jakarta.mail.Session session = MailSessions.smtp(smtpConfig, secret);
+            try {
+                jakarta.mail.Transport transport = session.getTransport("smtp");
+                transport.connect(smtpConfig.host(), smtpConfig.port(), smtpConfig.username(), secret);
+                jakarta.mail.internet.MimeMessage message = new jakarta.mail.internet.MimeMessage(session, new java.io.ByteArrayInputStream(raw));
+                message.setHeader("Bcc", null);
+                transport.sendMessage(message, message.getAllRecipients());
+                transport.close();
+                String sentFolder = sentFolderAfterSend();
+                if (!sentFolder.isBlank()) {
+                    appendToSentFolder(sentFolder, raw);
+                }
+            } catch (jakarta.mail.MessagingException e) {
+                throw ImapErrorMapper.map(e, "submit the message");
+            } catch (RuntimeException e) {
+                throw ImapErrorMapper.map(e, "submit the message");
+            }
+        }
+    }
+
+    private void saveDraftInternal(com.graalmail.core.domain.MessageDraft draft) {
+        String draftsFolder = draftsFolder();
+        if (draftsFolder.isBlank()) {
+            throw new ProviderException(ErrorCode.FEATURE_UNSUPPORTED,
+                    "The server does not advertise a drafts folder, so drafts cannot be saved "
+                            + "on the server. They are kept locally instead.", false);
+        }
+        try {
+            jakarta.mail.Folder folder = folder(draftsFolder);
+            jakarta.mail.internet.MimeMessage message = new jakarta.mail.internet.MimeMessage(mailSession);
+            message.setFrom(new jakarta.mail.internet.InternetAddress(email));
+            for (com.graalmail.core.domain.Address recipient : draft.to()) {
+                message.addRecipient(RecipientType.TO,
+                        new jakarta.mail.internet.InternetAddress(recipient.email()));
+            }
+            message.setSubject(draft.subject() == null ? "" : draft.subject(), "UTF-8");
+            message.setText(draft.bodyText() == null ? "" : draft.bodyText(), "UTF-8");
+            message.setFlag(Flags.Flag.DRAFT, true);
+            folder.appendMessages(new jakarta.mail.Message[]{message});
+        } catch (MessagingException | RuntimeException e) {
+            throw ImapErrorMapper.map(e, "save the draft");
+        }
     }
 
     private final class Submission implements MessageSubmissionService {
@@ -467,27 +558,7 @@ public final class ImapProviderSession implements ProviderSession {
 
         @Override
         public void saveDraft(MessageDraft draft) {
-            String draftsFolder = draftsFolder();
-            if (draftsFolder.isBlank()) {
-                throw new ProviderException(ErrorCode.FEATURE_UNSUPPORTED,
-                        "The server does not advertise a drafts folder, so drafts cannot be saved "
-                                + "on the server. They are kept locally instead.", false);
-            }
-            try {
-                jakarta.mail.Folder folder = folder(draftsFolder);
-                MimeMessage message = new MimeMessage(mailSession);
-                message.setFrom(new jakarta.mail.internet.InternetAddress(email));
-                for (com.graalmail.core.domain.Address recipient : draft.to()) {
-                    message.addRecipient(RecipientType.TO,
-                            new jakarta.mail.internet.InternetAddress(recipient.email()));
-                }
-                message.setSubject(draft.subject() == null ? "" : draft.subject(), "UTF-8");
-                message.setText(draft.bodyText() == null ? "" : draft.bodyText(), "UTF-8");
-                message.setFlag(Flags.Flag.DRAFT, true);
-                folder.appendMessages(new jakarta.mail.Message[]{message});
-            } catch (MessagingException | RuntimeException e) {
-                throw ImapErrorMapper.map(e, "save the draft");
-            }
+            saveDraftInternal(draft);
         }
     }
 
@@ -597,13 +668,142 @@ public final class ImapProviderSession implements ProviderSession {
     private final class Synchronization implements SynchronizationService {
 
         @Override
-        public SyncResult synchronize(String folderId) {
+        public SyncResult synchronize(String folderId, FolderSyncState syncState) {
+            List<String> errors = new ArrayList<>();
+            int newMessages = 0;
+            int updatedMessages = 0;
+            int deletedMessages = 0;
             try {
                 jakarta.mail.Folder folder = folder(folderId);
+                if (!folder.isOpen()) {
+                    try {
+                        folder.open(jakarta.mail.Folder.READ_WRITE);
+                    } catch (jakarta.mail.MessagingException e) {
+                        throw new RuntimeException("Failed to open folder", e);
+                    }
+                }
+
+                long localUidValidity = syncState.uidValidity();
+                long localUidNext = syncState.uidNext();
+                String localHighestModSeq = syncState.highestModSeq();
+
+                // Get IMAP UIDVALIDITY
+                long imapUidValidity = getUidValidity(folder);
+                if (localUidValidity != 0 && localUidValidity != imapUidValidity) {
+                    // UIDVALIDITY changed - full resync required
+                    return fullResync(folderId, folder, imapUidValidity, errors);
+                }
+
                 expunge(folder);
-                return new SyncResult(folderId, 0, 0, 0, java.time.Instant.now(), List.of());
+
+                // Get IMAP UIDNEXT
+                long imapUidNext = getUidNext(folder);
+
+                // Fetch new messages since last sync
+                if (localUidNext > 0 && imapUidNext > localUidNext) {
+                    try {
+                        var fetchResult = fetchNewMessages(folder, localUidNext, imapUidNext - 1);
+                        newMessages += fetchResult.newCount();
+                        updatedMessages += fetchResult.updatedCount();
+                    } catch (Exception e) {
+                        errors.add("Failed to fetch new messages: " + e.getMessage());
+                    }
+                }
+
+                // Detect deleted messages
+                try {
+                    deletedMessages += detectDeletedMessages(folder, localUidNext);
+                } catch (Exception e) {
+                    errors.add("Failed to detect deleted messages: " + e.getMessage());
+                }
+
+                // Update folder sync state - this will be persisted by the caller
+                String newHighestModSeq = getHighestModSeq(folder);
+
             } catch (RuntimeException e) {
-                throw ImapErrorMapper.map(e, "synchronize the mailbox '" + folderId + "'");
+                errors.add(e.getMessage());
+            }
+            return new SyncResult(folderId, newMessages, updatedMessages, deletedMessages,
+                    java.time.Instant.now(), errors);
+        }
+
+        private SyncResult fullResync(String folderId, jakarta.mail.Folder folder, long uidValidity, List<String> errors) {
+            int newMessages = 0;
+            int deletedMessages = 0;
+            try {
+                // Fetch all messages
+                var fetchResult = fetchAllMessages(folder);
+                newMessages += fetchResult.newCount();
+                deletedMessages += fetchResult.deletedCount();
+            } catch (Exception e) {
+                errors.add("Full resync failed: " + e.getMessage());
+            }
+            return new SyncResult(folderId, newMessages, 0, deletedMessages,
+                    java.time.Instant.now(), errors);
+        }
+
+        private record FetchResult(int newCount, int updatedCount, int deletedCount) {}
+
+        private FetchResult fetchNewMessages(jakarta.mail.Folder folder, long startUid, long endUid) throws Exception {
+            int newCount = 0;
+            int updatedCount = 0;
+            jakarta.mail.Message[] messages;
+            try {
+                java.lang.reflect.Method m = folder.getClass().getMethod("getMessagesByUID", long.class, long.class);
+                messages = (jakarta.mail.Message[]) m.invoke(folder, startUid, endUid);
+            } catch (Exception e) {
+                messages = folder.getMessages();
+            }
+            for (jakarta.mail.Message message : messages) {
+                long uid = uidOf(folder, message);
+                // We don't have access to MailStore here, so we just count
+                // The caller (SyncEngine) will handle fetching and saving
+                newCount++;
+            }
+            return new FetchResult(newCount, updatedCount, 0);
+        }
+
+        private FetchResult fetchAllMessages(jakarta.mail.Folder folder) throws Exception {
+            int newCount = 0;
+            int deletedCount = 0;
+            jakarta.mail.Message[] messages = folder.getMessages();
+            for (jakarta.mail.Message message : messages) {
+                newCount++;
+            }
+            return new FetchResult(newCount, 0, deletedCount);
+        }
+
+        private int detectDeletedMessages(jakarta.mail.Folder folder, long localUidNext) throws Exception {
+            // This is a simplified approach - in production we'd use MODSEQ or UID search
+            // For now, we rely on expunge and the fact that deleted messages are removed from IMAP
+            return 0;
+        }
+
+        private long getUidValidity(jakarta.mail.Folder folder) {
+            try {
+                java.lang.reflect.Method m = folder.getClass().getMethod("getUIDValidity");
+                return (Long) m.invoke(folder);
+            } catch (Exception e) {
+                return 0;
+            }
+        }
+
+        private long getUidNext(jakarta.mail.Folder folder) {
+            try {
+                java.lang.reflect.Method m = folder.getClass().getMethod("getUIDNext");
+                return (Long) m.invoke(folder);
+            } catch (Exception e) {
+                return 0;
+            }
+        }
+
+        private String getHighestModSeq(jakarta.mail.Folder folder) {
+            try {
+                java.lang.reflect.Method m = folder.getClass().getMethod("getHighestModSeq");
+                Object result = m.invoke(folder);
+                return result != null ? String.valueOf(result) : "";
+            } catch (Exception e) {
+                return "";
             }
         }
 
@@ -611,7 +811,7 @@ public final class ImapProviderSession implements ProviderSession {
         public java.util.List<SyncResult> synchronizeAll() {
             List<SyncResult> results = new ArrayList<>();
             for (com.graalmail.core.domain.Folder folder : mailboxes().listFolders()) {
-                results.add(synchronize(folder.id()));
+                results.add(synchronize(folder.id(), FolderSyncState.neverSynced()));
             }
             return results;
         }

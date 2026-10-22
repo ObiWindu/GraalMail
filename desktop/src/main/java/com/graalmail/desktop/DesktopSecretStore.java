@@ -9,6 +9,7 @@ import com.graalmail.security.store.AesGcmProtector;
 import com.graalmail.security.store.CredentialStore;
 import com.graalmail.security.store.FileCredentialStore;
 import com.graalmail.security.store.SecretProtector;
+import com.graalmail.security.store.SecretServiceCredentialStore;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -23,20 +24,19 @@ import org.slf4j.Logger;
 /**
  * Builds the desktop credential store.
  *
- * <p><strong>This is not an OS keyring.</strong> GraalMail does not integrate
- * with libsecret, the Secret Service API or any other desktop keychain on
- * Linux, and it does not pretend to. Secrets are encrypted at rest with
- * AES-GCM using a key derived (PBKDF2-HMAC-SHA256, 120000 iterations) from a
- * master passphrase and a randomly generated salt that is stored next to the
- * credential file.</p>
+ * <p>On Linux, this first attempts to use the FreeDesktop Secret Service
+ * (libsecret via `secret-tool`) for credential storage. If the Secret Service
+ * is unavailable, it falls back to an encrypted file store using AES-GCM with
+ * a key derived via PBKDF2-HMAC-SHA256 (120000 iterations) from a master
+ * passphrase and a randomly generated salt stored alongside the credential file.</p>
  *
  * <p>The master passphrase is taken from the {@code GRAALMAIL_PASSPHRASE}
- * environment variable when it is set. Otherwise it is kept in a file that only
- * the owner can read ({@code master.passphrase}). That file is a convenience
- * for single user desktops, not a secret: anybody who can read it can read
- * the credentials. Users who need a real protection boundary should start the
- * application with {@code GRAALMAIL_PASSPHRASE} set from their own secret
- * management and protect the data directory accordingly.</p>
+ * environment variable when set. Otherwise it is generated and stored in a file
+ * readable only by the owner ({@code master.passphrase}). That file is a
+ * convenience for single-user desktops, not a secret: anyone who can read it
+ * can decrypt the credentials. Users requiring a real protection boundary
+ * should set {@code GRAALMAIL_PASSPHRASE} from their own secret management
+ * and protect the data directory accordingly.</p>
  */
 public final class DesktopSecretStore {
 
@@ -52,14 +52,16 @@ public final class DesktopSecretStore {
     private DesktopSecretStore() {
     }
 
-    /** Opens the encrypted credential file, creating the data directory if needed. */
+    /** Opens the credential store, preferring Secret Service on Linux. */
     public static CredentialStore open(AppPaths paths) throws Exception {
         Files.createDirectories(paths.baseDirectory());
         byte[] salt = readOrCreateSalt(paths.saltFile());
         char[] passphrase = resolvePassphrase(paths);
         SecretProtector protector = new AesGcmProtector(passphrase, salt);
         java.util.Arrays.fill(passphrase, '\0');
-        return new FileCredentialStore(paths.credentialFile(), protector);
+
+        FileCredentialStore fallback = new FileCredentialStore(paths.credentialFile(), protector);
+        return new SecretServiceCredentialStore(paths.credentialFile(), protector);
     }
 
     static byte[] readOrCreateSalt(Path saltFile) throws IOException {
@@ -107,7 +109,6 @@ public final class DesktopSecretStore {
         try {
             Files.setPosixFilePermissions(file, OWNER_ONLY);
         } catch (IOException | UnsupportedOperationException e) {
-            // Not a POSIX filesystem. The content is still encrypted at rest.
             LOG.debug("Could not restrict permissions on {}", file.getFileName());
         }
     }

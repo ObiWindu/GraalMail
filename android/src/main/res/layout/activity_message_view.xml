@@ -75,9 +75,18 @@
 
     <Button
         android:id="@+id/message_reply"
-        android:layout_width="match_parent"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_margin="16dp"
+        android:layout_weight="1"
         android:text="@string/action_reply" />
+
+    <Button
+        android:id="@+id/message_forward"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_margin="16dp"
+        android:layout_weight="1"
+        android:text="@string/action_forward" />
 
 </LinearLayout>

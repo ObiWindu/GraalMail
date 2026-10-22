@@ -64,5 +64,8 @@ public interface MailStore {
     /** Removes cached message bodies and headers for an account. */
     void clearMessageCache(String accountId);
 
+    /** Removes cached message bodies and headers for a specific folder of an account. */
+    void clearMessageCache(String accountId, String folderId);
+
     void close();
 }

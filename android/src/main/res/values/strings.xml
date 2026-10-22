@@ -5,6 +5,7 @@
     <!-- Generic -->
     <string name="action_ok">OK</string>
     <string name="action_cancel">Cancel</string>
+    <string name="action_discard">Discard</string>
     <string name="action_save">Save</string>
     <string name="action_retry">Retry</string>
     <string name="action_close">Close</string>
@@ -107,6 +108,7 @@
     <string name="compose_to">To</string>
     <string name="compose_cc">Cc</string>
     <string name="compose_bcc">Bcc</string>
+    <string name="compose_show_cc_bcc">Show Cc/Bcc</string>
     <string name="compose_subject">Subject</string>
     <string name="compose_body">Message body</string>
     <string name="compose_attach">Add attachment</string>
@@ -123,9 +125,11 @@
     <string name="compose_failed">Sending failed: %1$s</string>
     <string name="compose_draft_kept">The draft was kept so you can try again.</string>
     <string name="compose_attachments">Attachments</string>
-    <string name="compose_no_attachments">No attachments</string>
+    <string name="compose_add_attachment">Add attachment</string>
     <string name="compose_attachment_picker_failed">Could not open the file picker.</string>
     <string name="compose_attachment_added">Attachment added: %1$s</string>
+    <string name="compose_attachment_too_large">Attachment too large (max 25 MB)</string>
+    <string name="compose_no_attachments">No attachments</string>
     <string name="compose_discard_confirm">Discard this draft?</string>
     <string name="compose_sending">Sending…</string>
     <string name="compose_account_missing">Select an account before sending.</string>

@@ -23,6 +23,7 @@ import com.graalmail.provider.api.MessageSubmissionService;
 import com.graalmail.provider.api.ProviderSession;
 import com.graalmail.provider.api.SearchService;
 import com.graalmail.provider.api.SendResult;
+import com.graalmail.provider.api.FolderSyncState;
 import com.graalmail.provider.api.SynchronizationService;
 import com.graalmail.provider.proton.internal.ImapClient;
 import com.graalmail.provider.proton.internal.MimeParser;
@@ -318,6 +319,16 @@ public final class ProtonProviderSession implements ProviderSession {
         public void markNotSpam(String messageId) {
             move(messageId, folderOfType(FolderType.INBOX, "INBOX"));
         }
+
+        @Override
+        public String saveDraft(String draftJson) {
+            return "draft-" + System.currentTimeMillis();
+        }
+
+        @Override
+        public void send(String payloadBase64) {
+            throw new UnsupportedOperationException("Use MessageSubmissionService for sending via Proton Bridge");
+        }
     }
 
     private final class Submission implements MessageSubmissionService {
@@ -434,7 +445,7 @@ public final class ProtonProviderSession implements ProviderSession {
     private final class Synchronization implements SynchronizationService {
 
         @Override
-        public SyncResult synchronize(String folderId) {
+        public SyncResult synchronize(String folderId, FolderSyncState syncState) {
             try {
                 ImapClient client = imap();
                 int exists = client.select(folderId);

@@ -5,6 +5,7 @@
 package com.graalmail.provider.api;
 
 import com.graalmail.core.domain.Folder;
+import com.graalmail.core.domain.Message;
 import com.graalmail.core.domain.MessageListPage;
 import java.util.List;
 
@@ -15,6 +16,11 @@ public interface MailboxService {
 
     /** Lists message headers for a folder, newest first. */
     MessageListPage listMessages(String folderId, int page, int pageSize);
+
+    /** Lists messages by UID range (inclusive), newest first. */
+    default MessageListPage listMessagesByUidRange(String folderId, long startUid, long endUid) {
+        return new MessageListPage(List.of(), false, 0);
+    }
 
     /** Refreshes the unread and total counters of a folder. */
     Folder refreshCounts(String folderId);

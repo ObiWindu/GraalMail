@@ -26,6 +26,7 @@ import com.graalmail.provider.api.ProviderSession;
 import com.graalmail.provider.api.ProviderType;
 import com.graalmail.provider.api.SearchService;
 import com.graalmail.provider.api.SendResult;
+import com.graalmail.provider.api.FolderSyncState;
 import com.graalmail.provider.api.SynchronizationService;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
@@ -196,6 +197,16 @@ public final class FakeMailProvider implements AccountProvider {
                     move(messageId, "inbox");
                 }
 
+                @Override
+                public String saveDraft(String draftJson) {
+                    return "draft-" + System.currentTimeMillis();
+                }
+
+                @Override
+                public void send(String payloadBase64) {
+                    // no-op for testing
+                }
+
                 private Message require(String messageId) {
                     Message message = messages.get(messageId);
                     if (message == null) {
@@ -264,7 +275,7 @@ public final class FakeMailProvider implements AccountProvider {
         public SynchronizationService synchronization() {
             return new SynchronizationService() {
                 @Override
-                public SyncResult synchronize(String folderId) {
+                public SyncResult synchronize(String folderId, FolderSyncState syncState) {
                     int count = 0;
                     for (Message message : messages.values()) {
                         if (message.folderId().equals(folderId)) {

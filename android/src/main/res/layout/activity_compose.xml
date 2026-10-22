@@ -36,6 +36,46 @@
                 android:inputType="textEmailAddress" />
 
             <EditText
+                android:id="@+id/compose_cc"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="@string/compose_cc"
+                android:inputType="textEmailAddress"
+                android:visibility="gone" />
+
+            <EditText
+                android:id="@+id/compose_bcc"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="@string/compose_bcc"
+                android:inputType="textEmailAddress"
+                android:visibility="gone" />
+
+            <LinearLayout
+                android:id="@+id/compose_cc_bcc_toggle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="4dp">
+
+                <TextView
+                    android:id="@+id/compose_show_cc_bcc"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/compose_show_cc_bcc"
+                    android:textAppearance="@style/TextAppearance.GraalMail.Snippet"
+                    android:layout_gravity="center_vertical" />
+
+                <ImageView
+                    android:id="@+id/compose_cc_bcc_arrow"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:src="@android:drawable/arrow_down_float"
+                    android:layout_gravity="center_vertical"
+                    android:layout_marginStart="8dp" />
+            </LinearLayout>
+
+            <EditText
                 android:id="@+id/compose_subject"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -49,6 +89,34 @@
                 android:gravity="top|start"
                 android:hint="@string/compose_body"
                 android:inputType="textMultiLine" />
+
+            <LinearLayout
+                android:id="@+id/compose_attachments"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:layout_marginTop="8dp"
+                android:visibility="gone">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/compose_attachments"
+                    android:textAppearance="@style/TextAppearance.GraalMail.Caption" />
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/compose_attachments_list"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:nestedScrollingEnabled="false" />
+            </LinearLayout>
+
+            <Button
+                android:id="@+id/compose_add_attachment"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@string/compose_add_attachment" />
 
             <TextView
                 android:id="@+id/compose_status"

@@ -10,7 +10,7 @@ import java.util.Map;
 /** Creates and migrates the local database schema. */
 public final class SqlSchema {
 
-    public static final int VERSION = 1;
+    public static final int VERSION = 3;
 
     private SqlSchema() {
     }
@@ -21,6 +21,18 @@ public final class SqlSchema {
         int current = rows.isEmpty() ? 0 : ((Number) rows.get(0).get("version")).intValue();
         if (current < 1) {
             createVersion1(db);
+            db.update("DELETE FROM schema_version");
+            db.update("INSERT INTO schema_version (version) VALUES (?)", 1);
+            current = 1;
+        }
+        if (current < 2) {
+            migrateToVersion2(db);
+            db.update("DELETE FROM schema_version");
+            db.update("INSERT INTO schema_version (version) VALUES (?)", 2);
+            current = 2;
+        }
+        if (current < 3) {
+            migrateToVersion3(db);
             db.update("DELETE FROM schema_version");
             db.update("INSERT INTO schema_version (version) VALUES (?)", VERSION);
         }
@@ -58,8 +70,36 @@ public final class SqlSchema {
                 + "id TEXT PRIMARY KEY, account_id TEXT NOT NULL, type TEXT NOT NULL, "
                 + "target_id TEXT NOT NULL DEFAULT '', target_folder_id TEXT NOT NULL DEFAULT '', "
                 + "payload TEXT NOT NULL DEFAULT '', state TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, "
-                + "last_error TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL)");
+                + "last_error TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, "
+                + "send_state TEXT NOT NULL DEFAULT '')");
         db.execute("CREATE INDEX IF NOT EXISTS idx_pending_account ON pending_actions (account_id, state)");
         db.execute("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
+    }
+
+    private static void migrateToVersion2(SqlDatabase db) {
+        try {
+            db.execute("ALTER TABLE pending_actions ADD COLUMN send_state TEXT NOT NULL DEFAULT ''");
+        } catch (RuntimeException e) {
+            // Column might already exist or not supported; ignore
+        }
+    }
+
+    private static void migrateToVersion3(SqlDatabase db) {
+        // Add synchronization state columns to folders table
+        try {
+            db.execute("ALTER TABLE folders ADD COLUMN uid_validity INTEGER NOT NULL DEFAULT 0");
+        } catch (RuntimeException ignored) {}
+        try {
+            db.execute("ALTER TABLE folders ADD COLUMN uid_next INTEGER NOT NULL DEFAULT 0");
+        } catch (RuntimeException ignored) {}
+        try {
+            db.execute("ALTER TABLE folders ADD COLUMN last_sync_at INTEGER NOT NULL DEFAULT 0");
+        } catch (RuntimeException ignored) {}
+        try {
+            db.execute("ALTER TABLE folders ADD COLUMN highest_mod_seq TEXT NOT NULL DEFAULT ''");
+        } catch (RuntimeException ignored) {}
+        try {
+            db.execute("ALTER TABLE folders ADD COLUMN sync_state TEXT NOT NULL DEFAULT 'NEVER'");
+        } catch (RuntimeException ignored) {}
     }
 }

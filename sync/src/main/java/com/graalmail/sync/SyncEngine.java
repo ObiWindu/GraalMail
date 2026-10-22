@@ -5,6 +5,7 @@
 package com.graalmail.sync;
 
 import com.graalmail.core.domain.Account;
+import com.graalmail.core.domain.SyncResult;
 import com.graalmail.core.domain.Folder;
 import com.graalmail.core.domain.Message;
 import com.graalmail.core.error.ErrorCode;
@@ -12,6 +13,7 @@ import com.graalmail.core.error.ProviderException;
 import com.graalmail.core.net.RetryPolicy;
 import com.graalmail.core.util.Ids;
 import com.graalmail.core.util.Log;
+import com.graalmail.provider.api.FolderSyncState;
 import com.graalmail.provider.api.ProviderSession;
 import com.graalmail.storage.MailStore;
 import com.graalmail.storage.PendingAction;
@@ -78,15 +80,24 @@ public final class SyncEngine {
                     continue;
                 }
                 try {
-                    var result = session.synchronization().synchronize(folder.id());
+                    FolderSyncState syncState = FolderSyncState.neverSynced();
+                    if (folder.uidValidity() != 0) {
+                        syncState = new FolderSyncState(folder.uidValidity(), folder.uidNext(),
+                                folder.lastSyncAt(), folder.highestModSeq(), false);
+                    }
+                    var result = session.synchronization().synchronize(folder.id(), syncState);
                     foldersSynced++;
                     newMessages += result.newMessages();
                     result.errors().forEach(errors::add);
+                    
+                    // Fetch and save new/updated messages
+                    if (result.newMessages() > 0 || result.updatedMessages() > 0) {
+                        fetchAndSaveMessages(account, session, folder.id(), syncState, result);
+                    }
                 } catch (ProviderException e) {
                     errors.add(folder.name() + ": " + e.userMessage());
                 }
             }
-            cacheMessages(account, session, folders);
             store.putSetting("sync.lastSuccess." + accountId, Instant.now().toString());
         } catch (ProviderException e) {
             errors.add(e.userMessage());
@@ -98,6 +109,22 @@ public final class SyncEngine {
         long duration = System.currentTimeMillis() - started;
         return new SyncReport(accountId, foldersSynced, newMessages, applied, failed, errors,
                 Instant.now(), duration);
+    }
+
+    private void fetchAndSaveMessages(Account account, ProviderSession session, String folderId,
+                                    FolderSyncState syncState, SyncResult result) {
+        try {
+            long startUid = syncState.uidNext();
+            long endUid = startUid + result.newMessages() + result.updatedMessages() - 1;
+            if (endUid >= startUid) {
+                var page = session.mailboxes().listMessages(folderId, 0, (int)(endUid - startUid + 1));
+                for (Message message : page.messages()) {
+                    store.saveMessage(withAccount(message, account.id(), folderId));
+                }
+            }
+        } catch (ProviderException e) {
+            // Log but don't fail the entire sync
+        }
     }
 
     /** Copies the most recent headers of every folder into the local cache. */
@@ -183,8 +210,34 @@ public final class SyncEngine {
             case DELETE -> session.messages().delete(action.targetId());
             case MARK_SPAM -> session.messages().markSpam(action.targetId());
             case MARK_NOT_SPAM -> session.messages().markNotSpam(action.targetId());
-            case SAVE_DRAFT, SEND -> throw new ProviderException(ErrorCode.NOT_IMPLEMENTED,
-                    "Queued drafts are sent from the compose window", false);
+            case SAVE_DRAFT -> {
+                // Payload contains draft message JSON
+                session.messages().saveDraft(action.payload());
+            }
+            case SEND -> {
+                // Send state machine: QUEUED -> SUBMITTING -> ACCEPTED | FAILED | OUTCOME_UNKNOWN
+                PendingAction.SendState currentSendState = action.sendState();
+                PendingAction.SendState nextState = currentSendState;
+                if (currentSendState == null || currentSendState == PendingAction.SendState.QUEUED) {
+                    nextState = PendingAction.SendState.SUBMITTING;
+                    store.updatePendingAction(action.withSendState(nextState));
+                }
+                if (nextState == PendingAction.SendState.SUBMITTING) {
+                    try {
+                        session.messages().send(action.payload());
+                        nextState = PendingAction.SendState.ACCEPTED;
+                    } catch (ProviderException e) {
+                        if (e.code() == ErrorCode.NETWORK_UNAVAILABLE || e.code() == ErrorCode.TIMEOUT) {
+                            // Ambiguous outcome - server may have accepted
+                            nextState = PendingAction.SendState.SUBMISSION_OUTCOME_UNKNOWN;
+                        } else {
+                            nextState = PendingAction.SendState.FAILED_BEFORE_SUBMISSION;
+                        }
+                    }
+                    store.updatePendingAction(action.withSendState(nextState));
+                }
+                // If ACCEPTED, action will be marked DONE by caller
+            }
         }
     }
 

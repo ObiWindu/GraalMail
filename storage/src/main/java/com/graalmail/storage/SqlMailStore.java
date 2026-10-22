@@ -14,6 +14,7 @@ import com.graalmail.core.domain.FolderType;
 import com.graalmail.core.domain.Message;
 import com.graalmail.core.domain.MessageListPage;
 import com.graalmail.core.domain.SearchQuery;
+import com.graalmail.core.domain.SyncState;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -97,17 +98,23 @@ public final class SqlMailStore implements MailStore {
         db.inTransaction(() -> {
             for (Folder folder : folders) {
                 db.update("INSERT INTO folders (id, account_id, name, parent_path, type, total_count, "
-                                + "unread_count, selectable, supports_labels, provider_type) "
-                                + "VALUES (?,?,?,?,?,?,?,?,?,?) "
+                                + "unread_count, selectable, supports_labels, provider_type, "
+                                + "uid_validity, uid_next, last_sync_at, highest_mod_seq, sync_state) "
+                                + "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
                                 + "ON CONFLICT(account_id, id) DO UPDATE SET name=excluded.name, "
                                 + "parent_path=excluded.parent_path, type=excluded.type, "
                                 + "total_count=excluded.total_count, unread_count=excluded.unread_count, "
                                 + "selectable=excluded.selectable, "
                                 + "supports_labels=excluded.supports_labels, "
-                                + "provider_type=excluded.provider_type",
+                                + "provider_type=excluded.provider_type, "
+                                + "uid_validity=excluded.uid_validity, uid_next=excluded.uid_next, "
+                                + "last_sync_at=excluded.last_sync_at, highest_mod_seq=excluded.highest_mod_seq, "
+                                + "sync_state=excluded.sync_state",
                         folder.id(), accountId, folder.name(), folder.parentPath(), folder.type().name(),
                         folder.totalCount(), folder.unreadCount(), folder.selectable() ? 1 : 0,
-                        folder.supportsLabels() ? 1 : 0, folder.providerSpecificType());
+                        folder.supportsLabels() ? 1 : 0, folder.providerSpecificType(),
+                        folder.uidValidity(), folder.uidNext(), folder.lastSyncAt(),
+                        folder.highestModSeq(), folder.syncState().name());
             }
             return null;
         });
@@ -240,12 +247,13 @@ public final class SqlMailStore implements MailStore {
     @Override
     public void enqueue(PendingAction action) {
         db.update("INSERT INTO pending_actions (id, account_id, type, target_id, target_folder_id, "
-                        + "payload, state, attempts, last_error, created_at) VALUES (?,?,?,?,?,?,?,?,?,?) "
+                        + "payload, state, attempts, last_error, created_at, send_state) VALUES (?,?,?,?,?,?,?,?,?,?,?) "
                         + "ON CONFLICT(id) DO UPDATE SET state=excluded.state, "
-                        + "attempts=excluded.attempts, last_error=excluded.last_error",
+                        + "attempts=excluded.attempts, last_error=excluded.last_error, send_state=excluded.send_state",
                 action.id(), action.accountId(), action.type().name(), action.targetId(),
                 action.targetFolderId(), action.payload(), action.state().name(), action.attempts(),
-                action.lastError(), action.createdAt().toEpochMilli());
+                action.lastError(), action.createdAt().toEpochMilli(),
+                action.sendState() == null ? "" : action.sendState().name());
     }
 
     @Override
@@ -262,8 +270,9 @@ public final class SqlMailStore implements MailStore {
 
     @Override
     public void updatePendingAction(PendingAction action) {
-        db.update("UPDATE pending_actions SET state = ?, attempts = ?, last_error = ? WHERE id = ?",
-                action.state().name(), action.attempts(), action.lastError(), action.id());
+        db.update("UPDATE pending_actions SET state = ?, attempts = ?, last_error = ?, send_state = ? WHERE id = ?",
+                action.state().name(), action.attempts(), action.lastError(),
+                action.sendState() == null ? "" : action.sendState().name(), action.id());
     }
 
     @Override
@@ -309,6 +318,11 @@ public final class SqlMailStore implements MailStore {
     }
 
     @Override
+    public void clearMessageCache(String accountId, String folderId) {
+        db.update("DELETE FROM messages WHERE account_id = ? AND folder_id = ?", accountId, folderId);
+    }
+
+    @Override
     public void close() {
         db.close();
     }
@@ -341,10 +355,18 @@ public final class SqlMailStore implements MailStore {
         } catch (IllegalArgumentException e) {
             type = FolderType.CUSTOM;
         }
+        SyncState syncState;
+        try {
+            syncState = SyncState.valueOf(str(row, "sync_state"));
+        } catch (IllegalArgumentException e) {
+            syncState = SyncState.NEVER;
+        }
         return new Folder(str(row, "id"), str(row, "name"), str(row, "parent_path"), type,
                 (int) number(row, "total_count"), (int) number(row, "unread_count"),
                 number(row, "selectable") != 0, number(row, "supports_labels") != 0,
-                str(row, "provider_type"));
+                str(row, "provider_type"),
+                number(row, "uid_validity"), number(row, "uid_next"),
+                number(row, "last_sync_at"), str(row, "highest_mod_seq"), syncState);
     }
 
     private Message toMessage(Map<String, Object> row) {
@@ -374,11 +396,17 @@ public final class SqlMailStore implements MailStore {
     }
 
     private PendingAction toPendingAction(Map<String, Object> row) {
+        String sendStateStr = str(row, "send_state");
+        PendingAction.SendState sendState = null;
+        if (sendStateStr != null && !sendStateStr.isBlank()) {
+            try { sendState = PendingAction.SendState.valueOf(sendStateStr); } catch (IllegalArgumentException ignored) {}
+        }
         return new PendingAction(str(row, "id"), str(row, "account_id"),
                 PendingAction.Type.valueOf(str(row, "type")), str(row, "target_id"),
                 str(row, "target_folder_id"), str(row, "payload"),
                 PendingAction.State.valueOf(str(row, "state")), (int) number(row, "attempts"),
-                str(row, "last_error"), Instant.ofEpochMilli(number(row, "created_at")));
+                str(row, "last_error"), Instant.ofEpochMilli(number(row, "created_at")),
+                sendState);
     }
 
     private static List<Address> readAddresses(String json) {

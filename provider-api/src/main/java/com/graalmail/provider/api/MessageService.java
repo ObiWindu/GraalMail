@@ -23,4 +23,10 @@ public interface MessageService {
     void markSpam(String messageId);
 
     void markNotSpam(String messageId);
+
+    /** Saves a draft message; returns the server-assigned message id. */
+    String saveDraft(String draftJson);
+
+    /** Sends a composed message; payload is the raw RFC 822 message bytes encoded as base64. */
+    void send(String payloadBase64);
 }

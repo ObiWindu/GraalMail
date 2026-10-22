@@ -18,8 +18,9 @@ import javax.net.ssl.SSLContext;
  * Builds the {@link Session} used to talk to an IMAP or SMTP server.
  *
  * <p>Transport security follows the configured {@link SecurityMode}. TLS
- * verification is never disabled: a custom trust store is used when the
- * provider publishes its own certificate authority.</p>
+ * verification is always enabled with the system trust store. A custom trust
+ * store can be supplied for providers that publish their own certificate
+ * authority (for example a locally running Proton Mail Bridge).</p>
  */
 public final class MailSessions {
 
@@ -136,13 +137,13 @@ public final class MailSessions {
             case SSL_TLS -> {
                 properties.put(prefix + ".ssl.enable", "true");
                 properties.put(prefix + ".ssl.checkserveridentity", "true");
-                properties.put(prefix + ".ssl.trust", "*");
+                // Use system default trust store - do NOT set ssl.trust="*"
             }
             case STARTTLS -> {
                 properties.put(prefix + ".starttls.enable", "true");
                 properties.put(prefix + ".starttls.required", "true");
                 properties.put(prefix + ".ssl.checkserveridentity", "true");
-                properties.put(prefix + ".ssl.trust", "*");
+                // Use system default trust store - do NOT set ssl.trust="*"
             }
             case NONE -> {
                 // The caller validated that an unencrypted connection is acceptable.

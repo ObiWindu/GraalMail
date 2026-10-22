@@ -17,10 +17,24 @@ public final class Folder {
     private final boolean selectable;
     private final boolean supportsLabels;
     private final String providerSpecificType;
+    private final long uidValidity;
+    private final long uidNext;
+    private final long lastSyncAt;
+    private final String highestModSeq;
+    private final SyncState syncState;
 
     public Folder(String id, String name, String parentPath, FolderType type,
                  int totalCount, int unreadCount, boolean selectable,
                  boolean supportsLabels, String providerSpecificType) {
+        this(id, name, parentPath, type, totalCount, unreadCount, selectable,
+                supportsLabels, providerSpecificType, 0, 0, 0, "", SyncState.NEVER);
+    }
+
+    public Folder(String id, String name, String parentPath, FolderType type,
+                 int totalCount, int unreadCount, boolean selectable,
+                 boolean supportsLabels, String providerSpecificType,
+                 long uidValidity, long uidNext, long lastSyncAt,
+                 String highestModSeq, SyncState syncState) {
         this.id = Objects.requireNonNull(id, "id");
         this.name = name == null ? id : name;
         this.parentPath = parentPath == null ? "" : parentPath;
@@ -30,6 +44,11 @@ public final class Folder {
         this.selectable = selectable;
         this.supportsLabels = supportsLabels;
         this.providerSpecificType = providerSpecificType == null ? "" : providerSpecificType;
+        this.uidValidity = uidValidity;
+        this.uidNext = uidNext;
+        this.lastSyncAt = lastSyncAt;
+        this.highestModSeq = highestModSeq == null ? "" : highestModSeq;
+        this.syncState = syncState == null ? SyncState.NEVER : syncState;
     }
 
     public static Folder of(String id, String name, FolderType type) {
@@ -45,10 +64,22 @@ public final class Folder {
     public boolean selectable() { return selectable; }
     public boolean supportsLabels() { return supportsLabels; }
     public String providerSpecificType() { return providerSpecificType; }
+    public long uidValidity() { return uidValidity; }
+    public long uidNext() { return uidNext; }
+    public long lastSyncAt() { return lastSyncAt; }
+    public String highestModSeq() { return highestModSeq; }
+    public SyncState syncState() { return syncState; }
 
     public Folder withCounts(int total, int unread) {
         return new Folder(id, name, parentPath, type, total, unread, selectable, supportsLabels,
-                providerSpecificType);
+                providerSpecificType, uidValidity, uidNext, lastSyncAt, highestModSeq, syncState);
+    }
+
+    public Folder withSyncState(long uidValidity, long uidNext, long lastSyncAt,
+                                String highestModSeq, SyncState syncState) {
+        return new Folder(id, name, parentPath, type, totalCount, unreadCount, selectable,
+                supportsLabels, providerSpecificType, uidValidity, uidNext, lastSyncAt,
+                highestModSeq, syncState);
     }
 
     @Override

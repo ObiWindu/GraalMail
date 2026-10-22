@@ -131,6 +131,8 @@ public final class MainWindow {
         composeItem.setOnAction(event -> composeNewMessage());
         MenuItem replyItem = new MenuItem("_Reply");
         replyItem.setOnAction(event -> replyToSelected());
+        MenuItem forwardItem = new MenuItem("_Forward");
+        forwardItem.setOnAction(event -> forwardSelected());
         MenuItem sync = new MenuItem("_Synchronise now");
         sync.setOnAction(event -> syncNow());
         MenuItem exit = new MenuItem("E_xit");
@@ -334,6 +336,16 @@ public final class MainWindow {
             return;
         }
         compose.reply(account, message, owner);
+    }
+
+    private void forwardSelected() {
+        Account account = selectedAccount.get();
+        Message message = messageList.getSelectionModel().getSelectedItem();
+        if (account == null || message == null) {
+            showInfo("Select a message first.");
+            return;
+        }
+        compose.forward(account, message, owner);
     }
 
     private Account firstAccount() {

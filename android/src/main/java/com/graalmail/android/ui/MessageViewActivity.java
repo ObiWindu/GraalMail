@@ -61,6 +61,7 @@ public final class MessageViewActivity extends AppCompatActivity {
         render();
         markAsRead();
         findViewById(R.id.message_reply).setOnClickListener(view -> reply());
+        findViewById(R.id.message_forward).setOnClickListener(view -> forward());
     }
 
     private void render() {
@@ -113,6 +114,16 @@ public final class MessageViewActivity extends AppCompatActivity {
         intent.putExtra(ComposeActivity.EXTRA_SUBJECT,
                 message.subject().toLowerCase(java.util.Locale.ROOT).startsWith("re:")
                         ? message.subject() : "Re: " + message.subject());
+        intent.putExtra(ComposeActivity.EXTRA_BODY, quote());
+        startActivity(intent);
+    }
+
+    private void forward() {
+        Intent intent = new Intent(this, ComposeActivity.class);
+        intent.putExtra(ComposeActivity.EXTRA_ACCOUNT_ID, getIntent().getStringExtra(EXTRA_ACCOUNT_ID));
+        intent.putExtra(ComposeActivity.EXTRA_SUBJECT,
+                message.subject().toLowerCase(java.util.Locale.ROOT).startsWith("fwd:")
+                        ? message.subject() : "Fwd: " + message.subject());
         intent.putExtra(ComposeActivity.EXTRA_BODY, quote());
         startActivity(intent);
     }

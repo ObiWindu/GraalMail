@@ -6,11 +6,13 @@ package com.graalmail.provider.api;
 
 import com.graalmail.core.domain.SyncResult;
 
+import java.util.List;
+
 /** Mailbox synchronization. */
 public interface SynchronizationService {
 
-    /** Synchronizes a single folder. */
-    SyncResult synchronize(String folderId);
+    /** Synchronizes a single folder with the given sync state. */
+    SyncResult synchronize(String folderId, FolderSyncState syncState);
 
     /** Synchronizes all folders that the provider marks as synchronizable. */
     default java.util.List<SyncResult> synchronizeAll() {

@@ -5,6 +5,7 @@
 package com.graalmail.provider.microsoft;
 
 import com.graalmail.core.domain.SyncResult;
+import com.graalmail.provider.api.FolderSyncState;
 import com.graalmail.provider.api.SynchronizationService;
 import java.time.Instant;
 import java.util.List;
@@ -27,7 +28,7 @@ public final class GraphBackedSynchronizationService implements SynchronizationS
     }
 
     @Override
-    public SyncResult synchronize(String folderId) {
+    public SyncResult synchronize(String folderId, FolderSyncState syncState) {
         int count = client.listMessages(folderId, 0, 1).size();
         return new SyncResult(folderId, count, 0, 0, Instant.now(), List.of());
     }

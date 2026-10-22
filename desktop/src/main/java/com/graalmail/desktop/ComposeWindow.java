@@ -131,6 +131,32 @@ public final class ComposeWindow {
     }
 
     /**
+     * Opens the window with a forwarded message.
+     *
+     * @param account the account the message is forwarded from
+     * @param message the message to forward
+     * @param owner the owner window, may be {@code null}
+     */
+    public void forward(Account account, Message message, Stage owner) {
+        prepare(owner);
+        this.account = account;
+        this.replyTo = message;
+        toField.clear();
+        ccField.clear();
+        bccField.clear();
+        if (message != null) {
+            String subject = message.subject();
+            subjectField.setText(subject.toLowerCase(java.util.Locale.ROOT).startsWith("fwd:")
+                    ? subject : "Fwd: " + subject);
+            bodyArea.setText(quote(message));
+        }
+        status.setText(" ");
+        stage.setTitle("Forward");
+        stage.show();
+        bodyArea.requestFocus();
+    }
+
+    /**
      * Shows the window modally.
      *
      * @param owner the owner window

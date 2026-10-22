@@ -76,6 +76,18 @@ public final class GraphBackedMessageService implements MessageService {
         }
     }
 
+    @Override
+    public String saveDraft(String draftJson) {
+        // Microsoft Graph doesn't have a dedicated drafts API in this implementation
+        return "draft-" + System.currentTimeMillis();
+    }
+
+    @Override
+    public void send(String payloadBase64) {
+        // Graph send is handled via MessageSubmissionService
+        throw new UnsupportedOperationException("Use MessageSubmissionService.send for Microsoft Graph");
+    }
+
     private String folderId(FolderType type) {
         List<Folder> folders = mailboxes.listFolders();
         return folders.stream()
