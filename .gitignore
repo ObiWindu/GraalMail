@@ -42,3 +42,6 @@ Thumbs.db
 *.dylib
 *.dll
 native-image.properties
+
+# Generated packages
+packaging/dist/

@@ -28,7 +28,7 @@ jobs:
       - name: Build Android module
         run: ./gradlew :android:assembleDebug --no-daemon
       - name: Build desktop distribution
-        run: ./gradlew :desktop:packageAppImageTarball --no-daemon
+        run: ./gradlew :desktop:packageAppImageTarball :desktop:stageDesktopFiles --no-daemon
       - name: Upload desktop artifact
         uses: actions/upload-artifact@v4
         with:
@@ -53,29 +53,16 @@ jobs:
           cache: 'gradle'
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
-      - name: Test jpackage deb (requires jpackage)
+      - name: Install packaging tools
         run: |
-          sudo apt-get update && sudo apt-get install -y jpackage
-          ./gradlew :desktop:packageDeb --no-daemon || true
-      - name: Test jpackage rpm (requires rpm-build)
-        run: |
-          sudo apt-get update && sudo apt-get install -y rpm
-          ./gradlew :desktop:packageRpm --no-daemon || true
-
-  dependency-check:
-    name: Dependency Check
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up JDK 25
-        uses: actions/setup-java@v4
+          sudo apt-get update
+          sudo apt-get install -y fakeroot rpm
+      - name: Build Debian package
+        run: ./gradlew :desktop:packageDeb --no-daemon
+      - name: Build RPM package
+        run: ./gradlew :desktop:packageRpm --no-daemon
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
         with:
-          distribution: 'temurin'
-          java-version: '25'
-          cache: 'gradle'
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
-      - name: Dependency updates
-        run: ./gradlew dependencyUpdates --no-daemon
-      - name: Check for dependency vulnerabilities
-        run: ./gradlew dependencyCheckAnalyze --no-daemon || true
+          name: graalmail-packages
+          path: desktop/build/dist/

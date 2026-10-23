@@ -1,8 +1,34 @@
 import org.graalvm.buildtools.gradle.dsl.GraalVMExtension
+import org.gradle.api.tasks.bundling.Compression
 
 plugins {
     application
     id("org.graalvm.buildtools.native") version "1.1.16"
+}
+
+/**
+ * The JavaFX artifacts are published with a classifier for every supported
+ * platform. The classifier of the build machine has to be used, otherwise an
+ * x86_64 application image is created on an ARM64 machine (and vice versa).
+ */
+val javafxVersion = libs.versions.javafx.get()
+val javafxClassifier = run {
+    val os = System.getProperty("os.name").lowercase()
+    val arch = System.getProperty("os.arch").lowercase()
+    when {
+        os.contains("win") -> "win"
+        os.contains("mac") -> if (arch == "aarch64" || arch == "arm64") "mac-aarch64" else "mac"
+        arch == "aarch64" || arch == "arm64" -> "linux-aarch64"
+        else -> "linux"
+    }
+}
+val platformArch = run {
+    val arch = System.getProperty("os.arch").lowercase()
+    when (arch) {
+        "x86_64", "amd64" -> "amd64"
+        "aarch64", "arm64" -> "arm64"
+        else -> arch
+    }
 }
 
 dependencies {
@@ -16,41 +42,18 @@ dependencies {
     implementation(project(":provider-microsoft"))
     implementation(project(":provider-yahoo"))
     implementation(project(":provider-proton"))
-    implementation("org.openjfx:javafx-base:22.0.1:linux")
-    implementation("org.openjfx:javafx-graphics:22.0.1:linux")
-    implementation("org.openjfx:javafx-controls:22.0.1:linux")
-    implementation("org.openjfx:javafx-fxml:22.0.1")
-    implementation("org.openjfx:javafx-media:22.0.1")
-    implementation("org.openjfx:javafx-web:22.0.1:linux")
+    listOf("base", "graphics", "controls", "fxml", "media", "web").forEach { module ->
+        implementation("org.openjfx:javafx-$module:$javafxVersion:$javafxClassifier")
+    }
     implementation(libs.jackson.databind)
     runtimeOnly(libs.logback.classic)
     testImplementation(libs.junit.jupiter)
 }
 
-// Remove non-classifier JavaFX jars from distribution (they lack module descriptors)
-// Keep javafx-media as it's required by javafx.web and has no linux variant
-tasks.named("installDist").configure {
-    doLast {
-        val libDir = layout.buildDirectory.dir("install/graalmail/lib").get().asFile
-        val nonModuleJars = listOf(
-            "javafx-base-22.0.1.jar",
-            "javafx-controls-22.0.1.jar",
-            "javafx-graphics-22.0.1.jar",
-            "javafx-web-22.0.1.jar"
-        )
-        nonModuleJars.forEach { name ->
-            val file = libDir.resolve(name)
-            if (file.exists()) {
-                file.delete()
-                println("Removed non-module jar: $name")
-            }
-        }
-    }
-}
-
 application {
     applicationName = "graalmail"
     mainClass.set("com.graalmail.desktop.GraalMailApp")
+    applicationDefaultJvmArgs = listOf("--enable-native-access=ALL-UNNAMED")
 }
 
 val graalvmNative = extensions.getByType(GraalVMExtension::class.java)
@@ -64,7 +67,7 @@ tasks.named<Jar>("jar") {
     manifest.attributes["Main-Class"] = "com.graalmail.desktop.GraalMailApp"
 }
 
-val appVersion = "0.1.0"
+val appVersion = project.version.toString()
 val iconFile = layout.projectDirectory.file("src/main/resources/icons/graalmail.png")
 
 /**
@@ -75,7 +78,7 @@ val iconFile = layout.projectDirectory.file("src/main/resources/icons/graalmail.
  * vendor, which is the case on many distributions. The copy works on every
  * JDK, so the packaging does not depend on the build machine.
  */
-val prepareRuntimeImage by tasks.registering(Sync::class) {
+val prepareRuntimeImage = tasks.register<Sync>("prepareRuntimeImage") {
     group = "distribution"
     description = "Copies the runtime of the build JDK into a runtime image."
     val home = File(System.getProperty("java.home"))
@@ -106,7 +109,7 @@ val prepareRuntimeImage by tasks.registering(Sync::class) {
  * contains the runtime, the application and a desktop entry, so it can be
  * started without a Java installation.
  */
-val packageAppImage by tasks.registering(Exec::class) {
+val packageAppImage = tasks.register<Exec>("packageAppImage") {
     group = "distribution"
     description = "Builds a self contained Linux application image with jpackage."
     dependsOn("installDist", "prepareRuntimeImage")
@@ -131,40 +134,65 @@ val packageAppImage by tasks.registering(Exec::class) {
         "--main-class", "com.graalmail.desktop.GraalMailApp",
         "--icon", icon.absolutePath,
         "--java-options", "-Dfile.encoding=UTF-8",
+        "--java-options", "--enable-native-access=ALL-UNNAMED",
         "--dest", destDir.get().asFile.absolutePath
     )
+}
+
+/**
+ * Archives the application image created by {@link #packageAppImage} as a
+ * release archive. The archive contains the self contained application, so it
+ * can be unpacked and started without a Java installation.
+ */
+val packageAppImageTarball = tasks.register<Tar>("packageAppImageTarball") {
+    group = "distribution"
+    description = "Builds the application image and archives it as a tar.gz."
+    dependsOn(packageAppImage)
+    archiveFileName.set("graalmail-$appVersion-linux-$platformArch.tar.gz")
+    destinationDirectory.set(layout.buildDirectory.dir("dist"))
+    compression = Compression.GZIP
+    from(layout.buildDirectory.dir("dist/app-image/GraalMail")) {
+        into("GraalMail")
+    }
 }
 
 /**
  * Stages the desktop entry and the application icon so that they can be
  * installed into the desktop environment of the user.
  */
-val stageDesktopFiles by tasks.registering(Copy::class) {
+val stageDesktopFiles = tasks.register<Copy>("stageDesktopFiles") {
     group = "distribution"
     description = "Stages the desktop entry and the application icon."
     from(layout.projectDirectory.file("src/main/resources/packaging/graalmail.desktop")) {
         into("share/applications")
     }
     from(layout.projectDirectory.file("src/main/resources/icons/graalmail.png")) {
-        into("share/icons/hicolor/256x256/apps/graalmail.png")
+        into("share/icons/hicolor/256x256/apps")
+        rename { "graalmail.png" }
     }
     from(layout.projectDirectory.file("src/main/resources/icons/graalmail-64.png")) {
-        into("share/icons/hicolor/64x64/apps/graalmail.png")
+        into("share/icons/hicolor/64x64/apps")
+        rename { "graalmail.png" }
     }
     into(layout.buildDirectory.dir("dist/desktop-files"))
+    doFirst {
+        delete(layout.buildDirectory.dir("dist/desktop-files"))
+    }
 }
 
 /**
- * Packages the native binary into a Debian package.
+ * Packages the application into a Debian package with jpackage.
  */
-val packageDeb by tasks.registering(Exec::class) {
+val packageDeb = tasks.register<Exec>("packageDeb") {
     group = "distribution"
     description = "Builds a Debian package with jpackage."
-    dependsOn("nativeCompile")
-    val nativeExe = layout.buildDirectory.file("native/nativeCompile/graalmail")
+    dependsOn("installDist", "prepareRuntimeImage")
+    val runtimeDir = layout.buildDirectory.dir("runtime-image")
+    val inputDir = layout.buildDirectory.dir("install/graalmail")
     val destDir = layout.buildDirectory.dir("dist/deb")
     val icon = iconFile.asFile
-    inputs.file(nativeExe)
+    inputs.dir(inputDir)
+    inputs.file(icon)
     outputs.dir(destDir)
     doFirst { delete(destDir) }
     commandLine(
@@ -172,50 +200,52 @@ val packageDeb by tasks.registering(Exec::class) {
         "--type", "deb",
         "--name", "GraalMail",
         "--app-version", appVersion,
-        "--input", layout.buildDirectory.dir("native/nativeCompile").get().asFile.absolutePath,
+        "--input", inputDir.get().asFile.absolutePath,
+        "--runtime-image", runtimeDir.get().asFile.absolutePath,
+        "--main-jar", "lib/graalmail.jar",
+        "--main-class", "com.graalmail.desktop.GraalMailApp",
         "--icon", icon.absolutePath,
+        "--linux-package-name", "graalmail",
+        "--linux-menu-group", "Network",
+        "--vendor", "GraalMail",
+        "--description", "Mail client for Gmail, Outlook, Yahoo, Proton Mail and IMAP",
+        "--java-options", "-Dfile.encoding=UTF-8",
+        "--java-options", "--enable-native-access=ALL-UNNAMED",
         "--dest", destDir.get().asFile.absolutePath
     )
 }
 
 /**
- * Packages the native binary into an RPM package.
+ * Packages the application into an RPM package with jpackage.
  */
-val packageRpm by tasks.registering(Exec::class) {
+val packageRpm = tasks.register<Exec>("packageRpm") {
     group = "distribution"
     description = "Builds an RPM package with jpackage."
-    dependsOn("nativeCompile")
+    dependsOn("installDist", "prepareRuntimeImage")
+    val runtimeDir = layout.buildDirectory.dir("runtime-image")
+    val inputDir = layout.buildDirectory.dir("install/graalmail")
     val destDir = layout.buildDirectory.dir("dist/rpm")
     val icon = iconFile.asFile
+    inputs.dir(inputDir)
+    inputs.file(icon)
+    outputs.dir(destDir)
     doFirst { delete(destDir) }
     commandLine(
         "jpackage",
         "--type", "rpm",
         "--name", "GraalMail",
         "--app-version", appVersion,
-        "--input", layout.buildDirectory.dir("native/nativeCompile").get().asFile.absolutePath,
+        "--input", inputDir.get().asFile.absolutePath,
+        "--runtime-image", runtimeDir.get().asFile.absolutePath,
+        "--main-jar", "lib/graalmail.jar",
+        "--main-class", "com.graalmail.desktop.GraalMailApp",
         "--icon", icon.absolutePath,
-        "--dest", destDir.get().asFile.absolutePath
-    )
-}
-
-/**
- * Packages the native binary into an AppImage.
- */
-val packageAppImageNative by tasks.registering(Exec::class) {
-    group = "distribution"
-    description = "Builds an AppImage with jpackage."
-    dependsOn("nativeCompile")
-    val destDir = layout.buildDirectory.dir("dist/appimage")
-    val icon = iconFile.asFile
-    doFirst { delete(destDir) }
-    commandLine(
-        "jpackage",
-        "--type", "app-image",
-        "--name", "GraalMail",
-        "--app-version", appVersion,
-        "--input", layout.buildDirectory.dir("native/nativeCompile").get().asFile.absolutePath,
-        "--icon", icon.absolutePath,
+        "--linux-package-name", "graalmail",
+        "--linux-menu-group", "Network",
+        "--vendor", "GraalMail",
+        "--description", "Mail client for Gmail, Outlook, Yahoo, Proton Mail and IMAP",
+        "--java-options", "-Dfile.encoding=UTF-8",
+        "--java-options", "--enable-native-access=ALL-UNNAMED",
         "--dest", destDir.get().asFile.absolutePath
     )
 }

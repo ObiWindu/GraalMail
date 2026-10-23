@@ -1,23 +1,22 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Licensed under the Apache License, Version 2.0 (ObiWindu <Obi.wandu@proton.me>)
-# Build script for creating Debian package
+# Builds the Debian package for GraalMail with jpackage.
 
-set -e
+set -euo pipefail
 
-# Get version from gradle.properties or use default
-VERSION=$(grep -E "^version\s*=" ../gradle.properties | cut -d'=' -f2 | tr -d ' ' || echo "0.1.0")
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+OUTPUT_DIR="${SCRIPT_DIR}/dist"
 
-echo "Building GraalMail version $VERSION"
+VERSION="$(sed -n 's/^version=//p' "${PROJECT_ROOT}/gradle.properties" | head -n 1)"
+VERSION="${VERSION:-0.1.0}"
 
-# Build the distribution zip
-cd ..
-./gradlew :desktop:distZip
+echo "Building GraalMail version ${VERSION}"
 
-# Copy zip to packaging directory
-cp desktop/build/distributions/graalmail.zip packaging/debian/graalmail-${VERSION}.zip
+cd "${PROJECT_ROOT}"
+./gradlew :desktop:packageDeb
 
-# Build the package
-cd packaging/debian
-dpkg-buildpackage -us -uc -b
+mkdir -p "${OUTPUT_DIR}"
+cp "${PROJECT_ROOT}"/desktop/build/dist/deb/*.deb "${OUTPUT_DIR}/"
 
-echo "Debian package created in packaging/debian/"
+echo "Debian package written to ${OUTPUT_DIR}"

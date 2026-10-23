@@ -23,8 +23,8 @@ those paths are marked as *unverified against the live service* in
 
 ## Requirements
 
-* JDK 17 or newer (the build uses a Java 25 toolchain, the Android module
-  targets Java 17 bytecode).
+* JDK 25 (the build uses a Java 25 toolchain, the Android module targets Java
+  17 bytecode).
 * For the desktop application: a JavaFX capable runtime. The Gradle build
   resolves the platform specific JavaFX artifacts automatically.
 * For the Android application: the Android SDK with platform 35 and a build
@@ -93,8 +93,14 @@ Read [SECURITY.md](SECURITY.md) before you put real credentials into it.
 
 * `app-image/GraalMail` – the application with its own runtime, the launcher
   `bin/GraalMail` and the application libraries,
-* `graalmail-0.1.0-linux-amd64.tar.gz` – the archive that is uploaded to a
-  release.
+* `graalmail-0.1.0-linux-amd64.tar.gz` (or `…-linux-arm64.tar.gz` on ARM64) –
+  the archive that is uploaded to a release.
+
+`./gradlew :desktop:packageDeb` and `./gradlew :desktop:packageRpm` create
+Debian and RPM packages with `jpackage`; the build machine needs `dpkg-deb`
+or `rpmbuild` for the selected format. `packaging/build-all.sh` builds every
+artifact that the local machine supports and collects them in
+`packaging/dist`.
 
 `./gradlew :desktop:stageDesktopFiles` writes the desktop entry
 (`share/applications/graalmail.desktop`) and the icons
@@ -144,10 +150,9 @@ The OAuth client registration is described in
 
 ## Known limitations
 
-* The graphical interface was never started in the build environment: the
-  machine has no usable X display, so the launcher stops with the JavaFX
-  message about missing runtime components. The application image itself was
-  built and inspected.
+* The desktop application was built from the sources and started from the
+  application image. The user interface was not exercised against live mail
+  accounts.
 * The Android application was built and packaged in this environment
   (`android-debug.apk`), but it was never started: no emulator or device was
   available, so the screens were only compiled and linted.

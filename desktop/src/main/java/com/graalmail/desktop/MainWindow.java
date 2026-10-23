@@ -186,7 +186,12 @@ public final class MainWindow {
     }
 
     private void refreshFolders() {
-        folderTree.getRoot().getChildren().setAll(buildTreeItems());
+        TreeItem<Object> root = folderTree.getRoot();
+        if (root == null) {
+            root = new TreeItem<>("Accounts");
+            folderTree.setRoot(root);
+        }
+        root.getChildren().setAll(buildTreeItems());
     }
 
     private List<TreeItem<Object>> buildTreeItems() {
