@@ -108,6 +108,9 @@ public final class ComposeWindow {
             throw new RuntimeException("Failed to create temporary directory for attachments", e);
         }
         stage.setScene(build());
+        
+        // Clean up temp directory when window is closed
+        stage.setOnHidden(event -> cleanupTempAttachments());
     }
 
     /**
@@ -717,6 +720,27 @@ public final class ComposeWindow {
                 checkAndRecoverDraft(account);
             }
         });
+    }
+
+    /**
+     * Cleans up the temporary attachments directory.
+     */
+    private void cleanupTempAttachments() {
+        if (tempAttachmentsDir != null) {
+            try {
+                Files.walk(tempAttachmentsDir)
+                        .sorted((a, b) -> b.compareTo(a))
+                        .forEach(path -> {
+                            try {
+                                Files.deleteIfExists(path);
+                            } catch (IOException e) {
+                                LOG.warn("Failed to delete temporary file {}: {}", path, e.getMessage());
+                            }
+                        });
+            } catch (IOException e) {
+                LOG.warn("Failed to clean up temporary attachments directory: {}", e.getMessage());
+            }
+        }
     }
 
     /**

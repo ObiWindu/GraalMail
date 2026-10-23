@@ -326,7 +326,7 @@ public final class ProtonProviderSession implements ProviderSession {
         }
 
         @Override
-        public void send(String payloadBase64) {
+        public SendResult send(String payloadBase64) {
             throw new UnsupportedOperationException("Use MessageSubmissionService for sending via Proton Bridge");
         }
     }

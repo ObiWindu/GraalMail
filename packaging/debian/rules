@@ -1,0 +1,42 @@
+# Licensed under the Apache License, Version 2.0 (ObiWindu <Obi.wandu@proton.me>)
+#!/usr/bin/make -f
+
+export DH_VERBOSE = 1
+
+%:
+	dh $@ --builddirectory=build
+
+override_dh_auto_clean:
+	rm -rf build
+	dh_auto_clean
+
+override_dh_auto_build:
+	# Build is done externally via Gradle
+	# The graalmail.zip should be in the parent directory
+	# Extract it here
+	unzip -o ../graalmail-$(DEB_VERSION_UPSTREAM).zip -d build
+
+override_dh_auto_install:
+	# Install application to /opt/graalmail
+	mkdir -p debian/graalmail/opt/graalmail
+	cp -r build/graalmail/* debian/graalmail/opt/graalmail/
+
+	# Install desktop file
+	mkdir -p debian/graalmail/usr/share/applications
+	cp ../../desktop/src/main/resources/packaging/graalmail.desktop debian/graalmail/usr/share/applications/
+
+	# Install icon
+	mkdir -p debian/graalmail/usr/share/icons/hicolor/256x256/apps
+	cp ../../desktop/src/main/resources/icons/graalmail.png debian/graalmail/usr/share/icons/hicolor/256x256/apps/
+
+	# Create symlink
+	mkdir -p debian/graalmail/usr/bin
+	ln -s /opt/graalmail/bin/graalmail debian/graalmail/usr/bin/graalmail
+
+override_dh_strip:
+	# Don't strip Java binaries
+	dh_strip --exclude=graalmail
+
+override_dh_shlibdeps:
+	# Java apps don't have traditional shlibdeps
+	dh_shlibdeps --dpkg-shlibdeps-params=--ignore-missing-info

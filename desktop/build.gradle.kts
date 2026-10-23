@@ -1,4 +1,5 @@
 import org.graalvm.buildtools.gradle.dsl.GraalVMExtension
+
 plugins {
     application
     id("org.graalvm.buildtools.native") version "1.1.16"
@@ -15,13 +16,36 @@ dependencies {
     implementation(project(":provider-microsoft"))
     implementation(project(":provider-yahoo"))
     implementation(project(":provider-proton"))
-    implementation("org.openjfx:javafx-base:21.0.5:linux")
-    implementation("org.openjfx:javafx-graphics:21.0.5:linux")
-    implementation("org.openjfx:javafx-controls:21.0.5:linux")
-    implementation("org.openjfx:javafx-web:21.0.5:linux")
+    implementation("org.openjfx:javafx-base:22.0.1:linux")
+    implementation("org.openjfx:javafx-graphics:22.0.1:linux")
+    implementation("org.openjfx:javafx-controls:22.0.1:linux")
+    implementation("org.openjfx:javafx-fxml:22.0.1")
+    implementation("org.openjfx:javafx-media:22.0.1")
+    implementation("org.openjfx:javafx-web:22.0.1:linux")
     implementation(libs.jackson.databind)
     runtimeOnly(libs.logback.classic)
     testImplementation(libs.junit.jupiter)
+}
+
+// Remove non-classifier JavaFX jars from distribution (they lack module descriptors)
+// Keep javafx-media as it's required by javafx.web and has no linux variant
+tasks.named("installDist").configure {
+    doLast {
+        val libDir = layout.buildDirectory.dir("install/graalmail/lib").get().asFile
+        val nonModuleJars = listOf(
+            "javafx-base-22.0.1.jar",
+            "javafx-controls-22.0.1.jar",
+            "javafx-graphics-22.0.1.jar",
+            "javafx-web-22.0.1.jar"
+        )
+        nonModuleJars.forEach { name ->
+            val file = libDir.resolve(name)
+            if (file.exists()) {
+                file.delete()
+                println("Removed non-module jar: $name")
+            }
+        }
+    }
 }
 
 application {

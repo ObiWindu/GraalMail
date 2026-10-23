@@ -17,7 +17,7 @@ import com.graalmail.security.model.Credential;
 import com.graalmail.security.store.CredentialStore;
 
 /** Builds provider sessions from stored accounts and stored credentials. */
-public final class AccountSessionFactory {
+public class AccountSessionFactory {
 
     private final CredentialStore credentialStore;
 

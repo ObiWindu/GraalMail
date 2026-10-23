@@ -9,6 +9,7 @@ import com.graalmail.core.domain.FolderType;
 import com.graalmail.core.domain.Message;
 import com.graalmail.provider.api.MailboxService;
 import com.graalmail.provider.api.MessageService;
+import com.graalmail.provider.api.SendResult;
 import java.util.List;
 
 /**
@@ -83,7 +84,7 @@ public final class GraphBackedMessageService implements MessageService {
     }
 
     @Override
-    public void send(String payloadBase64) {
+    public SendResult send(String payloadBase64) {
         // Graph send is handled via MessageSubmissionService
         throw new UnsupportedOperationException("Use MessageSubmissionService.send for Microsoft Graph");
     }

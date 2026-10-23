@@ -10,3 +10,7 @@ dependencies {
     implementation(libs.greenmail)
     implementation(libs.greenmail.junit5)
 }
+
+tasks.test {
+    failOnNoDiscoveredTests = false
+}

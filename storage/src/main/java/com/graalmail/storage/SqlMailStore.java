@@ -98,6 +98,8 @@ public final class SqlMailStore implements MailStore {
     public void saveFolders(String accountId, List<Folder> folders) {
         db.inTransaction(() -> {
             for (Folder folder : folders) {
+                String name = encryptIfNeeded("folders", "name", folder.name());
+                String providerType = encryptIfNeeded("folders", "provider_type", folder.providerSpecificType());
                 db.update("INSERT INTO folders (id, account_id, name, parent_path, type, total_count, "
                                 + "unread_count, selectable, supports_labels, provider_type, "
                                 + "uid_validity, uid_next, last_sync_at, highest_mod_seq, sync_state) "
@@ -111,9 +113,9 @@ public final class SqlMailStore implements MailStore {
                                 + "uid_validity=excluded.uid_validity, uid_next=excluded.uid_next, "
                                 + "last_sync_at=excluded.last_sync_at, highest_mod_seq=excluded.highest_mod_seq, "
                                 + "sync_state=excluded.sync_state",
-                        folder.id(), accountId, folder.name(), folder.parentPath(), folder.type().name(),
+                        folder.id(), accountId, name, folder.parentPath(), folder.type().name(),
                         folder.totalCount(), folder.unreadCount(), folder.selectable() ? 1 : 0,
-                        folder.supportsLabels() ? 1 : 0, folder.providerSpecificType(),
+                        folder.supportsLabels() ? 1 : 0, providerType,
                         folder.uidValidity(), folder.uidNext(), folder.lastSyncAt(),
                         folder.highestModSeq(), folder.syncState().name());
             }
@@ -150,6 +152,12 @@ public final class SqlMailStore implements MailStore {
 
     @Override
     public void saveMessage(Message message) {
+        // Encrypt sensitive message fields if using EncryptedSqlDatabase
+        String bodyText = encryptIfNeeded("messages", "body_text", message.bodyText());
+        String bodyHtml = encryptIfNeeded("messages", "body_html", message.bodyHtml());
+        String headers = encryptIfNeeded("messages", "headers", json(message.headers()));
+        String attachments = encryptIfNeeded("messages", "attachments", json(message.attachments()));
+
         db.update("INSERT INTO messages (id, account_id, folder_id, internet_message_id, subject, "
                         + "from_name, from_email, recipients, snippet, sent_at, unread, flagged, draft, "
                         + "answered, has_attachments, size, body_text, body_html, headers, attachments, "
@@ -165,8 +173,8 @@ public final class SqlMailStore implements MailStore {
                 json(message.to().stream().map(Address::format).toList()),
                 message.snippet(), epoch(message.date()), flag(message.unread()),
                 flag(message.flagged()), flag(message.draft()), flag(message.answered()),
-                flag(message.hasAttachments()), message.size(), message.bodyText(), message.bodyHtml(),
-                json(message.headers()), json(message.attachments()), Instant.now().toEpochMilli());
+                flag(message.hasAttachments()), message.size(), bodyText, bodyHtml,
+                headers, attachments, Instant.now().toEpochMilli());
     }
 
     @Override
@@ -281,18 +289,24 @@ public final class SqlMailStore implements MailStore {
         List<Map<String, Object>> rows = db.query("SELECT * FROM contacts ORDER BY name, email");
         List<Contact> contacts = new ArrayList<>();
         for (Map<String, Object> row : rows) {
-            contacts.add(new Contact(str(row, "id"), str(row, "name"), str(row, "email"),
-                    str(row, "note"), Instant.ofEpochMilli(number(row, "updated_at"))));
+            String name = decryptStr("contacts", "name", row, "name");
+            String email = decryptStr("contacts", "email", row, "email");
+            String note = decryptStr("contacts", "note", row, "note");
+            contacts.add(new Contact(str(row, "id"), name, email, note,
+                    Instant.ofEpochMilli(number(row, "updated_at"))));
         }
         return contacts;
     }
 
     @Override
     public void saveContact(Contact contact) {
+        String name = encryptIfNeeded("contacts", "name", contact.name());
+        String email = encryptIfNeeded("contacts", "email", contact.email());
+        String note = encryptIfNeeded("contacts", "note", contact.note());
         db.update("INSERT INTO contacts (id, name, email, note, updated_at) VALUES (?,?,?,?,?) "
                         + "ON CONFLICT(id) DO UPDATE SET name=excluded.name, email=excluded.email, "
                         + "note=excluded.note, updated_at=excluded.updated_at",
-                contact.id(), contact.name(), contact.email(), contact.note(),
+                contact.id(), name, email, note,
                 contact.updatedAt().toEpochMilli());
     }
 
@@ -325,12 +339,13 @@ public final class SqlMailStore implements MailStore {
 
     @Override
     public void saveLocalDraft(LocalDraft draft) {
+        String draftJson = encryptIfNeeded("local_drafts", "draft_json", draft.draftJson());
         db.update("INSERT INTO local_drafts (id, account_id, folder_id, draft_json, updated_at, is_recovered) "
                 + "VALUES (?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET "
                 + "account_id=excluded.account_id, folder_id=excluded.folder_id, "
                 + "draft_json=excluded.draft_json, updated_at=excluded.updated_at, "
                 + "is_recovered=excluded.is_recovered",
-                draft.id(), draft.accountId(), draft.folderId(), draft.draftJson(),
+                draft.id(), draft.accountId(), draft.folderId(), draftJson,
                 draft.updatedAt(), draft.recovered() ? 1 : 0);
     }
 
@@ -362,9 +377,27 @@ public final class SqlMailStore implements MailStore {
         db.close();
     }
 
+    private String encryptIfNeeded(String table, String column, String value) {
+        if (db instanceof EncryptedSqlDatabase encryptedDb) {
+            Object result = encryptedDb.encryptForColumn(table, column, value);
+            return result instanceof String ? (String) result : value;
+        }
+        return value;
+    }
+
+    private String decryptStr(String table, String column, Map<String, Object> row, String key) {
+        Object value = row.get(key);
+        if (db instanceof EncryptedSqlDatabase encryptedDb) {
+            Object decrypted = encryptedDb.decryptForColumn(table, column, value);
+            return decrypted == null ? "" : String.valueOf(decrypted);
+        }
+        return value == null ? "" : String.valueOf(value);
+    }
+
     private LocalDraft toLocalDraft(Map<String, Object> row) {
+        String draftJson = decryptStr("local_drafts", "draft_json", row, "draft_json");
         return new LocalDraft(str(row, "id"), str(row, "account_id"), str(row, "folder_id"),
-                str(row, "draft_json"), number(row, "updated_at"), number(row, "is_recovered") != 0);
+                draftJson, number(row, "updated_at"), number(row, "is_recovered") != 0);
     }
 
     private Account toAccount(Map<String, Object> row) {
@@ -401,15 +434,22 @@ public final class SqlMailStore implements MailStore {
         } catch (IllegalArgumentException e) {
             syncState = SyncState.NEVER;
         }
-        return new Folder(str(row, "id"), str(row, "name"), str(row, "parent_path"), type,
+        String name = decryptStr("folders", "name", row, "name");
+        String providerType = decryptStr("folders", "provider_type", row, "provider_type");
+        return new Folder(str(row, "id"), name, str(row, "parent_path"), type,
                 (int) number(row, "total_count"), (int) number(row, "unread_count"),
                 number(row, "selectable") != 0, number(row, "supports_labels") != 0,
-                str(row, "provider_type"),
+                providerType,
                 number(row, "uid_validity"), number(row, "uid_next"),
                 number(row, "last_sync_at"), str(row, "highest_mod_seq"), syncState);
     }
 
     private Message toMessage(Map<String, Object> row) {
+        String bodyText = decryptStr("messages", "body_text", row, "body_text");
+        String bodyHtml = decryptStr("messages", "body_html", row, "body_html");
+        String headers = decryptStr("messages", "headers", row, "headers");
+        String attachments = decryptStr("messages", "attachments", row, "attachments");
+        
         Message.Builder builder = Message.builder(str(row, "id"))
                 .accountId(str(row, "account_id"))
                 .folderId(str(row, "folder_id"))
@@ -424,10 +464,10 @@ public final class SqlMailStore implements MailStore {
                 .answered(number(row, "answered") != 0)
                 .attachment(number(row, "has_attachments") != 0)
                 .size(number(row, "size"))
-                .bodyText(str(row, "body_text"))
-                .bodyHtml(str(row, "body_html"))
-                .headers(readHeaders(str(row, "headers")))
-                .attachments(readAttachments(str(row, "attachments")));
+                .bodyText(bodyText)
+                .bodyHtml(bodyHtml)
+                .headers(readHeaders(headers))
+                .attachments(readAttachments(attachments));
         Long sentAt = row.get("sent_at") == null ? null : number(row, "sent_at");
         if (sentAt != null && sentAt > 0) {
             builder.date(Instant.ofEpochMilli(sentAt));

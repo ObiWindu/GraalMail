@@ -6,15 +6,28 @@ pkgdesc="Mail client for Gmail, Outlook, Yahoo, Proton Mail and IMAP"
 arch=('x86_64')
 url="https://github.com/graalmail/graalmail"
 license=('MIT')
-depends=('java-runtime>=21')
-source=("graalmail-${pkgver}.tar.gz")
+depends=('java-runtime>=21' 'gtk3' 'libxtst' 'libxrender')
+makedepends=('unzip')
+source=("graalmail-${pkgver}.zip")
 sha256sums=('SKIP')
 
+prepare() {
+  # The source zip contains a graalmail/ directory with lib/ and bin/
+  unzip -o "graalmail-${pkgver}.zip"
+}
+
 package() {
+  # Install application files to /opt/graalmail
   install -d "$pkgdir/opt/graalmail"
-  cp -r "$srcdir"/* "$pkgdir/opt/graalmail/"
-  install -Dm644 "$srcdir/../graalmail.desktop" "$pkgdir/usr/share/applications/graalmail.desktop"
-  install -Dm644 "$srcdir/../graalmail.png" "$pkgdir/usr/share/icons/hicolor/256x256/apps/graalmail.png"
+  cp -r "$srcdir/graalmail"/* "$pkgdir/opt/graalmail/"
+
+  # Install desktop entry
+  install -Dm644 "$srcdir/graalmail.desktop" "$pkgdir/usr/share/applications/graalmail.desktop"
+
+  # Install icon
+  install -Dm644 "$srcdir/graalmail.png" "$pkgdir/usr/share/icons/hicolor/256x256/apps/graalmail.png"
+
+  # Create symlink in /usr/bin
   install -d "$pkgdir/usr/bin"
   ln -s /opt/graalmail/bin/graalmail "$pkgdir/usr/bin/graalmail"
 }

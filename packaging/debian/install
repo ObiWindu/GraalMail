@@ -1,0 +1,3 @@
+debian/graalmail/usr/share/applications/graalmail.desktop
+debian/graalmail/usr/share/icons/hicolor/256x256/apps/graalmail.png
+debian/graalmail/usr/bin/graalmail

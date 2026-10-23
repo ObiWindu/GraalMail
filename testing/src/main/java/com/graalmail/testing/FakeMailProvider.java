@@ -203,8 +203,9 @@ public final class FakeMailProvider implements AccountProvider {
                 }
 
                 @Override
-                public void send(String payloadBase64) {
+                public SendResult send(String payloadBase64) {
                     // no-op for testing
+                    return SendResult.accepted("fake");
                 }
 
                 private Message require(String messageId) {

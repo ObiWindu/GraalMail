@@ -42,6 +42,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -469,7 +470,7 @@ public final class ImapProviderSession implements ProviderSession {
         }
 
         @Override
-        public void send(String payloadBase64) {
+        public SendResult send(String payloadBase64) {
             byte[] raw = java.util.Base64.getDecoder().decode(payloadBase64);
             String secret = currentSecret();
             jakarta.mail.Session session = MailSessions.smtp(smtpConfig, secret);
@@ -484,6 +485,7 @@ public final class ImapProviderSession implements ProviderSession {
                 if (!sentFolder.isBlank()) {
                     appendToSentFolder(sentFolder, raw);
                 }
+                return SendResult.accepted("");
             } catch (jakarta.mail.MessagingException e) {
                 throw ImapErrorMapper.map(e, "submit the message");
             } catch (RuntimeException e) {
@@ -670,9 +672,9 @@ public final class ImapProviderSession implements ProviderSession {
         @Override
         public SyncResult synchronize(String folderId, FolderSyncState syncState) {
             List<String> errors = new ArrayList<>();
-            int newMessages = 0;
-            int updatedMessages = 0;
-            int deletedMessages = 0;
+            List<Long> newUids = new ArrayList<>();
+            List<Long> updatedUids = new ArrayList<>();
+            List<Long> deletedUids = new ArrayList<>();
             try {
                 jakarta.mail.Folder folder = folder(folderId);
                 if (!folder.isOpen()) {
@@ -703,8 +705,8 @@ public final class ImapProviderSession implements ProviderSession {
                 if (localUidNext > 0 && imapUidNext > localUidNext) {
                     try {
                         var fetchResult = fetchNewMessages(folder, localUidNext, imapUidNext - 1);
-                        newMessages += fetchResult.newCount();
-                        updatedMessages += fetchResult.updatedCount();
+                        newUids.addAll(fetchResult.newUids());
+                        updatedUids.addAll(fetchResult.updatedUids());
                     } catch (Exception e) {
                         errors.add("Failed to fetch new messages: " + e.getMessage());
                     }
@@ -712,41 +714,46 @@ public final class ImapProviderSession implements ProviderSession {
 
                 // Detect deleted messages
                 try {
-                    deletedMessages += detectDeletedMessages(folder, localUidNext);
+                    var deletedResult = detectDeletedMessages(folder, localUidNext);
+                    deletedUids.addAll(deletedResult);
                 } catch (Exception e) {
                     errors.add("Failed to detect deleted messages: " + e.getMessage());
                 }
 
-                // Update folder sync state - this will be persisted by the caller
+                // Update folder sync state
                 String newHighestModSeq = getHighestModSeq(folder);
+
+                return SyncResult.of(folderId, newUids, updatedUids, deletedUids,
+                        imapUidValidity, imapUidNext, newHighestModSeq, errors);
 
             } catch (RuntimeException e) {
                 errors.add(e.getMessage());
+                return new SyncResult(folderId, 0, 0, 0, java.time.Instant.now(), errors);
             }
-            return new SyncResult(folderId, newMessages, updatedMessages, deletedMessages,
-                    java.time.Instant.now(), errors);
         }
 
         private SyncResult fullResync(String folderId, jakarta.mail.Folder folder, long uidValidity, List<String> errors) {
-            int newMessages = 0;
-            int deletedMessages = 0;
+            List<Long> newUids = new ArrayList<>();
+            List<Long> deletedUids = new ArrayList<>();
             try {
                 // Fetch all messages
-                var fetchResult = fetchAllMessages(folder);
-                newMessages += fetchResult.newCount();
-                deletedMessages += fetchResult.deletedCount();
+                jakarta.mail.Message[] messages = folder.getMessages();
+                for (jakarta.mail.Message message : messages) {
+                    long uid = uidOf(folder, message);
+                    newUids.add(uid);
+                }
             } catch (Exception e) {
                 errors.add("Full resync failed: " + e.getMessage());
             }
-            return new SyncResult(folderId, newMessages, 0, deletedMessages,
-                    java.time.Instant.now(), errors);
+            return SyncResult.of(folderId, newUids, Collections.emptyList(), deletedUids,
+                    uidValidity, getUidNext(folder), getHighestModSeq(folder), errors);
         }
 
-        private record FetchResult(int newCount, int updatedCount, int deletedCount) {}
+        private record FetchResult(List<Long> newUids, List<Long> updatedUids) {}
 
         private FetchResult fetchNewMessages(jakarta.mail.Folder folder, long startUid, long endUid) throws Exception {
-            int newCount = 0;
-            int updatedCount = 0;
+            List<Long> newUids = new ArrayList<>();
+            List<Long> updatedUids = new ArrayList<>();
             jakarta.mail.Message[] messages;
             try {
                 java.lang.reflect.Method m = folder.getClass().getMethod("getMessagesByUID", long.class, long.class);
@@ -756,27 +763,18 @@ public final class ImapProviderSession implements ProviderSession {
             }
             for (jakarta.mail.Message message : messages) {
                 long uid = uidOf(folder, message);
-                // We don't have access to MailStore here, so we just count
-                // The caller (SyncEngine) will handle fetching and saving
-                newCount++;
+                // Check if message already exists locally (would require MailStore access)
+                // For now, treat all as new - the SyncEngine will handle deduplication
+                newUids.add(uid);
             }
-            return new FetchResult(newCount, updatedCount, 0);
+            return new FetchResult(newUids, updatedUids);
         }
 
-        private FetchResult fetchAllMessages(jakarta.mail.Folder folder) throws Exception {
-            int newCount = 0;
-            int deletedCount = 0;
-            jakarta.mail.Message[] messages = folder.getMessages();
-            for (jakarta.mail.Message message : messages) {
-                newCount++;
-            }
-            return new FetchResult(newCount, 0, deletedCount);
-        }
-
-        private int detectDeletedMessages(jakarta.mail.Folder folder, long localUidNext) throws Exception {
+        private List<Long> detectDeletedMessages(jakarta.mail.Folder folder, long localUidNext) throws Exception {
             // This is a simplified approach - in production we'd use MODSEQ or UID search
             // For now, we rely on expunge and the fact that deleted messages are removed from IMAP
-            return 0;
+            // A proper implementation would compare local UIDs with server UIDs
+            return Collections.emptyList();
         }
 
         private long getUidValidity(jakarta.mail.Folder folder) {
