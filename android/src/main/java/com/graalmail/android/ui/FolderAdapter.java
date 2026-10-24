@@ -98,7 +98,7 @@ public final class FolderAdapter extends RecyclerView.Adapter<RecyclerView.ViewH
      */
     public void submit(List<Account> accounts, java.util.function.BiFunction<Account, String, List<Folder>> folders) {
         entries.clear();
-        showUnifiedInbox = accounts.size() > 1;
+        showUnifiedInbox = !accounts.isEmpty();
 
         if (showUnifiedInbox) {
             // Add unified inbox entry

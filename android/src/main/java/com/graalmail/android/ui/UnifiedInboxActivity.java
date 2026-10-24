@@ -14,6 +14,7 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
+import androidx.appcompat.widget.SearchView;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -40,6 +41,11 @@ public final class UnifiedInboxActivity extends AppCompatActivity {
     private AppContext context;
     private UnifiedMessageAdapter adapter;
     private TextView emptyView;
+    private RecyclerView messageList;
+    private int pageOffset;
+    private String activeQuery = "";
+    private int generation;
+    private boolean loading;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -55,11 +61,26 @@ public final class UnifiedInboxActivity extends AppCompatActivity {
         }
         toolbar.setNavigationOnClickListener(view -> finish());
 
-        RecyclerView list = findViewById(R.id.message_list);
-        list.setLayoutManager(new LinearLayoutManager(this));
+        messageList = findViewById(R.id.message_list);
+        messageList.setLayoutManager(new LinearLayoutManager(this));
         adapter = new UnifiedMessageAdapter(this::openMessage);
-        list.setAdapter(adapter);
+        messageList.setAdapter(adapter);
+        messageList.addOnScrollListener(new RecyclerView.OnScrollListener() {
+            @Override public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy) {
+                var layout = (LinearLayoutManager) recyclerView.getLayoutManager();
+                if (dy > 0 && !loading && layout != null
+                        && layout.findLastVisibleItemPosition() >= adapter.getItemCount() - 8) load(true);
+            }
+        });
         emptyView = findViewById(R.id.message_empty);
+        SearchView search = findViewById(R.id.search_view);
+        search.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
+            @Override public boolean onQueryTextSubmit(String query) { activeQuery = query; load(false); search.clearFocus(); return true; }
+            @Override public boolean onQueryTextChange(String query) {
+                if (query.isBlank()) { activeQuery = ""; load(false); }
+                return false;
+            }
+        });
 
         findViewById(R.id.message_compose).setOnClickListener(view -> compose());
     }
@@ -71,6 +92,16 @@ public final class UnifiedInboxActivity extends AppCompatActivity {
     }
 
     private void load() {
+        load(false);
+    }
+
+    private void load(boolean append) {
+        if (loading) return;
+        loading = true;
+        if (!append) { pageOffset = 0; generation++; }
+        int currentGeneration = generation;
+        int offset = pageOffset;
+        String query = activeQuery;
         context.io().execute(() -> {
             List<Account> accounts = context.store().listAccounts();
             List<Message> allMessages = new ArrayList<>();
@@ -80,13 +111,16 @@ public final class UnifiedInboxActivity extends AppCompatActivity {
                 List<Folder> folders = context.store().listFolders(account.id());
                 for (Folder folder : folders) {
                     if (folder.type() == FolderType.INBOX) {
-                        List<Message> messages = context.store()
-                                .listMessages(account.id(), folder.id(), PAGE_SIZE, 0).messages();
-                        // Add account info to message for display
-                        for (Message msg : messages) {
-                            // We could modify the snippet to show account, but for now just add all
-                            allMessages.add(msg);
+                        List<Message> messages;
+                        if (query.isBlank()) {
+                            messages = context.store().listMessages(account.id(), folder.id(),
+                                    offset + PAGE_SIZE + 1, 0).messages();
+                        } else {
+                            messages = context.store().search(SearchQuery.builder().text(query)
+                                    .accountIds(List.of(account.id())).folderIds(List.of(folder.id()))
+                                    .limit(offset + PAGE_SIZE + 1).build(), offset + PAGE_SIZE + 1);
                         }
+                        allMessages.addAll(messages);
                     }
                 }
             }
@@ -99,9 +133,24 @@ public final class UnifiedInboxActivity extends AppCompatActivity {
                 return b.date().compareTo(a.date());
             });
             
+            allMessages.sort((a, b) -> {
+                if (a.date() == null) return b.date() == null ? 0 : 1;
+                if (b.date() == null) return -1;
+                return b.date().compareTo(a.date());
+            });
+            int from = Math.min(offset, allMessages.size());
+            int to = Math.min(offset + PAGE_SIZE, allMessages.size());
+            List<Message> page = new ArrayList<>(allMessages.subList(from, to));
             runOnUiThread(() -> {
-                adapter.submit(allMessages);
-                emptyView.setVisibility(allMessages.isEmpty() ? View.VISIBLE : View.GONE);
+                if (currentGeneration == generation) {
+                    if (append) adapter.append(page); else adapter.submit(page);
+                    pageOffset = to;
+                    boolean empty = !append && page.isEmpty();
+                    emptyView.setText(query.isBlank() ? R.string.message_list_empty
+                            : R.string.message_list_empty_search);
+                    emptyView.setVisibility(empty ? View.VISIBLE : View.GONE);
+                }
+                loading = false;
             });
         });
     }
@@ -145,6 +194,12 @@ public final class UnifiedInboxActivity extends AppCompatActivity {
             messages.clear();
             messages.addAll(values);
             notifyDataSetChanged();
+        }
+
+        void append(List<Message> values) {
+            int start = messages.size();
+            messages.addAll(values);
+            notifyItemRangeInserted(start, values.size());
         }
 
         @NonNull

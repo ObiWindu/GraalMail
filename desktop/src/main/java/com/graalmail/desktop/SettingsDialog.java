@@ -10,6 +10,7 @@ import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
+import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.Spinner;
 import javafx.stage.Stage;
@@ -31,6 +32,8 @@ public final class SettingsDialog {
     private final Spinner<Integer> syncInterval;
     private final Spinner<Integer> pageSize;
     private final CheckBox notifications = new CheckBox("Show a desktop notification for new mail");
+    private final ComboBox<String> density = new ComboBox<>();
+    private final ComboBox<String> theme = new ComboBox<>();
 
     /**
      * Creates the settings window.
@@ -53,6 +56,10 @@ public final class SettingsDialog {
         syncInterval.setEditable(true);
         pageSize.setEditable(true);
         notifications.setSelected(settings.notificationsEnabled());
+        density.getItems().setAll("Comfortable", "Compact");
+        density.setValue(settings.compactDensity() ? "Compact" : "Comfortable");
+        theme.getItems().setAll("Light", "Dark");
+        theme.setValue(settings.theme());
 
         Label intervalLabel = new Label("Synchronise every (minutes)");
         Label pageLabel = new Label("Messages per page");
@@ -63,6 +70,8 @@ public final class SettingsDialog {
             settings.syncIntervalMinutes(syncInterval.getValue());
             settings.pageSize(pageSize.getValue());
             settings.notificationsEnabled(notifications.isSelected());
+            settings.compactDensity("Compact".equals(density.getValue()));
+            settings.theme(theme.getValue());
             LOG.info("Settings saved: sync every {} minutes, {} messages per page",
                     syncInterval.getValue(), pageSize.getValue());
             stage.close();
@@ -73,14 +82,24 @@ public final class SettingsDialog {
         javafx.scene.layout.HBox buttons = new javafx.scene.layout.HBox(8, cancel, save);
         buttons.setAlignment(Pos.CENTER_RIGHT);
 
-        javafx.scene.layout.VBox root = new javafx.scene.layout.VBox(10,
-                intervalLabel, syncInterval,
-                pageLabel, pageSize,
-                notifications,
-                buttons);
+        javafx.scene.layout.VBox syncSettings = new javafx.scene.layout.VBox(10,
+                intervalLabel, syncInterval, pageLabel, pageSize, notifications);
+        javafx.scene.layout.VBox appearanceSettings = new javafx.scene.layout.VBox(10,
+                new Label("Message list density"), density, new Label("Theme"), theme);
+        javafx.scene.control.Tab syncTab = new javafx.scene.control.Tab("Sync", syncSettings);
+        javafx.scene.control.Tab appearanceTab = new javafx.scene.control.Tab("Appearance", appearanceSettings);
+        syncTab.setClosable(false);
+        appearanceTab.setClosable(false);
+        javafx.scene.control.TabPane tabs = new javafx.scene.control.TabPane(syncTab, appearanceTab);
+        javafx.scene.layout.VBox root = new javafx.scene.layout.VBox(10, tabs, buttons);
+        root.getStyleClass().add("account-setup");
+        if (settings.theme().equals("Dark")) root.getStyleClass().add("dark-theme");
         root.setPadding(new Insets(14));
 
-        stage.setScene(new Scene(root, 380, 260));
+        Scene scene = new Scene(root, 460, 330);
+        var stylesheet = getClass().getResource("/styles/mail.css");
+        if (stylesheet != null) scene.getStylesheets().add(stylesheet.toExternalForm());
+        stage.setScene(scene);
         return stage.getScene();
     }
 
@@ -91,6 +110,6 @@ public final class SettingsDialog {
         if (stage.getScene() == null) {
             build();
         }
-        stage.show();
+        stage.showAndWait();
     }
 }

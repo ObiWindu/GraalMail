@@ -27,7 +27,10 @@ import com.graalmail.android.AppContext;
 import com.graalmail.android.R;
 import com.graalmail.core.domain.Message;
 import com.graalmail.core.domain.SearchQuery;
+import com.graalmail.core.domain.Folder;
+import com.graalmail.core.domain.FolderType;
 import com.graalmail.core.text.TextTools;
+import com.graalmail.storage.PendingAction;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -59,6 +62,9 @@ public final class MessageListActivity extends AppCompatActivity {
     private TextView emptyView;
     private androidx.appcompat.view.ActionMode actionMode;
     private final List<Message> selectedMessages = new ArrayList<>();
+    private int pageOffset;
+    private boolean loadingMore;
+    private String activeQuery = "";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -110,6 +116,13 @@ public final class MessageListActivity extends AppCompatActivity {
         list.setLayoutManager(new LinearLayoutManager(this));
         adapter = new MessageAdapter(this::openMessage, this::onMessageLongClick);
         list.setAdapter(adapter);
+        list.addOnScrollListener(new RecyclerView.OnScrollListener() {
+            @Override public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy) {
+                var layout = (LinearLayoutManager) recyclerView.getLayoutManager();
+                if (dy > 0 && !loadingMore && layout != null
+                        && layout.findLastVisibleItemPosition() >= adapter.getItemCount() - 8) loadMore();
+            }
+        });
         emptyView = findViewById(R.id.message_empty);
 
         findViewById(R.id.message_compose).setOnClickListener(view -> compose());
@@ -122,6 +135,8 @@ public final class MessageListActivity extends AppCompatActivity {
     }
 
     private void load() {
+        pageOffset = 0;
+        activeQuery = "";
         context.io().execute(() -> {
             List<Message> messages = new ArrayList<>(context.store()
                     .listMessages(accountId, folderId, PAGE_SIZE, 0).messages());
@@ -133,13 +148,38 @@ public final class MessageListActivity extends AppCompatActivity {
     }
 
     private void search(String query) {
+        activeQuery = query == null ? "" : query;
+        pageOffset = 0;
         context.io().execute(() -> {
             List<Message> messages = context.store()
-                    .search(SearchQuery.builder().text(query).build(), PAGE_SIZE);
+                    .search(SearchQuery.builder().text(query).accountIds(List.of(accountId))
+                            .folderIds(folderId == null ? List.of() : List.of(folderId))
+                            .limit(PAGE_SIZE).build(), PAGE_SIZE);
             runOnUiThread(() -> {
                 adapter.submit(messages);
+                pageOffset = messages.size();
                 emptyView.setVisibility(messages.isEmpty() ? View.VISIBLE : View.GONE);
                 emptyView.setText(R.string.message_list_empty_search);
+            });
+        });
+    }
+
+    private void loadMore() {
+        loadingMore = true;
+        int offset = pageOffset;
+        String query = activeQuery;
+        context.io().execute(() -> {
+            List<Message> page = query.isBlank()
+                    ? context.store().listMessages(accountId, folderId, PAGE_SIZE, offset).messages()
+                    : context.store().search(SearchQuery.builder().text(query).accountIds(List.of(accountId))
+                            .folderIds(folderId == null ? List.of() : List.of(folderId))
+                            .limit(PAGE_SIZE).offset(offset).build(), PAGE_SIZE);
+            runOnUiThread(() -> {
+                if (query.equals(activeQuery)) {
+                    adapter.append(page);
+                    pageOffset += page.size();
+                }
+                loadingMore = false;
             });
         });
     }
@@ -223,6 +263,17 @@ public final class MessageListActivity extends AppCompatActivity {
             } else if (id == R.id.action_select_all) {
                 selectAll();
                 return true;
+            } else if (id == R.id.action_star) {
+                changeSelectedFlags();
+                mode.finish();
+                return true;
+            } else if (id == R.id.action_spam) {
+                moveSelected(FolderType.SPAM);
+                mode.finish();
+                return true;
+            } else if (id == R.id.action_move) {
+                chooseMoveFolder();
+                return true;
             }
             return false;
         }
@@ -236,24 +287,73 @@ public final class MessageListActivity extends AppCompatActivity {
     }
 
     private void deleteSelected() {
-        for (Message message : selectedMessages) {
-            context.store().deleteMessage(message.id());
+        List<Message> target = new ArrayList<>(selectedMessages);
+        for (Message message : target) {
+            context.store().account(message.accountId()).ifPresent(account -> {
+                Folder trash = context.store().listFolders(account.id()).stream()
+                        .filter(folder -> folder.type() == FolderType.TRASH).findFirst().orElse(null);
+                if (trash == null) context.syncEngine().queue(account, PendingAction.Type.DELETE, message.id(), "");
+                else context.syncEngine().queue(account, PendingAction.Type.MOVE, message.id(), trash.id());
+            });
         }
         load();
-        Toast.makeText(this, selectedMessages.size() + " messages deleted", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, target.size() + " messages queued for deletion", Toast.LENGTH_SHORT).show();
     }
 
     private void archiveSelected() {
-        // Move to archive folder - implementation depends on provider
-        Toast.makeText(this, "Archive not yet implemented", Toast.LENGTH_SHORT).show();
+        List<Message> target = new ArrayList<>(selectedMessages);
+        for (Message message : target) context.store().account(message.accountId()).ifPresent(account ->
+                context.store().listFolders(account.id()).stream()
+                        .filter(folder -> folder.type() == FolderType.ARCHIVE).findFirst()
+                        .ifPresent(folder -> context.syncEngine().queue(account, PendingAction.Type.MOVE,
+                                message.id(), folder.id())));
+        load();
+        Toast.makeText(this, target.size() + " archive actions queued", Toast.LENGTH_SHORT).show();
+    }
+
+    private void changeSelectedFlags() {
+        List<Message> target = new ArrayList<>(selectedMessages);
+        for (Message message : target) context.store().account(message.accountId()).ifPresent(account ->
+                context.syncEngine().queue(account, message.flagged() ? PendingAction.Type.UNFLAG
+                        : PendingAction.Type.FLAG, message.id(), ""));
+        load();
+        Toast.makeText(this, target.size() + " star actions queued", Toast.LENGTH_SHORT).show();
+    }
+
+    private void moveSelected(FolderType type) {
+        List<Message> target = new ArrayList<>(selectedMessages);
+        for (Message message : target) context.store().account(message.accountId()).ifPresent(account ->
+                context.store().listFolders(account.id()).stream().filter(folder -> folder.type() == type)
+                        .findFirst().ifPresent(folder -> context.syncEngine().queue(account,
+                                PendingAction.Type.MOVE, message.id(), folder.id())));
+        load();
+        Toast.makeText(this, target.size() + " move actions queued", Toast.LENGTH_SHORT).show();
+    }
+
+    private void chooseMoveFolder() {
+        List<Folder> folders = context.store().listFolders(accountId).stream()
+                .filter(Folder::selectable).filter(folder -> !folder.id().equals(folderId)).toList();
+        String[] names = folders.stream().map(Folder::name).toArray(String[]::new);
+        if (names.length == 0) return;
+        new androidx.appcompat.app.AlertDialog.Builder(this).setTitle("Move selected messages to")
+                .setItems(names, (dialog, which) -> {
+                    String destination = folders.get(which).id();
+                    List<Message> target = new ArrayList<>(selectedMessages);
+                    for (Message message : target) context.store().account(message.accountId()).ifPresent(account ->
+                            context.syncEngine().queue(account, PendingAction.Type.MOVE, message.id(), destination));
+                    load();
+                    if (actionMode != null) actionMode.finish();
+                }).show();
     }
 
     private void markSelectedAsRead(boolean read) {
-        for (Message message : selectedMessages) {
-            context.store().updateFlags(message.id(), !read, message.flagged());
+        List<Message> target = new ArrayList<>(selectedMessages);
+        for (Message message : target) {
+            context.store().account(message.accountId()).ifPresent(account -> context.syncEngine().queue(account,
+                    read ? PendingAction.Type.MARK_READ : PendingAction.Type.MARK_UNREAD, message.id(), ""));
         }
         load();
-        Toast.makeText(this, selectedMessages.size() + " messages marked as " + (read ? "read" : "unread"), Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, target.size() + " messages queued as " + (read ? "read" : "unread"), Toast.LENGTH_SHORT).show();
     }
 
     private void selectAll() {
@@ -284,6 +384,12 @@ public final class MessageListActivity extends AppCompatActivity {
             messages.clear();
             messages.addAll(values);
             notifyDataSetChanged();
+        }
+
+        void append(List<Message> values) {
+            int start = messages.size();
+            messages.addAll(values);
+            notifyItemRangeInserted(start, values.size());
         }
 
         List<Message> getMessages() {
@@ -354,11 +460,7 @@ public final class MessageListActivity extends AppCompatActivity {
                         : itemView.getContext().getColor(android.R.color.transparent));
                 
                 itemView.setOnClickListener(view -> {
-                    if (isSelected) {
-                        // In selection mode, just toggle
-                    } else if (listener != null) {
-                        listener.onMessageSelected(message);
-                    }
+                    if (listener != null) listener.onMessageSelected(message);
                 });
                 
                 itemView.setOnLongClickListener(view -> {

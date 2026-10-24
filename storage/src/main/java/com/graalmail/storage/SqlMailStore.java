@@ -243,8 +243,17 @@ public final class SqlMailStore implements MailStore {
             }
             sql.append(")");
         }
-        sql.append(" ORDER BY sent_at DESC LIMIT ?");
+        if (!query.accountIds().isEmpty()) {
+            sql.append(" AND account_id IN (");
+            for (int i = 0; i < query.accountIds().size(); i++) {
+                sql.append(i == 0 ? "?" : ",?");
+                params.add(query.accountIds().get(i));
+            }
+            sql.append(")");
+        }
+        sql.append(" ORDER BY sent_at DESC LIMIT ? OFFSET ?");
         params.add(limit);
+        params.add(query.offset());
         List<Map<String, Object>> rows = db.query(sql.toString(), params.toArray());
         List<Message> messages = new ArrayList<>();
         for (Map<String, Object> row : rows) {

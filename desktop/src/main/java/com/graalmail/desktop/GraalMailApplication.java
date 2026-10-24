@@ -20,12 +20,13 @@ import javafx.stage.Stage;
 public final class GraalMailApplication extends Application {
 
     private DesktopContext context;
+    private MainWindow window;
 
     @Override
     public void start(Stage stage) throws Exception {
         AppPaths paths = AppPaths.userDefault();
         context = DesktopContext.open(paths);
-        MainWindow window = new MainWindow(context);
+        window = new MainWindow(context);
         stage.setTitle("GraalMail");
         Scene scene = window.build(stage);
         stage.setScene(scene);
@@ -37,6 +38,10 @@ public final class GraalMailApplication extends Application {
 
     @Override
     public void stop() {
+        if (window != null) {
+            window.close();
+            window = null;
+        }
         if (context != null) {
             context.close();
             context = null;

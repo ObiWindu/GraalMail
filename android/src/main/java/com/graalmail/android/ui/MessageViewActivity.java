@@ -11,6 +11,8 @@ import android.text.Html;
 import android.text.method.LinkMovementMethod;
 import android.text.style.ImageSpan;
 import android.view.View;
+import android.view.Menu;
+import android.view.MenuItem;
 import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -25,6 +27,9 @@ import com.graalmail.android.R;
 import com.graalmail.core.domain.Account;
 import com.graalmail.core.domain.Attachment;
 import com.graalmail.core.domain.Message;
+import com.graalmail.core.domain.Folder;
+import com.graalmail.core.domain.FolderType;
+import com.graalmail.storage.PendingAction;
 import com.graalmail.core.text.HtmlSanitizer;
 import com.graalmail.provider.api.ProviderSession;
 
@@ -50,6 +55,81 @@ public final class MessageViewActivity extends AppCompatActivity {
     private AppContext context;
     private Message message;
     private String accountId;
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        getMenuInflater().inflate(R.menu.message_view_actions, menu);
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        int id = item.getItemId();
+        if (id == R.id.action_star) {
+            queueFlag(!message.flagged());
+            return true;
+        }
+        if (id == R.id.action_mark_unread) {
+            queue(PendingAction.Type.MARK_UNREAD, "");
+            Toast.makeText(this, R.string.action_mark_unread, Toast.LENGTH_SHORT).show();
+            finish();
+            return true;
+        }
+        if (id == R.id.action_archive || id == R.id.action_spam || id == R.id.action_delete) {
+            FolderType type = id == R.id.action_archive ? FolderType.ARCHIVE
+                    : id == R.id.action_spam ? FolderType.SPAM : FolderType.TRASH;
+            moveTo(type, id == R.id.action_delete);
+            return true;
+        }
+        if (id == R.id.action_move) {
+            chooseFolder();
+            return true;
+        }
+        return super.onOptionsItemSelected(item);
+    }
+
+    private void queueFlag(boolean flagged) {
+        queue(flagged ? PendingAction.Type.FLAG : PendingAction.Type.UNFLAG, "");
+        message = message.toBuilder().flagged(flagged).build();
+        context.store().saveMessage(message);
+        Toast.makeText(this, flagged ? R.string.message_view_starred : R.string.message_view_unstarred,
+                Toast.LENGTH_SHORT).show();
+    }
+
+    private void queue(PendingAction.Type type, String folderId) {
+        context.store().account(accountId).ifPresent(account ->
+                context.syncEngine().queue(account, type, message.id(), folderId));
+    }
+
+    private void moveTo(FolderType type, boolean deleteIfMissing) {
+        Folder folder = context.store().listFolders(accountId).stream()
+                .filter(value -> value.type() == type).findFirst().orElse(null);
+        if (folder != null) {
+            queue(PendingAction.Type.MOVE, folder.id());
+        } else if (deleteIfMissing) {
+            new androidx.appcompat.app.AlertDialog.Builder(this)
+                    .setMessage("This account has no Trash folder. Delete this message permanently?")
+                    .setNegativeButton(R.string.action_cancel, null)
+                    .setPositiveButton(R.string.action_delete, (dialog, which) -> {
+                        queue(PendingAction.Type.DELETE, ""); finish();
+                    }).show();
+            return;
+        } else {
+            Toast.makeText(this, "This account does not provide that folder", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        finish();
+    }
+
+    private void chooseFolder() {
+        List<Folder> folders = context.store().listFolders(accountId).stream()
+                .filter(Folder::selectable).filter(folder -> !folder.id().equals(message.folderId())).toList();
+        String[] names = folders.stream().map(Folder::name).toArray(String[]::new);
+        if (names.length == 0) return;
+        new androidx.appcompat.app.AlertDialog.Builder(this).setTitle("Move to")
+                .setItems(names, (dialog, which) -> { queue(PendingAction.Type.MOVE, folders.get(which).id()); finish(); })
+                .show();
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -233,7 +313,8 @@ private void downloadAttachment(Attachment attachment) {
         if (!message.unread()) {
             return;
         }
-        context.io().execute(() -> context.store().updateFlags(message.id(), false, message.flagged()));
+        context.store().account(accountId).ifPresent(account -> context.syncEngine().queue(account,
+                PendingAction.Type.MARK_READ, message.id(), ""));
         message = message.toBuilder().unread(false).build();
     }
 

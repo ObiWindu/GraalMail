@@ -80,6 +80,8 @@ public final class ComposeWindow {
     private final TextArea bodyArea = new TextArea();
     private final ListView<RecipientSuggestion> suggestionList = new ListView<>();
     private final ListView<Attachment> attachmentList = new ListView<>();
+    private final VBox ccRow = labelled("Cc", ccField);
+    private final VBox bccRow = labelled("Bcc", bccField);
     private final Label status = new Label(" ");
     private final Button sendButton = new Button("Send");
     private final Button draftButton = new Button("Save draft");
@@ -89,6 +91,7 @@ public final class ComposeWindow {
     private Account account;
     private Message replyTo;
     private boolean sending;
+    private boolean allowClose;
     private Timer autosaveTimer;
     private String lastAutosavedDraftJson;
     private final List<Attachment> attachments = new ArrayList<>();
@@ -111,6 +114,29 @@ public final class ComposeWindow {
         
         // Clean up temp directory when window is closed
         stage.setOnHidden(event -> cleanupTempAttachments());
+        stage.setOnCloseRequest(event -> {
+            if (sending || allowClose || !hasComposeContent()) return;
+            javafx.scene.control.ButtonType saveLocal = new javafx.scene.control.ButtonType(
+                    "Save locally", javafx.scene.control.ButtonBar.ButtonData.YES);
+            javafx.scene.control.ButtonType discard = new javafx.scene.control.ButtonType(
+                    "Discard", javafx.scene.control.ButtonBar.ButtonData.NO);
+            javafx.scene.control.ButtonType cancel = new javafx.scene.control.ButtonType(
+                    "Keep editing", javafx.scene.control.ButtonBar.ButtonData.CANCEL_CLOSE);
+            Alert alert = new Alert(Alert.AlertType.CONFIRMATION,
+                    "Save this message as a local draft before closing?",
+                    saveLocal, discard, cancel);
+            alert.setTitle("Unsaved message");
+            alert.setHeaderText(null);
+            javafx.scene.control.ButtonType choice = alert.showAndWait().orElse(cancel);
+            if (choice == saveLocal) {
+                saveLocalDraftOnClose();
+            } else if (choice == discard) {
+                if (account != null) context.store().getLocalDraft(account.id())
+                        .ifPresent(draft -> context.store().deleteLocalDraft(draft.id()));
+            } else {
+                event.consume();
+            }
+        });
     }
 
     /**
@@ -122,6 +148,7 @@ public final class ComposeWindow {
     public void newMessage(Account account, Stage owner) {
         prepare(owner);
         this.account = account;
+        this.allowClose = false;
         this.replyTo = null;
         checkAndRecoverDraft(account);
         toField.clear();
@@ -150,6 +177,7 @@ public final class ComposeWindow {
     public void reply(Account account, Message message, Stage owner) {
         prepare(owner);
         this.account = account;
+        this.allowClose = false;
         this.replyTo = message;
         toField.clear();
         ccField.clear();
@@ -188,6 +216,7 @@ public final class ComposeWindow {
     public void forward(Account account, Message message, Stage owner) {
         prepare(owner);
         this.account = account;
+        this.allowClose = false;
         this.replyTo = message;
         toField.clear();
         ccField.clear();
@@ -308,6 +337,10 @@ public final class ComposeWindow {
     }
 
     private void prepare(Stage owner) {
+        var classes = stage.getScene().getRoot().getStyleClass();
+        if (new DesktopSettings(context.store()).theme().equals("Dark")) {
+            if (!classes.contains("dark-theme")) classes.add("dark-theme");
+        } else classes.remove("dark-theme");
         if (owner != null && stage.getOwner() == null) {
             stage.initOwner(owner);
             stage.initModality(Modality.WINDOW_MODAL);
@@ -321,13 +354,29 @@ public final class ComposeWindow {
      */
     public Scene build() {
         VBox root = new VBox(8);
+        root.getStyleClass().add("compose-window");
+        if (new DesktopSettings(context.store()).theme().equals("Dark")) root.getStyleClass().add("dark-theme");
         root.setPadding(new Insets(10));
+        Label heading = new Label("Compose message");
+        heading.getStyleClass().add("compose-heading");
 
-        root.getChildren().addAll(
-                labelled("To", toField),
-                labelled("Cc", ccField),
-                labelled("Bcc", bccField),
-                labelled("Subject", subjectField));
+        Button recipientOptions = new Button("Cc / Bcc");
+        recipientOptions.setAccessibleText("Show or hide carbon copy and blind carbon copy fields");
+        ccRow.setVisible(false);
+        ccRow.setManaged(false);
+        bccRow.setVisible(false);
+        bccRow.setManaged(false);
+        recipientOptions.setOnAction(event -> {
+            boolean show = !ccRow.isVisible();
+            ccRow.setVisible(show);
+            ccRow.setManaged(show);
+            bccRow.setVisible(show);
+            bccRow.setManaged(show);
+        });
+        HBox toRow = new HBox(8, labelled("To", toField), recipientOptions);
+        HBox.setHgrow(toRow.getChildren().getFirst(), Priority.ALWAYS);
+        root.getChildren().addAll(toRow, ccRow, bccRow, labelled("Subject", subjectField));
+        root.getChildren().add(0, heading);
 
         suggestionList.setPrefHeight(120);
         suggestionList.setVisible(false);
@@ -381,6 +430,7 @@ public final class ComposeWindow {
         root.getChildren().addAll(suggestionList, bodyArea, attachmentList, status, buttons);
 
         sendButton.setDefaultButton(true);
+        sendButton.getStyleClass().add("primary-action");
         sendButton.setOnAction(event -> send());
         draftButton.setOnAction(event -> saveDraft());
         attachButton.setOnAction(event -> pickAttachments());
@@ -388,7 +438,10 @@ public final class ComposeWindow {
         wireSuggestions();
         wireShortcuts();
 
-        stage.setScene(new Scene(root, 720, 640));
+        Scene scene = new Scene(root, 760, 680);
+        var stylesheet = getClass().getResource("/styles/mail.css");
+        if (stylesheet != null) scene.getStylesheets().add(stylesheet.toExternalForm());
+        stage.setScene(scene);
         initAutosave();
         return stage.getScene();
     }
@@ -590,12 +643,36 @@ public final class ComposeWindow {
                 attachButton.setDisable(false);
                 status.setText(message);
                 if (message.endsWith("sent") || message.endsWith("saved") || message.contains("not confirmed")) {
+                    allowClose = true;
                     stage.close();
                 }
             });
         }, "graalmail-compose");
         worker.setDaemon(true);
         worker.start();
+    }
+
+    private boolean hasComposeContent() {
+        return !toField.getText().isBlank() || !ccField.getText().isBlank()
+                || !bccField.getText().isBlank() || !subjectField.getText().isBlank()
+                || !bodyArea.getText().isBlank() || !attachments.isEmpty();
+    }
+
+    private void saveLocalDraftOnClose() {
+        if (account == null) return;
+        MessageDraft draft = MessageDraft.builder().accountId(account.id())
+                .to(AddressParser.parseList(toField.getText()))
+                .cc(AddressParser.parseList(ccField.getText()))
+                .bcc(AddressParser.parseList(bccField.getText()))
+                .subject(subjectField.getText())
+                .bodyText(bodyArea.getText())
+                .attachments(new ArrayList<>(attachments)).build();
+        try {
+            String json = MAPPER.writeValueAsString(draft);
+            context.store().saveLocalDraft(LocalDraft.of(account.id(), "", json));
+        } catch (Exception e) {
+            LOG.warn("The local draft could not be saved: {}", e.getMessage());
+        }
     }
 
     private void showWarning(String message) {

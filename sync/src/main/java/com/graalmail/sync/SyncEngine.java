@@ -441,8 +441,14 @@ public final class SyncEngine {
                 targetFolderId, "", PendingAction.State.PENDING, 0, "", Instant.now());
         store.enqueue(action);
         switch (type) {
-            case MARK_READ -> store.updateFlags(targetId, true, false);
-            case MARK_UNREAD -> store.updateFlags(targetId, false, false);
+            case MARK_READ -> store.message(targetId)
+                    .ifPresent(message -> store.updateFlags(targetId, false, message.flagged()));
+            case MARK_UNREAD -> store.message(targetId)
+                    .ifPresent(message -> store.updateFlags(targetId, true, message.flagged()));
+            case FLAG -> store.message(targetId)
+                    .ifPresent(message -> store.updateFlags(targetId, message.unread(), true));
+            case UNFLAG -> store.message(targetId)
+                    .ifPresent(message -> store.updateFlags(targetId, message.unread(), false));
             case MOVE -> store.moveMessage(targetId, targetFolderId);
             case DELETE -> store.deleteMessage(targetId);
             default -> {

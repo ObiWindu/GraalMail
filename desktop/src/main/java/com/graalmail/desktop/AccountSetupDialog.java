@@ -31,7 +31,9 @@ import javafx.scene.control.Label;
 import javafx.scene.control.PasswordField;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.GridPane;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
+import javafx.scene.Node;
 import javafx.stage.Stage;
 import org.slf4j.Logger;
 
@@ -66,6 +68,9 @@ public final class AccountSetupDialog {
     private final TextField redirectResultField = new TextField();
     private final Label status = new Label("");
     private final Button saveButton = new Button("Save account");
+    private final Map<Node, Label> rowLabels = new java.util.HashMap<>();
+    private final VBox stepContent = new VBox(12);
+    private int currentStep;
 
     private AuthorizationRequest pendingAuthorization;
     private AccountSetup pendingSetup;
@@ -89,43 +94,115 @@ public final class AccountSetupDialog {
         providerChoice.setValue(ProviderType.GENERIC);
         providerChoice.valueProperty().addListener((observable, old, value) -> updateVisibility(value));
 
-        GridPane grid = new GridPane();
-        grid.setHgap(10);
-        grid.setVgap(8);
-        grid.setPadding(new Insets(12));
+        GridPane identity = new GridPane();
+        GridPane connection = new GridPane();
+        GridPane authorization = new GridPane();
+        for (GridPane grid : new GridPane[]{identity, connection, authorization}) {
+            grid.setHgap(10);
+            grid.setVgap(8);
+            grid.setPadding(new Insets(12));
+        }
+        addRow(identity, 0, "Provider", providerChoice);
+        addRow(identity, 1, "Email", emailField);
+        addRow(identity, 2, "Display name", displayNameField);
         int row = 0;
-        row = addRow(grid, row, "Provider", providerChoice);
-        row = addRow(grid, row, "Email", emailField);
-        row = addRow(grid, row, "Display name", displayNameField);
-        row = addRow(grid, row, "IMAP server", imapHostField);
-        row = addRow(grid, row, "IMAP port", imapPortField);
-        row = addRow(grid, row, "IMAP security", imapSecurityField);
-        row = addRow(grid, row, "SMTP server", smtpHostField);
-        row = addRow(grid, row, "SMTP port", smtpPortField);
-        row = addRow(grid, row, "SMTP security", smtpSecurityField);
-        row = addRow(grid, row, "Password or app password", passwordField);
-        row = addRow(grid, row, "OAuth client id", clientIdField);
-        row = addRow(grid, row, "OAuth redirect URI", redirectUriField);
-        row = addRow(grid, row, "Redirect result", redirectResultField);
+        row = addRow(connection, row, "IMAP server", imapHostField);
+        row = addRow(connection, row, "IMAP port", imapPortField);
+        row = addRow(connection, row, "IMAP security", imapSecurityField);
+        row = addRow(connection, row, "SMTP server", smtpHostField);
+        row = addRow(connection, row, "SMTP port", smtpPortField);
+        row = addRow(connection, row, "SMTP security", smtpSecurityField);
+        row = addRow(connection, row, "Password or app password", passwordField);
+        row = addRow(connection, row, "OAuth client id", clientIdField);
+        row = addRow(connection, row, "OAuth redirect URI", redirectUriField);
+        addRow(authorization, 0, "Redirect result URL", redirectResultField);
 
         Button openBrowser = new Button("Open sign in page");
         openBrowser.setOnAction(event -> openAuthorizationPage());
         Button cancel = new Button("Cancel");
         cancel.setOnAction(event -> stage.close());
+        Button continueButton = new Button("Continue");
+        continueButton.setDefaultButton(true);
+        Button back = new Button("Back");
+        back.setOnAction(event -> { currentStep = Math.max(0, currentStep - 1); updateStep(identity, connection, authorization, openBrowser, back, continueButton); });
+        continueButton.setOnAction(event -> {
+            if (currentStep == 0) {
+                if (emailField.getText() == null || emailField.getText().isBlank()) {
+                    status.setText("Enter the email address for this account first.");
+                    emailField.requestFocus();
+                    return;
+                }
+                currentStep = 1;
+                updateStep(identity, connection, authorization, openBrowser, back, continueButton);
+            } else if (requiresOAuth()) {
+                currentStep = 2;
+                updateStep(identity, connection, authorization, openBrowser, back, continueButton);
+            } else save();
+        });
         saveButton.setOnAction(event -> save());
 
-        VBox buttons = new VBox(8, openBrowser, saveButton, cancel);
-        buttons.setPadding(new Insets(12));
+        HBox buttons = new HBox(8, back, continueButton, openBrowser, saveButton, cancel);
+        buttons.setAlignment(javafx.geometry.Pos.CENTER_RIGHT);
 
-        VBox root = new VBox(10, grid, status, buttons);
-        root.setPadding(new Insets(10));
-        stage.setScene(new javafx.scene.Scene(root, 560, 640));
+        Label heading = new Label("Add an account");
+        heading.getStyleClass().add("compose-heading");
+        Label help = new Label("Choose your provider and follow the sign-in steps. Your mail stays in GraalMail's local cache.");
+        help.setWrapText(true);
+        VBox content = new VBox(12, heading, help, stepContent, status, buttons);
+        content.getStyleClass().add("account-setup");
+        if (new DesktopSettings(context.store()).theme().equals("Dark")) content.getStyleClass().add("dark-theme");
+        content.setPadding(new Insets(16));
+        javafx.scene.control.ScrollPane scroll = new javafx.scene.control.ScrollPane(content);
+        scroll.setFitToWidth(true);
+        scroll.setHbarPolicy(javafx.scene.control.ScrollPane.ScrollBarPolicy.NEVER);
+        javafx.scene.Scene scene = new javafx.scene.Scene(scroll, 600, 680);
+        var stylesheet = getClass().getResource("/styles/mail.css");
+        if (stylesheet != null) scene.getStylesheets().add(stylesheet.toExternalForm());
+        stage.setScene(scene);
         updateVisibility(ProviderType.GENERIC);
+        currentStep = 0;
+        updateStep(identity, connection, authorization, openBrowser, back, continueButton);
         stage.showAndWait();
     }
 
+    private void updateStep(GridPane identity, GridPane connection, GridPane authorization,
+                            Button openBrowser, Button back, Button continueButton) {
+        stepContent.getChildren().clear();
+        if (currentStep == 0) {
+            stepContent.getChildren().addAll(new Label("1. Choose provider and account"), identity);
+        } else if (currentStep == 1) {
+            stepContent.getChildren().addAll(new Label("2. Configure sign-in"), connection);
+        } else {
+            stepContent.getChildren().addAll(new Label("3. Complete browser sign-in"),
+                    new Label("Open the provider page, finish signing in, then paste the full redirect URL below."),
+                    authorization);
+        }
+        back.setVisible(currentStep > 0);
+        back.setManaged(currentStep > 0);
+        boolean oauthStep = currentStep == 2 && requiresOAuth();
+        openBrowser.setVisible(oauthStep);
+        openBrowser.setManaged(oauthStep);
+        saveButton.setVisible(oauthStep);
+        saveButton.setManaged(oauthStep);
+        saveButton.setDefaultButton(oauthStep);
+        continueButton.setVisible(currentStep < 2);
+        continueButton.setManaged(currentStep < 2);
+        continueButton.setDefaultButton(currentStep < 2);
+        continueButton.setText(currentStep == 1 && !requiresOAuth() ? "Save account" : "Continue");
+        setRowVisible(redirectResultField, oauthStep);
+    }
+
+    private boolean requiresOAuth() {
+        ProviderType type = providerChoice.getValue();
+        return type == ProviderType.GMAIL || type == ProviderType.MICROSOFT
+                || (type == ProviderType.YAHOO && clientIdField.getText() != null
+                && !clientIdField.getText().isBlank());
+    }
+
     private int addRow(GridPane grid, int row, String label, javafx.scene.Node node) {
-        grid.add(new Label(label), 0, row);
+        Label caption = new Label(label);
+        rowLabels.put(node, caption);
+        grid.add(caption, 0, row);
         grid.add(node, 1, row);
         return row + 1;
     }
@@ -142,6 +219,26 @@ public final class AccountSetupDialog {
         clientIdField.setDisable(type == ProviderType.GENERIC);
         redirectUriField.setDisable(type == ProviderType.GENERIC);
         redirectResultField.setDisable(type == ProviderType.GENERIC);
+        setRowVisible(imapHostField, generic);
+        setRowVisible(imapPortField, generic);
+        setRowVisible(imapSecurityField, generic);
+        setRowVisible(smtpHostField, generic);
+        setRowVisible(smtpPortField, generic);
+        setRowVisible(smtpSecurityField, generic);
+        setRowVisible(passwordField, type != ProviderType.GMAIL && type != ProviderType.MICROSOFT);
+        setRowVisible(clientIdField, type != ProviderType.GENERIC);
+        setRowVisible(redirectUriField, type != ProviderType.GENERIC);
+        setRowVisible(redirectResultField, type != ProviderType.GENERIC);
+    }
+
+    private void setRowVisible(Node field, boolean visible) {
+        field.setVisible(visible);
+        field.setManaged(visible);
+        Label label = rowLabels.get(field);
+        if (label != null) {
+            label.setVisible(visible);
+            label.setManaged(visible);
+        }
     }
 
     private void openAuthorizationPage() {

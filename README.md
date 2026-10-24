@@ -146,7 +146,7 @@ The OAuth client registration is described in
 * [PROVIDER_SUPPORT.md](PROVIDER_SUPPORT.md) – compatibility matrix and setup
 * [TESTING.md](TESTING.md) – what is tested and how to run it
 * [CONTRIBUTING.md](CONTRIBUTING.md) – coding rules and review expectations
-* [PLAN.md](PLAN.md) – the implementation plan and its current status
+* [GUI_REDESIGN_PLAN.md](GUI_REDESIGN_PLAN.md) – the desktop GUI redesign plan
 
 ## Known limitations
 

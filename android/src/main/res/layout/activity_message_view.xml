@@ -75,20 +75,28 @@
         </LinearLayout>
     </ScrollView>
 
-    <Button
-        android:id="@+id/message_reply"
-        android:layout_width="0dp"
+    <LinearLayout
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_margin="16dp"
-        android:layout_weight="1"
-        android:text="@string/action_reply" />
+        android:orientation="horizontal"
+        android:paddingHorizontal="8dp"
+        android:paddingBottom="8dp">
 
-    <Button
-        android:id="@+id/message_forward"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_margin="16dp"
-        android:layout_weight="1"
-        android:text="@string/action_forward" />
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/message_reply"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_margin="8dp"
+            android:layout_weight="1"
+            android:text="@string/action_reply" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/message_forward"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_margin="8dp"
+            android:layout_weight="1"
+            android:text="@string/action_forward" />
+    </LinearLayout>
 
 </LinearLayout>

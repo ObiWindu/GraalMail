@@ -31,4 +31,19 @@
         android:title="@string/message_list_select_all"
         app:showAsAction="never" />
 
+    <item
+        android:id="@+id/action_star"
+        android:title="@string/action_star"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_spam"
+        android:title="@string/action_spam"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_move"
+        android:title="Move to…"
+        app:showAsAction="never" />
+
 </menu>
