@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '25'
+          cache: 'gradle'
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+      - name: Build and test JVM modules
+        run: ./gradlew :core:test :security:test :provider-api:test :storage:test :sync:test :provider-imap:test :provider-gmail:test :provider-microsoft:test :provider-yahoo:test :provider-proton:test :testing:test :desktop:test --no-daemon
+      - name: Build Android module
+        run: ./gradlew :android:assembleDebug --no-daemon
+      - name: Build desktop distribution
+        run: ./gradlew :desktop:packageAppImageTarball :desktop:stageDesktopFiles --no-daemon
+      - name: Upload desktop artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: graalmail-desktop
+          path: desktop/build/dist/
+      - name: Upload Android APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: graalmail-android
+          path: android/build/outputs/apk/debug/
+
+  packaging:
+    name: Packaging Smoke Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '25'
+          cache: 'gradle'
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+      - name: Install packaging tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fakeroot rpm
+      - name: Build Debian package
+        run: ./gradlew :desktop:packageDeb --no-daemon
+      - name: Build RPM package
+        run: ./gradlew :desktop:packageRpm --no-daemon
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: graalmail-packages
+          path: desktop/build/dist/

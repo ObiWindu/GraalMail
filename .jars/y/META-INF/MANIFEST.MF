@@ -1,0 +1,49 @@
+Manifest-Version: 1.0
+Bundle-Description: Angus Mail Provider
+Bundle-DocURL: https://www.eclipse.org
+Bundle-License: http://www.eclipse.org/legal/epl-2.0, https://www.gnu.or
+ g/software/classpath/license.html, http://www.eclipse.org/org/documents
+ /edl-v10.php
+Bundle-ManifestVersion: 2
+Bundle-Name: Angus Mail Provider
+Bundle-SymbolicName: org.eclipse.angus.mail
+Bundle-Vendor: Eclipse Foundation
+Bundle-Version: 2.0.3
+Created-By: Apache Maven Bundle Plugin 5.1.9
+DynamicImport-Package: *
+Export-Package: org.eclipse.angus.mail.auth;version="2.0.3";uses:="javax
+ .security.auth.callback,javax.security.sasl,org.eclipse.angus.mail.util
+ ",org.eclipse.angus.mail.handlers;version="2.0.3";uses:="jakarta.activa
+ tion",org.eclipse.angus.mail.iap;version="2.0.3";uses:="org.eclipse.ang
+ us.mail.util",org.eclipse.angus.mail.imap;version="2.0.3";uses:="jakart
+ a.activation,jakarta.mail,jakarta.mail.event,jakarta.mail.internet,jaka
+ rta.mail.search,org.eclipse.angus.mail.iap,org.eclipse.angus.mail.imap.
+ protocol,org.eclipse.angus.mail.util",org.eclipse.angus.mail.imap.proto
+ col;version="2.0.3";uses:="jakarta.mail,jakarta.mail.internet,jakarta.m
+ ail.search,org.eclipse.angus.mail.iap,org.eclipse.angus.mail.imap,org.e
+ clipse.angus.mail.util",org.eclipse.angus.mail.nativeimage;version="2.0
+ .3";uses:="org.graalvm.nativeimage.hosted",org.eclipse.angus.mail.pop3;
+ version="2.0.3";uses:="jakarta.mail,jakarta.mail.internet,org.eclipse.a
+ ngus.mail.util",org.eclipse.angus.mail.smtp;version="2.0.3";uses:="jaka
+ rta.mail,jakarta.mail.internet,org.eclipse.angus.mail.util",org.eclipse
+ .angus.mail.util;version="2.0.3";uses:="jakarta.mail,jakarta.mail.util,
+ javax.net.ssl",org.eclipse.angus.mail.util.logging;version="2.0.3";uses
+ :="jakarta.mail"
+Import-Package: javax.security.sasl;resolution:=optional,sun.security.ut
+ il;resolution:=optional,jakarta.activation;version="[2.1,3)",jakarta.ma
+ il;version="[2.1,3)",jakarta.mail.event;version="[2.1,3)",jakarta.mail.
+ internet;version="[2.1,3)",jakarta.mail.search;version="[2.1,3)",jakart
+ a.mail.util;version="[2.1,3)",javax.crypto,javax.crypto.spec,javax.net,
+ javax.net.ssl,javax.security.auth.callback,javax.security.auth.x500,jav
+ ax.xml.transform,javax.xml.transform.stream,org.eclipse.angus.mail.auth
+ ;version="[2.0,3)",org.eclipse.angus.mail.iap;version="[2.0,3)",org.ecl
+ ipse.angus.mail.imap;version="[2.0,3)",org.eclipse.angus.mail.imap.prot
+ ocol;version="[2.0,3)",org.eclipse.angus.mail.util;version="[2.0,3)",or
+ g.graalvm.nativeimage.hosted;resolution:=optional
+Provide-Capability: osgi.serviceloader;osgi.serviceloader="jakarta.mail.
+ util.StreamProvider",osgi.serviceloader;osgi.serviceloader="jakarta.mai
+ l.Provider"
+Require-Capability: osgi.extender;filter:="(&(osgi.extender=osgi.service
+ loader.registrar)(version>=1.0.0)(!(version>=2.0.0)))";resolution:=opti
+ onal,osgi.ee;filter:="(&(osgi.ee=JavaSE)(version=1.8))"
+

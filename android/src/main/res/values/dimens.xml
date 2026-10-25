@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <dimen name="space_1">4dp</dimen>
+    <dimen name="space_2">8dp</dimen>
+    <dimen name="space_3">12dp</dimen>
+    <dimen name="space_4">16dp</dimen>
+    <dimen name="space_5">24dp</dimen>
+    <dimen name="screen_inset_phone">16dp</dimen>
+    <dimen name="screen_inset_wide">24dp</dimen>
+    <dimen name="touch_target_min">48dp</dimen>
+    <dimen name="mailbox_account_row_min">64dp</dimen>
+    <dimen name="mailbox_folder_row_min">56dp</dimen>
+    <dimen name="message_row_min">88dp</dimen>
+    <dimen name="reader_page_inset">16dp</dimen>
+</resources>
