@@ -250,3 +250,37 @@
     -fx-background-color: #303846;
     -fx-text-fill: #c7cfdd;
 }
+
+.reader-header {
+    -fx-spacing: 6px;
+    -fx-padding: 12px 16px 10px 16px;
+    -fx-background-color: -fx-gm-pane;
+    -fx-border-color: transparent transparent -fx-gm-border transparent;
+}
+.reader-subject { -fx-font-size: 19px; -fx-font-weight: 600; -fx-text-fill: -fx-gm-text; }
+.reader-identity { -fx-alignment: center-left; -fx-spacing: 12px; }
+.reader-sender { -fx-font-size: 13px; -fx-font-weight: 600; -fx-text-fill: -fx-gm-text; }
+.reader-date, .reader-recipient-summary, .reader-indicators { -fx-text-fill: -fx-gm-muted; }
+.reader-details-toggle { -fx-padding: 2px 4px; -fx-background-color: transparent; -fx-text-fill: -fx-gm-accent; }
+.reader-recipient-details {
+    -fx-padding: 8px;
+    -fx-background-color: -fx-gm-subtle;
+    -fx-background-radius: 4px;
+    -fx-text-fill: -fx-gm-secondary;
+}
+.reader-state {
+    -fx-padding: 7px 12px;
+    -fx-background-color: -fx-gm-subtle;
+    -fx-text-fill: -fx-gm-secondary;
+}
+.reader-attachments {
+    -fx-padding: 8px 0 0 0;
+    -fx-hgap: 8px;
+    -fx-vgap: 8px;
+}
+.diagnostics-window { -fx-background-color: -fx-gm-window; -fx-padding: 18px; -fx-spacing: 12px; }
+.diagnostics-window .text-area { -fx-font-family: monospace; -fx-font-size: 12px; }
+.settings-explanation { -fx-text-fill: #687386; }
+.dark-theme .settings-explanation { -fx-text-fill: #aab4c4; }
+.dark-theme .reader-header, .dark-theme .reader-state { -fx-background-color: -fx-gm-pane; }
+.dark-theme .reader-recipient-details { -fx-background-color: -fx-gm-subtle; }

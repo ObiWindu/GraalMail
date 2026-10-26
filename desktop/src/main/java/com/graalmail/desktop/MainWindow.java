@@ -463,7 +463,7 @@ public final class MainWindow {
         remoteImagesButton.setAccessibleText("Allow remote images for this message only");
         readerHeader = buildReaderHeader();
         readerPane = new VBox(readerActionsPane, readerHeader, remoteImagesButton,
-                readerState, attachmentActions, reader);
+                readerState, reader);
         readerPane.getStyleClass().add("reader-pane");
         reader.setContextMenuEnabled(false);
         reader.setMinWidth(320);
@@ -511,6 +511,7 @@ public final class MainWindow {
             readerDetailsToggle.setText(expanded ? "Hide details" : "Show details");
         });
         readerDetailsToggle.setAccessibleText("Show or hide message recipient details");
+        attachmentActions.getStyleClass().add("reader-attachments");
         javafx.scene.layout.Region spacer = new javafx.scene.layout.Region();
         HBox title = new HBox(8, readerSubject, spacer, readerDate);
         title.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
@@ -519,7 +520,7 @@ public final class MainWindow {
         HBox identity = new HBox(8, readerSender, readerMessageIndicators);
         identity.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
         VBox header = new VBox(6, title, identity, readerRecipientSummary,
-                readerDetailsToggle, readerRecipientDetails);
+                readerDetailsToggle, readerRecipientDetails, attachmentActions);
         header.setPadding(new Insets(10, 14, 10, 14));
         header.getStyleClass().add("reader-header");
         header.setVisible(false);
@@ -1564,7 +1565,7 @@ public final class MainWindow {
     }
 
     private void showDiagnostics() {
-        new DiagnosticsDialog(context).show();
+        new DiagnosticsDialog(context, isDarkTheme()).show();
     }
 
     private void showInfo(String message) {

@@ -37,6 +37,7 @@ public final class DiagnosticsDialog {
     private static final Logger LOG = Log.of(DiagnosticsDialog.class);
 
     private final DesktopContext context;
+    private final boolean darkTheme;
     private final Stage stage = new Stage();
     private final TextArea report = new TextArea();
 
@@ -45,8 +46,9 @@ public final class DiagnosticsDialog {
      *
      * @param context the application context
      */
-    public DiagnosticsDialog(DesktopContext context) {
+    public DiagnosticsDialog(DesktopContext context, boolean darkTheme) {
         this.context = context;
+        this.darkTheme = darkTheme;
         stage.setTitle("Diagnostics");
     }
 
@@ -76,6 +78,8 @@ public final class DiagnosticsDialog {
         buttons.setAlignment(Pos.CENTER_LEFT);
 
         VBox root = new VBox(10, report, buttons);
+        root.getStyleClass().add("diagnostics-window");
+        if (darkTheme) root.getStyleClass().add("dark-theme");
         root.setPadding(new Insets(12));
         stage.setScene(new Scene(root, 760, 520));
         return stage.getScene();

@@ -440,6 +440,22 @@ public final class ComposeWindow {
         wireShortcuts();
 
         Scene scene = new Scene(root, 760, 680);
+        scene.setOnKeyPressed(event -> {
+            boolean command = event.isControlDown() || event.isMetaDown();
+            if (command && event.getCode() == KeyCode.ENTER) {
+                if (!sending) send();
+                event.consume();
+            } else if (command && event.getCode() == KeyCode.S) {
+                if (!sending) saveDraft();
+                event.consume();
+            } else if (command && event.isShiftDown() && event.getCode() == KeyCode.A) {
+                if (!sending) pickAttachments();
+                event.consume();
+            } else if (event.getCode() == KeyCode.ESCAPE && !sending) {
+                stage.close();
+                event.consume();
+            }
+        });
         var stylesheet = getClass().getResource("/styles/mail.css");
         if (stylesheet != null) scene.getStylesheets().add(stylesheet.toExternalForm());
         stage.setScene(scene);

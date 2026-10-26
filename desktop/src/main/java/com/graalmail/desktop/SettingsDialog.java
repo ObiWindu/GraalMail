@@ -39,6 +39,8 @@ public final class SettingsDialog {
     private final ComboBox<String> theme = new ComboBox<>();
     private final ComboBox<String> layout = new ComboBox<>();
     private final ComboBox<String> listMode = new ComboBox<>();
+    private final CheckBox showNavigation = new CheckBox("Show folders and accounts pane");
+    private final CheckBox showReader = new CheckBox("Show message reader pane");
 
     /**
      * Creates the settings window.
@@ -56,8 +58,8 @@ public final class SettingsDialog {
             stage.initModality(Modality.WINDOW_MODAL);
         }
         stage.setResizable(true);
-        stage.setMinWidth(680);
-        stage.setMinHeight(480);
+        stage.setMinWidth(720);
+        stage.setMinHeight(520);
     }
 
     /**
@@ -77,6 +79,8 @@ public final class SettingsDialog {
         layout.setValue(settings.layoutMode());
         listMode.getItems().setAll("Cards", "Table");
         listMode.setValue(settings.listMode());
+        showNavigation.setSelected(settings.showNavigation());
+        showReader.setSelected(settings.showReader());
 
         Label intervalLabel = new Label("Synchronise every (minutes)");
         Label pageLabel = new Label("Messages per page");
@@ -91,6 +95,8 @@ public final class SettingsDialog {
             settings.theme(theme.getValue());
             settings.layoutMode(layout.getValue());
             settings.listMode(listMode.getValue());
+            settings.showNavigation(showNavigation.isSelected());
+            settings.showReader(showReader.isSelected());
             LOG.info("Settings saved: sync every {} minutes, {} messages per page",
                     syncInterval.getValue(), pageSize.getValue());
             stage.close();
@@ -110,7 +116,8 @@ public final class SettingsDialog {
         layoutHelp.setWrapText(true);
         javafx.scene.layout.VBox layoutSettings = new javafx.scene.layout.VBox(10,
                 new Label("Workspace layout"), layout, layoutHelp,
-                new Label("Pane visibility can also be changed from the Layout menu in the main toolbar."));
+                showNavigation, showReader,
+                new Label("You can also change pane visibility from the Layout menu in the main toolbar."));
         javafx.scene.control.Tab syncTab = new javafx.scene.control.Tab("Sync", syncSettings);
         javafx.scene.control.Tab appearanceTab = new javafx.scene.control.Tab("Appearance", appearanceSettings);
         javafx.scene.control.Tab layoutTab = new javafx.scene.control.Tab("Layout", layoutSettings);
@@ -118,12 +125,16 @@ public final class SettingsDialog {
         appearanceTab.setClosable(false);
         layoutTab.setClosable(false);
         javafx.scene.control.TabPane tabs = new javafx.scene.control.TabPane(syncTab, appearanceTab, layoutTab);
-        javafx.scene.layout.VBox root = new javafx.scene.layout.VBox(10, tabs, buttons);
+        Label heading = new Label("GraalMail Settings");
+        heading.getStyleClass().add("compose-heading");
+        Label explanation = new Label("Choose how GraalMail looks, syncs, and arranges your workspace.");
+        explanation.getStyleClass().add("settings-explanation");
+        javafx.scene.layout.VBox root = new javafx.scene.layout.VBox(10, heading, explanation, tabs, buttons);
         root.getStyleClass().add("account-setup");
         if (darkTheme) root.getStyleClass().add("dark-theme");
         root.setPadding(new Insets(14));
 
-        Scene scene = new Scene(root, 820, 620);
+        Scene scene = new Scene(root, 900, 650);
         var stylesheet = getClass().getResource("/styles/mail.css");
         if (stylesheet != null) scene.getStylesheets().add(stylesheet.toExternalForm());
         stage.setScene(scene);
