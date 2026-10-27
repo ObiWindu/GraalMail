@@ -44,4 +44,11 @@ public class InMemoryPeerNetworkService implements PeerNetworkService {
     public java.util.concurrent.CompletionStage<List<PeerAddress>> discoverPeers() {
         return CompletableFuture.completedFuture(new ArrayList<>(peers.keySet()));
     }
+
+    @Override
+    public java.util.concurrent.CompletionStage<java.util.Optional<byte[]>> peerSigningKey(PeerAddress peer) {
+        MailboxPeer mp = peers.get(peer);
+        if (mp == null || mp.signingKey() == null) return CompletableFuture.completedFuture(java.util.Optional.empty());
+        return CompletableFuture.completedFuture(java.util.Optional.of(mp.signingKey().getPublic().getEncoded()));
+    }
 }

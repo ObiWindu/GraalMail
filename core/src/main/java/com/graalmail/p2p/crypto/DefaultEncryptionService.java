@@ -127,7 +127,11 @@ public class DefaultEncryptionService implements EncryptionService {
     }
 
     private static byte[] readBytes(java.nio.ByteBuffer buf) {
+        if (buf.remaining() < 4) throw new PolyMailException(ErrorCode.INVALID_MESSAGE, "truncated ciphertext envelope");
         int len = buf.getInt();
+        if (len < 0 || len > buf.remaining()) {
+            throw new PolyMailException(ErrorCode.INVALID_MESSAGE, "corrupt ciphertext envelope length");
+        }
         byte[] b = new byte[len];
         buf.get(b);
         return b;
@@ -135,12 +139,18 @@ public class DefaultEncryptionService implements EncryptionService {
 
     @Override
     public byte[] decrypt(byte[] ciphertextEnvelope, byte[] recipientEncryptionPrivateKeyEncoded, byte[] associatedData) {
+        if (ciphertextEnvelope == null || ciphertextEnvelope.length > ProtocolConstants.MAX_MESSAGE_BYTES + 1024) {
+            throw new PolyMailException(ErrorCode.INVALID_MESSAGE, "ciphertext envelope size invalid");
+        }
         try {
             java.nio.ByteBuffer buf = java.nio.ByteBuffer.wrap(ciphertextEnvelope);
             byte[] ephPubEncoded = readBytes(buf);
             byte[] salt = readBytes(buf);
             byte[] iv = readBytes(buf);
             byte[] ct = readBytes(buf);
+            if (buf.hasRemaining()) {
+                throw new PolyMailException(ErrorCode.INVALID_MESSAGE, "trailing bytes in ciphertext envelope");
+            }
 
             KeyFactory kf = KeyFactory.getInstance("X25519");
             PrivateKey recipientPriv = kf.generatePrivate(new PKCS8EncodedKeySpec(recipientEncryptionPrivateKeyEncoded));
@@ -157,9 +167,53 @@ public class DefaultEncryptionService implements EncryptionService {
             cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(key, "AES"), new GCMParameterSpec(ProtocolConstants.GCM_TAG_BITS, iv));
             if (associatedData != null) cipher.updateAAD(associatedData);
             return cipher.doFinal(ct);
+        } catch (PolyMailException e) {
+            throw e;
         } catch (Exception e) {
             throw new PolyMailException(ErrorCode.ENCRYPTION_FAILED, "decryption failed", e);
         }
+    }
+
+    @Override
+    public byte[] seal(byte[] plaintext, byte[] key) {
+        if (key == null || key.length != ProtocolConstants.AES_KEY_BYTES) {
+            throw new PolyMailException(ErrorCode.ENCRYPTION_FAILED, "content key must be 32 bytes");
+        }
+        try {
+            byte[] iv = new byte[ProtocolConstants.GCM_IV_BYTES];
+            random.nextBytes(iv);
+            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+            cipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(key, "AES"), new GCMParameterSpec(ProtocolConstants.GCM_TAG_BITS, iv));
+            byte[] ct = cipher.doFinal(plaintext);
+            byte[] out = new byte[iv.length + ct.length];
+            System.arraycopy(iv, 0, out, 0, iv.length);
+            System.arraycopy(ct, 0, out, iv.length, ct.length);
+            return out;
+        } catch (Exception e) {
+            throw new PolyMailException(ErrorCode.ENCRYPTION_FAILED, "seal failed", e);
+        }
+    }
+
+    @Override
+    public byte[] open(byte[] sealed, byte[] key) {
+        if (key == null || key.length != ProtocolConstants.AES_KEY_BYTES) {
+            throw new PolyMailException(ErrorCode.ENCRYPTION_FAILED, "content key must be 32 bytes");
+        }
+        try {
+            byte[] iv = java.util.Arrays.copyOf(sealed, ProtocolConstants.GCM_IV_BYTES);
+            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+            cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(key, "AES"), new GCMParameterSpec(ProtocolConstants.GCM_TAG_BITS, iv));
+            return cipher.doFinal(sealed, ProtocolConstants.GCM_IV_BYTES, sealed.length - ProtocolConstants.GCM_IV_BYTES);
+        } catch (Exception e) {
+            throw new PolyMailException(ErrorCode.ENCRYPTION_FAILED, "open failed", e);
+        }
+    }
+
+    @Override
+    public byte[] randomContentKey() {
+        byte[] key = new byte[ProtocolConstants.AES_KEY_BYTES];
+        random.nextBytes(key);
+        return key;
     }
 
     @Override

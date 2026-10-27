@@ -12,7 +12,7 @@ Supported providers:
 | Outlook.com / Hotmail / Microsoft 365 | OAuth 2.0 (authorization code + PKCE) | Microsoft Graph (default) or IMAP + SMTP with XOAUTH2 | implemented, Graph path covered by unit tests |
 | Yahoo Mail | App password (OAuth 2.0 optional, requires Yahoo approval) | IMAP + SMTP over TLS | implemented, protocol path covered by tests |
 | Proton Mail (Linux) | Proton Mail Bridge | local IMAP + SMTP | implemented, documented parity limits |
-| Proton Mail (Android) | – | – | not available: no officially supported client integration exists |
+| Proton Mail (Android) | – | – | no mailbox sync (no supported client integration exists); the setup screen links to the official Proton Mail app and web client |
 | Any other provider | password or app password | IMAP + SMTP over TLS/STARTTLS | implemented, covered by a GreenMail integration test |
 
 Nothing in this repository is a mock: the IMAP and SMTP code paths are
@@ -135,6 +135,9 @@ and is larger than a linked image, but the packaging works on every machine.
    the full redirect URL into the dialog.
 4. For Yahoo and generic IMAP providers: enter the app password or the account
    password and the server settings.
+5. For Proton Mail (Linux): start Proton Mail Bridge on this machine, then
+   enter the Proton login and the Bridge password. Ports, TLS mode and the
+   Bridge certificate are detected automatically.
 
 The OAuth client registration is described in
 [PROVIDER_SUPPORT.md](PROVIDER_SUPPORT.md).

@@ -114,6 +114,7 @@ public final class MainWindow {
     private final Label readerRecipientSummary = new Label();
     private final Label readerRecipientDetails = new Label();
     private final Label readerMessageIndicators = new Label();
+    private final javafx.scene.layout.StackPane readerAvatarHost = new javafx.scene.layout.StackPane();
     private final Button readerDetailsToggle = new Button("Show details");
     private VBox readerHeader;
     private final javafx.scene.layout.FlowPane attachmentActions = new javafx.scene.layout.FlowPane(
@@ -125,8 +126,8 @@ public final class MainWindow {
     private final ToggleButton starredFilter = new ToggleButton("Starred");
     private final ToggleButton attachmentsFilter = new ToggleButton("Attachments");
     private final Button clearFiltersButton = new Button("Clear filters");
-    private final Button quickFilterToggle = new Button("Quick Filter");
-    private final Button multiSelectButton = new Button("Select multiple");
+    private final Button quickFilterToggle = new Button("Filter");
+    private final Button multiSelectButton = new Button("Select");
     private final Label selectionCount = new Label("0 selected");
     private final SimpleObjectProperty<Account> selectedAccount = new SimpleObjectProperty<>();
     private final SimpleObjectProperty<Folder> selectedFolder = new SimpleObjectProperty<>();
@@ -192,14 +193,14 @@ public final class MainWindow {
         BorderPane root = new BorderPane();
         root.getStyleClass().add("mail-window");
         if (isDarkTheme()) root.getStyleClass().add("dark-theme");
-        spacesToolbar = buildSpacesToolbar();
+        // Proton-style layout: single top bar + three-pane workspace.
+        // The legacy Thunderbird spaces rail is no longer shown.
         BorderPane mailShell = new BorderPane();
         mailShell.getStyleClass().add("mail-shell");
         VBox top = new VBox(buildToolbar());
         mailShell.setTop(top);
         mailShell.setCenter(buildCenter());
         mailShell.setBottom(buildStatusBar());
-        root.setLeft(spacesToolbar);
         root.setCenter(mailShell);
 
         folderTree.getSelectionModel().selectedItemProperty().addListener((observable, old, item) ->
@@ -243,11 +244,38 @@ public final class MainWindow {
             } else if (event.isControlDown() && event.isShiftDown() && event.getCode() == KeyCode.R) {
                 syncNow();
                 event.consume();
-            } else if (event.getCode() == KeyCode.DELETE) {
+            } else if (event.getCode() == KeyCode.DELETE
+                    || (!event.isControlDown() && !event.isMetaDown() && event.getCode() == KeyCode.NUMBER_SIGN)) {
                 deleteSelected();
                 event.consume();
-            } else if (!event.isControlDown() && event.getCode() == KeyCode.A) {
+            } else if (!event.isControlDown() && !event.isMetaDown() && event.getCode() == KeyCode.SLASH) {
+                searchField.requestFocus();
+                searchField.selectAll();
+                event.consume();
+            } else if (!event.isControlDown() && !event.isMetaDown() && event.getCode() == KeyCode.C) {
+                composeNewMessage();
+                event.consume();
+            } else if (!event.isControlDown() && !event.isMetaDown() && event.getCode() == KeyCode.E) {
                 archiveSelected();
+                event.consume();
+            } else if (!event.isControlDown() && !event.isMetaDown() && event.getCode() == KeyCode.U) {
+                toggleReadSelected();
+                event.consume();
+            } else if (!event.isControlDown() && !event.isMetaDown() && event.getCode() == KeyCode.S) {
+                toggleStarSelected();
+                event.consume();
+            } else if (!event.isControlDown() && !event.isMetaDown() && event.getCode() == KeyCode.J) {
+                selectAdjacent(1);
+                event.consume();
+            } else if (!event.isControlDown() && !event.isMetaDown() && event.getCode() == KeyCode.K) {
+                selectAdjacent(-1);
+                event.consume();
+            } else if (!event.isControlDown() && !event.isMetaDown() && event.getCode() == KeyCode.A) {
+                archiveSelected();
+                event.consume();
+            } else if (!event.isControlDown() && !event.isMetaDown() && event.getCode() == KeyCode.OPEN_BRACKET) {
+                settings.showNavigation(!settings.showNavigation());
+                rebuildWorkspace();
                 event.consume();
             }
         });
@@ -259,9 +287,8 @@ public final class MainWindow {
         mainScene = scene;
         if (owner != null) {
             UiScale.install(scene, owner);
+            UiScale.onScale(owner, this::refreshScaledContent);
             reader.setZoom(UiScale.scale(owner));
-            owner.xProperty().addListener((observable, oldValue, newValue) -> refreshScaledContent());
-            owner.yProperty().addListener((observable, oldValue, newValue) -> refreshScaledContent());
         }
         scene.widthProperty().addListener((observable, oldWidth, newWidth) -> {
             if (!effectiveLayoutMode().equals(activeLayoutMode)) rebuildWorkspace();
@@ -337,50 +364,61 @@ public final class MainWindow {
     }
 
     private ToolBar buildToolbar() {
-        Button composeButton = new Button("New Message");
+        // Proton-style top bar: logo + compose on the left, pill search in the
+        // center, sync / layout / settings on the right.
+        Label logoMark = new Label("G");
+        logoMark.getStyleClass().add("proton-logo-mark");
+        Label logoName = new Label("GraalMail");
+        logoName.getStyleClass().add("proton-logo-name");
+        HBox brand = new HBox(UiScale.px(owner, 8), logoMark, logoName);
+        brand.getStyleClass().add("proton-brand");
+        brand.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
+
+        Button navToggle = new Button();
+        navToggle.setGraphic(ThunderbirdIcons.icon("spaces-menu", "toolbar-icon"));
+        navToggle.setAccessibleText("Toggle folder pane");
+        navToggle.setTooltip(new javafx.scene.control.Tooltip("Toggle folders ( [ )"));
+        navToggle.getStyleClass().add("icon-button");
+        navToggle.setOnAction(event -> {
+            settings.showNavigation(!settings.showNavigation());
+            rebuildWorkspace();
+        });
+
+        Button composeButton = new Button("New message");
         composeButton.setGraphic(ThunderbirdIcons.icon("new-mail", "toolbar-icon"));
         composeButton.getStyleClass().add("primary-action");
+        composeButton.getStyleClass().add("proton-compose");
+        composeButton.setTooltip(new javafx.scene.control.Tooltip("New message (C)"));
         composeButton.setOnAction(event -> composeNewMessage());
-        Button refresh = new Button("Get Messages");
-        refresh.setGraphic(ThunderbirdIcons.icon("get-mail", "toolbar-icon"));
-        refresh.setOnAction(event -> syncNow());
-        Button addAccount = new Button("Add account");
-        addAccount.setGraphic(ThunderbirdIcons.icon("account-settings", "toolbar-icon"));
-        addAccount.setOnAction(event -> addAccount());
-        searchField.setPromptText("Search mail");
+
+        searchField.setPromptText("Search messages…  ( / )");
+        searchField.setAccessibleText("Search cached mail");
         HBox searchBox = new HBox(UiScale.px(owner, 6), ThunderbirdIcons.icon("search", "toolbar-icon"), searchField);
         searchBox.getStyleClass().add("toolbar-search");
+        searchBox.getStyleClass().add("proton-search");
         HBox.setHgrow(searchField, Priority.ALWAYS);
         HBox.setHgrow(searchBox, Priority.ALWAYS);
         searchField.focusedProperty().addListener((observable, wasFocused, focused) -> {
             if (focused) searchBox.getStyleClass().add("search-focused");
             else searchBox.getStyleClass().remove("search-focused");
         });
-        searchField.setAccessibleText("Search cached mail");
         searchScope.getItems().setAll("All local mail");
         searchScope.setValue("All local mail");
         searchScope.setId("search-scope");
         searchScope.setAccessibleText("Search scope");
-        Button settingsButton = new Button("Settings");
-        settingsButton.setGraphic(ThunderbirdIcons.icon("settings", "toolbar-icon"));
-        settingsButton.setOnAction(event -> showSettings());
-        MenuButton moreButton = new MenuButton("More");
-        moreButton.setGraphic(ThunderbirdIcons.icon("more", "toolbar-icon"));
-        MenuItem diagnosticsItem = new MenuItem("Diagnostics…");
-        diagnosticsItem.setOnAction(event -> showDiagnostics());
-        MenuItem aboutItem = new MenuItem("About GraalMail");
-        aboutItem.setOnAction(event -> showAbout());
-        showSpacesToolbar = new CheckMenuItem("Show Spaces Toolbar");
-        showSpacesToolbar.setSelected(true);
-        showSpacesToolbar.setOnAction(event -> {
-            spacesToolbar.setVisible(showSpacesToolbar.isSelected());
-            spacesToolbar.setManaged(showSpacesToolbar.isSelected());
-        });
-        moreButton.getItems().addAll(showSpacesToolbar, new javafx.scene.control.SeparatorMenuItem(),
-                diagnosticsItem, aboutItem);
-        MenuButton layoutButton = new MenuButton("Layout");
+
+        Button refresh = new Button();
+        refresh.setGraphic(ThunderbirdIcons.icon("get-mail", "toolbar-icon"));
+        refresh.setAccessibleText("Get messages");
+        refresh.setTooltip(new javafx.scene.control.Tooltip("Get messages (Ctrl+Shift+R)"));
+        refresh.getStyleClass().add("icon-button");
+        refresh.setOnAction(event -> syncNow());
+
+        MenuButton layoutButton = new MenuButton();
         layoutButton.setGraphic(ThunderbirdIcons.icon("display-options", "toolbar-icon"));
         layoutButton.setAccessibleText("Choose workspace layout and pane visibility");
+        layoutButton.setTooltip(new javafx.scene.control.Tooltip("Layout"));
+        layoutButton.getStyleClass().add("icon-button");
         ToggleGroup layouts = new ToggleGroup();
         for (String mode : List.of("Classic", "Wide", "Vertical")) {
             RadioMenuItem choice = new RadioMenuItem(mode);
@@ -406,23 +444,35 @@ public final class MainWindow {
             rebuildWorkspace();
         });
         layoutButton.getItems().addAll(showFolders, showReader);
-        multiSelectButton.setAccessibleText("Toggle multiple message selection");
-        multiSelectButton.setOnAction(event -> {
-            boolean multiple = messageList.getSelectionModel().getSelectionMode() == SelectionMode.SINGLE;
-            messageList.getSelectionModel().setSelectionMode(multiple ? SelectionMode.MULTIPLE : SelectionMode.SINGLE);
-            messageTable.getSelectionModel().setSelectionMode(multiple ? SelectionMode.MULTIPLE : SelectionMode.SINGLE);
-            multiSelectButton.setText(multiple ? "Done selecting" : "Select multiple");
-            if (!multiple) {
-                var selected = messageList.getSelectionModel().getSelectedItem();
-                messageList.getSelectionModel().clearSelection();
-                if (selected != null) messageList.getSelectionModel().select(selected);
-            }
-            updateSelectionControls();
-        });
-        ToolBar toolbar = new ToolBar(composeButton, addAccount, refresh, layoutButton,
-                new javafx.scene.control.Separator(), searchBox, searchScope,
-                settingsButton, moreButton);
+
+        Button settingsButton = new Button();
+        settingsButton.setGraphic(ThunderbirdIcons.icon("settings", "toolbar-icon"));
+        settingsButton.setAccessibleText("Settings");
+        settingsButton.setTooltip(new javafx.scene.control.Tooltip("Settings"));
+        settingsButton.getStyleClass().add("icon-button");
+        settingsButton.setOnAction(event -> showSettings());
+
+        MenuButton accountButton = new MenuButton();
+        accountButton.setGraphic(ThunderbirdIcons.icon("account-settings", "toolbar-icon"));
+        accountButton.setAccessibleText("Accounts and more");
+        accountButton.setTooltip(new javafx.scene.control.Tooltip("Accounts and more"));
+        MenuItem addAccountItem = new MenuItem("Add account…");
+        addAccountItem.setOnAction(event -> addAccount());
+        MenuItem diagnosticsItem = new MenuItem("Diagnostics…");
+        diagnosticsItem.setOnAction(event -> showDiagnostics());
+        MenuItem aboutItem = new MenuItem("About GraalMail");
+        aboutItem.setOnAction(event -> showAbout());
+        MenuItem shortcutsItem = new MenuItem("Keyboard shortcuts…");
+        shortcutsItem.setOnAction(event -> showShortcuts());
+        accountButton.getItems().addAll(addAccountItem,
+                new javafx.scene.control.SeparatorMenuItem(),
+                diagnosticsItem, shortcutsItem, aboutItem);
+
+        ToolBar toolbar = new ToolBar(brand, navToggle, composeButton,
+                searchBox, searchScope,
+                refresh, layoutButton, settingsButton, accountButton);
         toolbar.getStyleClass().add("main-toolbar");
+        toolbar.getStyleClass().add("proton-topbar");
         toolbar.setId("main-toolbar");
         return toolbar;
     }
@@ -430,28 +480,21 @@ public final class MainWindow {
     private BorderPane buildCenter() {
         folderTree.setShowRoot(false);
         folderTree.setCellFactory(view -> new FolderTreeCell());
+        Label navSection = new Label("Mailboxes");
+        navSection.getStyleClass().add("nav-section-label");
+        HBox folderToolbar = new HBox(UiScale.px(owner, 3), navSection);
+        javafx.scene.layout.Region folderSpacer = new javafx.scene.layout.Region();
+        HBox.setHgrow(folderSpacer, Priority.ALWAYS);
         Button folderGetMessages = new Button();
         folderGetMessages.setGraphic(ThunderbirdIcons.icon("get-mail", "toolbar-icon"));
         folderGetMessages.setAccessibleText("Get messages for all accounts");
         folderGetMessages.setTooltip(new javafx.scene.control.Tooltip("Get Messages"));
+        folderGetMessages.getStyleClass().add("icon-button");
         folderGetMessages.setOnAction(event -> syncNow());
-        Button folderWriteMessage = new Button();
-        folderWriteMessage.setGraphic(ThunderbirdIcons.icon("new-mail", "toolbar-icon"));
-        folderWriteMessage.setAccessibleText("Write a new message");
-        folderWriteMessage.setTooltip(new javafx.scene.control.Tooltip("New Message"));
-        folderWriteMessage.setOnAction(event -> composeNewMessage());
-        MenuButton folderMore = new MenuButton();
-        folderMore.setGraphic(ThunderbirdIcons.icon("more", "toolbar-icon"));
-        folderMore.setAccessibleText("Folder pane options");
-        folderMore.setTooltip(new javafx.scene.control.Tooltip("Folder Pane Options"));
-        MenuItem addAccountMenuItem = new MenuItem("Add account…");
-        addAccountMenuItem.setOnAction(event -> addAccount());
-        MenuItem folderSettingsMenuItem = new MenuItem("Settings…");
-        folderSettingsMenuItem.setOnAction(event -> showSettings());
-        folderMore.getItems().addAll(addAccountMenuItem, folderSettingsMenuItem);
-        HBox folderToolbar = new HBox(UiScale.px(owner, 3), folderWriteMessage, folderMore, folderGetMessages);
-        folderToolbar.setAlignment(javafx.geometry.Pos.CENTER_RIGHT);
+        folderToolbar.getChildren().addAll(folderSpacer, folderGetMessages);
+        folderToolbar.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
         folderToolbar.getStyleClass().add("folder-pane-toolbar");
+        folderToolbar.getStyleClass().add("proton-nav-header");
 
         messageList.setCellFactory(view -> new MessageListCell(settings.compactDensity(), UiScale.scale(owner)));
         messageList.setPlaceholder(new Label("No messages here yet"));
@@ -496,13 +539,16 @@ public final class MainWindow {
         filters.getStyleClass().add("quick-filter-bar");
         filters.setVisible(false);
         filters.setManaged(false);
+        quickFilterToggle.setText("Filter");
+        quickFilterToggle.setAccessibleText("Toggle quick filters");
+        quickFilterToggle.setTooltip(new javafx.scene.control.Tooltip("Quick filters (Unread, Starred, Attachments)"));
+        quickFilterToggle.setGraphic(ThunderbirdIcons.icon("filter", "toolbar-icon"));
+        quickFilterToggle.getStyleClass().add("icon-button");
         quickFilterToggle.setOnAction(event -> {
             boolean show = !filters.isVisible();
             filters.setVisible(show);
             filters.setManaged(show);
-            quickFilterToggle.setText(show ? "Hide filters" : "Quick Filter");
         });
-        quickFilterToggle.setGraphic(ThunderbirdIcons.icon("filter", "toolbar-icon"));
         listModePicker.getItems().setAll("Cards", "Table");
         listModePicker.setValue(settings.listMode());
         listModePicker.setAccessibleText("Message list display mode");
@@ -510,11 +556,32 @@ public final class MainWindow {
             settings.listMode(value);
             updateListDisplayMode();
         });
-        javafx.scene.layout.FlowPane titleRow = new javafx.scene.layout.FlowPane(
-                UiScale.px(owner, 8), UiScale.px(owner, 4),
-                viewTitle, messageCount, listModePicker, multiSelectButton);
-        titleRow.getChildren().add(quickFilterToggle);
+        multiSelectButton.setAccessibleText("Toggle multiple message selection");
+        multiSelectButton.setTooltip(new javafx.scene.control.Tooltip("Select multiple messages"));
+        multiSelectButton.setGraphic(ThunderbirdIcons.icon("more", "toolbar-icon"));
+        multiSelectButton.setOnAction(event -> {
+            boolean multiple = messageList.getSelectionModel().getSelectionMode() == SelectionMode.SINGLE;
+            messageList.getSelectionModel().setSelectionMode(multiple ? SelectionMode.MULTIPLE : SelectionMode.SINGLE);
+            messageTable.getSelectionModel().setSelectionMode(multiple ? SelectionMode.MULTIPLE : SelectionMode.SINGLE);
+            multiSelectButton.setText(multiple ? "Done" : "Select");
+            if (!multiple) {
+                var selected = messageList.getSelectionModel().getSelectedItem();
+                messageList.getSelectionModel().clearSelection();
+                if (selected != null) messageList.getSelectionModel().select(selected);
+            }
+            updateSelectionControls();
+        });
+        VBox titleText = new VBox(0, viewTitle, messageCount);
+        titleText.getStyleClass().add("proton-list-titles");
+        viewTitle.getStyleClass().add("proton-view-title");
+        messageCount.getStyleClass().add("proton-message-count");
+        javafx.scene.layout.Region titleSpacer = new javafx.scene.layout.Region();
+        HBox.setHgrow(titleSpacer, Priority.ALWAYS);
+        HBox titleRow = new HBox(UiScale.px(owner, 8),
+                titleText, titleSpacer, quickFilterToggle, listModePicker, multiSelectButton);
+        titleRow.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
         titleRow.getStyleClass().add("list-title-row");
+        titleRow.getStyleClass().add("proton-list-header");
         Button markSelectedRead = new Button("Read / unread");
         markSelectedRead.setGraphic(ThunderbirdIcons.icon("unread", "toolbar-icon"));
         markSelectedRead.setOnAction(event -> toggleReadSelected());
@@ -545,18 +612,28 @@ public final class MainWindow {
         listContent.setPadding(Insets.EMPTY);
         listPane = listContent;
 
+        readerReplyButton.setText("Reply");
         readerReplyButton.setOnAction(event -> replyToSelected());
+        readerForwardButton.setText("Forward");
         readerForwardButton.setOnAction(event -> forwardSelected());
         readerUnreadButton.setOnAction(event -> toggleReadSelected());
         readerStarButton.setOnAction(event -> toggleStarSelected());
+        readerArchiveButton.setText("Archive");
         readerArchiveButton.setOnAction(event -> archiveSelected());
         readerJunkButton.setOnAction(event -> junkSelected());
+        readerDeleteButton.setText("Delete");
         readerDeleteButton.setOnAction(event -> deleteSelected());
         readerReplyButton.setGraphic(ThunderbirdIcons.icon("reply", "toolbar-icon"));
         readerForwardButton.setGraphic(ThunderbirdIcons.icon("forward", "toolbar-icon"));
         readerArchiveButton.setGraphic(ThunderbirdIcons.icon("archive", "toolbar-icon"));
         readerDeleteButton.setGraphic(ThunderbirdIcons.icon("trash", "toolbar-icon"));
+        readerReplyButton.getStyleClass().add("proton-reply");
         moveButton.setOnAction(event -> showMoveMenu());
+        moveButton.setGraphic(ThunderbirdIcons.icon("folder", "toolbar-icon"));
+        previousButton.setText("");
+        previousButton.setGraphic(ThunderbirdIcons.icon("collapse", "toolbar-icon"));
+        nextButton.setText("");
+        nextButton.setGraphic(ThunderbirdIcons.icon("collapse", "toolbar-icon"));
         previousButton.setOnAction(event -> selectAdjacent(-1));
         nextButton.setOnAction(event -> selectAdjacent(1));
         remoteImagesButton.setOnAction(event -> {
@@ -564,8 +641,9 @@ public final class MainWindow {
             if (currentMessage != null) reader.getEngine().loadContent(render(currentMessage, remoteImagesAllowed));
             remoteImagesButton.setText(remoteImagesAllowed ? "Block remote images" : "Show remote images for this message");
         });
-        Button moreActions = new Button("More actions");
+        Button moreActions = new Button("More");
         moreActions.setGraphic(ThunderbirdIcons.icon("more", "toolbar-icon"));
+        moreActions.getStyleClass().add("icon-button");
         ContextMenu readerMenu = new ContextMenu(
                 new MenuItem("Mark read / unread"), new MenuItem("Star / unstar"),
                 new MenuItem("Move to…"), new MenuItem("Junk"),
@@ -578,9 +656,12 @@ public final class MainWindow {
         readerMenu.getItems().get(5).setOnAction(event -> selectAdjacent(1));
         moreActions.setOnAction(event -> readerMenu.show(moreActions,
                 javafx.geometry.Side.BOTTOM, 0, 0));
+        javafx.scene.layout.Region readerSpacer = new javafx.scene.layout.Region();
+        HBox.setHgrow(readerSpacer, Priority.ALWAYS);
         readerActionsPane = new javafx.scene.layout.FlowPane(
                 UiScale.px(owner, 7), UiScale.px(owner, 7), readerReplyButton, readerForwardButton,
-                readerArchiveButton, readerDeleteButton, moreActions);
+                readerSpacer, previousButton, nextButton,
+                readerArchiveButton, moveButton, readerDeleteButton, moreActions);
         readerActionsPane.setPadding(UiScale.insets(owner, 10));
         readerActionsPane.getStyleClass().add("reader-actions");
         readerReplyButton.setAccessibleText("Reply to selected message");
@@ -600,11 +681,18 @@ public final class MainWindow {
         readerPane = new VBox(readerActionsPane, readerHeader, remoteImagesButton,
                 readerState, reader);
         readerPane.getStyleClass().add("reader-pane");
+        readerPane.getStyleClass().add("proton-reader-card");
         reader.setContextMenuEnabled(false);
         HBox.setHgrow(reader, Priority.ALWAYS);
         VBox.setVgrow(reader, Priority.ALWAYS);
 
-        navigationPane = new VBox(folderToolbar, folderTree);
+        Button addAccountFooter = new Button("+  Add account");
+        addAccountFooter.getStyleClass().add("proton-ghost-button");
+        addAccountFooter.setMaxWidth(Double.MAX_VALUE);
+        addAccountFooter.setOnAction(event -> addAccount());
+        VBox navFooter = new VBox(addAccountFooter);
+        navFooter.getStyleClass().add("proton-nav-footer");
+        navigationPane = new VBox(folderToolbar, folderTree, navFooter);
         navigationPane.getStyleClass().add("navigation-pane");
         VBox.setVgrow(folderTree, Priority.ALWAYS);
         workspaceHost = new BorderPane();
@@ -638,9 +726,13 @@ public final class MainWindow {
         title.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
         HBox.setHgrow(readerSubject, Priority.ALWAYS);
         HBox.setHgrow(spacer, Priority.ALWAYS);
-        HBox identity = new HBox(UiScale.px(owner, 8), readerSender, readerMessageIndicators);
+        VBox senderText = new VBox(1, readerSender, readerRecipientSummary);
+        senderText.setMaxWidth(Double.MAX_VALUE);
+        HBox.setHgrow(senderText, Priority.ALWAYS);
+        HBox identity = new HBox(UiScale.px(owner, 10), readerAvatarHost, senderText, readerMessageIndicators);
         identity.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
-        VBox header = new VBox(UiScale.px(owner, 6), title, identity, readerRecipientSummary,
+        identity.getStyleClass().add("reader-identity");
+        VBox header = new VBox(UiScale.px(owner, 8), title, identity,
                 readerDetailsToggle, readerRecipientDetails, attachmentActions);
         header.setPadding(UiScale.insets(owner, 10, 14, 10, 14));
         header.getStyleClass().add("reader-header");
@@ -653,8 +745,10 @@ public final class MainWindow {
 
     private void showReaderHeader(Message message) {
         readerSubject.setText(message.subject().isBlank() ? "(No subject)" : message.subject());
-        readerSender.setText(message.from().name().isBlank()
-                ? message.from().email() : message.from().name() + "  <" + message.from().email() + ">");
+        String senderName = message.from().name().isBlank() ? message.from().email() : message.from().name();
+        readerSender.setText(senderName);
+        readerAvatarHost.getChildren().setAll(
+                ProtonAvatar.avatar(message.from().name(), message.from().email(), 40 * UiScale.currentScale()));
         readerDate.setText(formatMessageDate(message.date()));
         List<Address> recipients = message.to();
         readerRecipientSummary.setText("To: " + (recipients.isEmpty()
@@ -860,10 +954,12 @@ public final class MainWindow {
         return settings.darkTheme();
     }
 
+    private static final double NARROW_LAYOUT_WIDTH = 1120;
+
     private String effectiveLayoutMode() {
         String configured = settings.layoutMode();
         if (mainScene != null && mainScene.getWidth() > 0
-                && mainScene.getWidth() < UiScale.px(owner, 1120)
+                && mainScene.getWidth() < NARROW_LAYOUT_WIDTH
                 && "Vertical".equals(configured)) {
             return "Classic";
         }
@@ -871,8 +967,15 @@ public final class MainWindow {
     }
 
     private void refreshScaledContent() {
-        reader.setZoom(UiScale.scale(owner));
-        messageList.setCellFactory(view -> new MessageListCell(settings.compactDensity(), UiScale.scale(owner)));
+        double scale = UiScale.scale(owner);
+        reader.setZoom(scale);
+        messageList.setCellFactory(view -> new MessageListCell(settings.compactDensity(), scale));
+        folderTree.refresh();
+        if (currentMessage != null && readerHeader != null && readerHeader.isVisible()) {
+            readerAvatarHost.getChildren().setAll(ProtonAvatar.avatar(
+                    currentMessage.from().name(), currentMessage.from().email(),
+                    40 * UiScale.currentScale()));
+        }
     }
 
     private HBox buildStatusBar() {
@@ -1740,6 +1843,20 @@ public final class MainWindow {
         alert.setHeaderText("GraalMail desktop");
         alert.setContentText("A cross platform email client. Data directory: "
                 + context.paths().baseDirectory());
+        alert.showAndWait();
+    }
+
+    private void showShortcuts() {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle("Keyboard shortcuts");
+        alert.setHeaderText("Work faster without the mouse");
+        alert.setContentText("""
+                C — New message          Ctrl+N — New message
+                / or Ctrl+K — Search     J / K — Next / previous message
+                Enter — Open message     E or A — Archive
+                U — Mark read / unread   S — Star / unstar
+                Del or # — Delete        R — Reply   Shift+F — Forward
+                Ctrl+Shift+R — Sync      [ — Toggle folder pane""");
         alert.showAndWait();
     }
 

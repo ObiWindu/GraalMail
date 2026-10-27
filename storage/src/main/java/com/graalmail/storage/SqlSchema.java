@@ -10,7 +10,7 @@ import java.util.Map;
 /** Creates and migrates the local database schema. */
 public final class SqlSchema {
 
-    public static final int VERSION = 5;
+    public static final int VERSION = 6;
 
     private SqlSchema() {
     }
@@ -45,6 +45,12 @@ public final class SqlSchema {
         }
         if (current < 5) {
             migrateToVersion5(db);
+            db.update("DELETE FROM schema_version");
+            db.update("INSERT INTO schema_version (version) VALUES (?)", 5);
+            current = 5;
+        }
+        if (current < 6) {
+            migrateToVersion6(db);
             db.update("DELETE FROM schema_version");
             db.update("INSERT INTO schema_version (version) VALUES (?)", VERSION);
         }
@@ -152,5 +158,11 @@ public final class SqlSchema {
                 + "notification_transaction_hash TEXT NOT NULL DEFAULT '', notification_block_number INTEGER NOT NULL DEFAULT 0, "
                 + "delivery_state TEXT NOT NULL, verification_state TEXT NOT NULL, read_state TEXT NOT NULL, "
                 + "last_error_code TEXT NOT NULL DEFAULT '')"); } catch (RuntimeException ignored) {}
+    }
+
+    private static void migrateToVersion6(SqlDatabase db) {
+        // Durable delivery state: envelope payload on outgoing ops, receipt signatures.
+        try { db.execute("ALTER TABLE polymail_outgoing_queue ADD COLUMN payload BLOB"); } catch (RuntimeException ignored) {}
+        try { db.execute("ALTER TABLE polymail_storage_receipts ADD COLUMN receipt_signature BLOB"); } catch (RuntimeException ignored) {}
     }
 }

@@ -14,8 +14,9 @@ import javafx.scene.control.Label;
 import javafx.scene.control.TreeCell;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
+import javafx.scene.layout.VBox;
 
-/** Renders account and folder rows using Thunderbird's mailbox icon set. */
+/** Renders Proton-style navigation rows: rounded pills with count badges. */
 final class FolderTreeCell extends TreeCell<Object> {
 
     @Override
@@ -28,14 +29,31 @@ final class FolderTreeCell extends TreeCell<Object> {
         } else if (value instanceof Account account) {
             getStyleClass().add("account-row");
             String title = account.displayName().isBlank() ? account.email() : account.displayName();
+            Label name = new Label(title);
+            name.getStyleClass().add("account-name");
+            name.setMaxWidth(Double.MAX_VALUE);
+            HBox.setHgrow(name, Priority.ALWAYS);
+            VBox text = new VBox(name);
+            if (!account.displayName().isBlank() && !account.email().isBlank()) {
+                Label email = new Label(account.email());
+                email.getStyleClass().add("account-email");
+                text.getChildren().add(email);
+            }
+            text.setMaxWidth(Double.MAX_VALUE);
+            HBox.setHgrow(text, Priority.ALWAYS);
+            javafx.scene.layout.StackPane avatar = ProtonAvatar.avatar(
+                    account.displayName(), account.email(), 28 * UiScale.currentScale());
+            HBox row = new HBox(avatar, text);
+            row.setAlignment(Pos.CENTER_LEFT);
+            row.getStyleClass().add("folder-row-content");
             setText(null);
-            setGraphic(row(icon("mail", "account"), title, "account-name", null));
+            setGraphic(row);
             setAccessibleText(title + ", account " + account.email());
         } else if (value instanceof Folder folder) {
             getStyleClass().add("folder-row");
             String type = iconFor(folder.type());
             Label count = folder.unreadCount() > 0
-                    ? badge(Integer.toString(folder.unreadCount())) : null;
+                    ? badge(formatCount(folder.unreadCount())) : null;
             setText(null);
             setGraphic(row(icon(type, type), folder.name(), "folder-name", count));
             setAccessibleText(folder.name() + (folder.unreadCount() > 0
@@ -67,6 +85,10 @@ final class FolderTreeCell extends TreeCell<Object> {
         Label count = new Label(value);
         count.getStyleClass().add("folder-unread-count");
         return count;
+    }
+
+    private static String formatCount(int count) {
+        return count > 99 ? "99+" : Integer.toString(count);
     }
 
     private static String iconFor(FolderType type) {

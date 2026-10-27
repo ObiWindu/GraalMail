@@ -8,7 +8,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-public class SqlPolyMailStore implements PolyMailStore {
+public class SqlPolyMailStore implements PolyMailStore, com.graalmail.p2p.blockchain.CursorStore,
+        com.graalmail.p2p.delivery.DeliveryStore {
     private final SqlDatabase db;
 
     public SqlPolyMailStore(SqlDatabase db) { this.db = db; }
@@ -79,9 +80,15 @@ public class SqlPolyMailStore implements PolyMailStore {
 
     @Override
     public void saveReceipt(StorageReceipt receipt) {
-        db.update("INSERT INTO polymail_storage_receipts (receipt_id, message_id, content_hash, peer_id, receipt_payload, accepted_at, retention_until, verification_state) VALUES (?,?,?,?,?,?,?,?)",
+        saveReceiptRecord(receipt, false);
+    }
+
+    @Override
+    public void saveReceiptRecord(StorageReceipt receipt, boolean verified) {
+        db.update("INSERT INTO polymail_storage_receipts (receipt_id, message_id, content_hash, peer_id, receipt_payload, receipt_signature, accepted_at, retention_until, verification_state) VALUES (?,?,?,?,?,?,?,?,?)",
                 java.util.UUID.randomUUID().toString(), receipt.messageId(), receipt.contentId(), receipt.peerId(),
-                "", receipt.acceptedAt(), receipt.retentionUntil(), "UNVERIFIED");
+                "", receipt.signature(), receipt.acceptedAt(), receipt.retentionUntil(),
+                verified ? "VERIFIED" : "UNVERIFIED");
     }
 
     @Override
@@ -116,6 +123,16 @@ public class SqlPolyMailStore implements PolyMailStore {
     }
 
     @Override
+    public BlockchainCursor load(String chainId, String contractAddress) {
+        return loadCursor(chainId, contractAddress);
+    }
+
+    @Override
+    public void save(BlockchainCursor cursor) {
+        saveCursor(cursor);
+    }
+
+    @Override
     public boolean messageExists(String messageId) {
         List<Map<String, Object>> rows = db.query("SELECT message_id FROM polymail_messages WHERE message_id = ?", messageId);
         return !rows.isEmpty();
@@ -129,6 +146,78 @@ public class SqlPolyMailStore implements PolyMailStore {
         db.update("INSERT INTO polymail_messages (message_id, mailbox_identity_id, direction, sender_identity, recipient_identity, created_at, expires_at, content_hash, delivery_state, verification_state, read_state, last_error_code) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
                 messageId, mailboxIdentityId, direction, senderIdentity, recipientIdentity, createdAt, expiresAt, contentHash,
                 deliveryState, verificationState, readState, lastErrorCode);
+    }
+
+    @Override
+    public void saveOutgoing(com.graalmail.p2p.delivery.OutgoingEntry entry) {
+        List<Map<String, Object>> rows = db.query("SELECT operation_id FROM polymail_outgoing_queue WHERE operation_id = ?", entry.operationId());
+        if (!rows.isEmpty()) return;
+        long now = System.currentTimeMillis();
+        db.update("INSERT INTO polymail_outgoing_queue (operation_id, message_id, operation_type, current_state, retry_count, next_attempt_at, last_error_code, created_at, updated_at, payload) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                entry.operationId(), entry.messageId(), entry.operationType(), entry.state(), entry.retryCount(),
+                entry.nextAttemptAt(), entry.lastError(), now, now, entry.payload());
+    }
+
+    @Override
+    public void updateOutgoing(String operationId, String state, int retryCount, long nextAttemptAt, String lastError) {
+        updateOperation(operationId, state, retryCount, nextAttemptAt, lastError);
+    }
+
+    @Override
+    public List<com.graalmail.p2p.delivery.OutgoingEntry> pendingOutgoing() {
+        List<Map<String, Object>> rows = db.query(
+                "SELECT * FROM polymail_outgoing_queue WHERE current_state NOT IN ('NOTIFICATION_CONFIRMED','FAILED','EXPIRED')");
+        List<com.graalmail.p2p.delivery.OutgoingEntry> out = new ArrayList<>();
+        for (Map<String, Object> r : rows) {
+            out.add(new com.graalmail.p2p.delivery.OutgoingEntry(
+                    str(r.get("operation_id")), str(r.get("message_id")), str(r.get("operation_type")),
+                    str(r.get("current_state")), ((Number) r.get("retry_count")).intValue(),
+                    ((Number) r.get("next_attempt_at")).longValue(), str(r.get("last_error_code")),
+                    blob(r.get("payload"))));
+        }
+        return out;
+    }
+
+    @Override
+    public void saveMessageRecord(com.graalmail.p2p.delivery.MessageRecord record) {
+        if (messageExists(record.messageId())) return;
+        db.update("INSERT INTO polymail_messages (message_id, mailbox_identity_id, direction, sender_identity, recipient_identity, created_at, expires_at, content_hash, notification_transaction_hash, delivery_state, verification_state, read_state, last_error_code) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                record.messageId(), "", record.direction(), record.senderIdentity(), record.recipientIdentity(),
+                record.createdAt(), record.expiresAt(), record.contentHashHex(), record.notificationTxHash(),
+                record.deliveryState(), record.verificationState(), "UNREAD", record.lastError());
+    }
+
+    @Override
+    public void updateMessageState(String messageId, String deliveryState, String verificationState, String lastError) {
+        db.update("UPDATE polymail_messages SET delivery_state=?, verification_state=?, last_error_code=? WHERE message_id=?",
+                deliveryState, verificationState, lastError, messageId);
+    }
+
+    @Override
+    public void updateMessageNotification(String messageId, String txHash) {
+        db.update("UPDATE polymail_messages SET notification_transaction_hash=? WHERE message_id=?", txHash, messageId);
+    }
+
+    @Override
+    public boolean hasMessageRecord(String messageId) { return messageExists(messageId); }
+
+    @Override
+    public com.graalmail.p2p.delivery.MessageRecord messageRecord(String messageId) {
+        List<Map<String, Object>> rows = db.query("SELECT * FROM polymail_messages WHERE message_id = ?", messageId);
+        if (rows.isEmpty()) return null;
+        Map<String, Object> r = rows.get(0);
+        return new com.graalmail.p2p.delivery.MessageRecord(
+                str(r.get("message_id")), str(r.get("direction")), str(r.get("sender_identity")),
+                str(r.get("recipient_identity")), ((Number) r.get("created_at")).longValue(),
+                ((Number) r.get("expires_at")).longValue(), str(r.get("content_hash")),
+                str(r.get("notification_transaction_hash")), str(r.get("delivery_state")),
+                str(r.get("verification_state")), str(r.get("last_error_code")));
+    }
+
+    private static byte[] blob(Object o) {
+        if (o == null) return null;
+        if (o instanceof byte[] b) return b;
+        return o.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
     }
 
     private static String str(Object o) { return o == null ? "" : o.toString(); }

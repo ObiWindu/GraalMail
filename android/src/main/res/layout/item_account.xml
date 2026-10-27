@@ -12,6 +12,17 @@
     android:paddingBottom="@dimen/space_2">
 
     <TextView
+        android:id="@+id/account_avatar"
+        android:layout_width="@dimen/message_avatar_size"
+        android:layout_height="@dimen/message_avatar_size"
+        android:layout_marginEnd="@dimen/space_3"
+        android:background="@drawable/avatar_circle"
+        android:gravity="center"
+        android:textColor="#FFFFFF"
+        android:textSize="16sp"
+        android:textStyle="bold" />
+
+    <TextView
         android:id="@+id/account_name"
         android:layout_width="0dp"
         android:layout_height="wrap_content"

@@ -35,4 +35,15 @@ public class InMemoryPolygonNotificationService implements PolygonNotificationSe
     public java.util.concurrent.CompletionStage<TransactionStatus> track(String transactionHash) {
         return CompletableFuture.completedFuture(events.containsKey(transactionHash) ? TransactionStatus.CONFIRMED : TransactionStatus.FAILED);
     }
+
+    @Override
+    public java.util.concurrent.CompletionStage<Long> headBlock() {
+        return CompletableFuture.completedFuture(block.get());
+    }
+
+    /** Test helper simulating a chain reorganization that orphans every block above {@code newHead}. */
+    public void dropAbove(long newHead) {
+        events.values().removeIf(e -> e.blockNumber() > newHead);
+        block.set(newHead);
+    }
 }

@@ -17,6 +17,7 @@ import com.graalmail.provider.api.ProviderRegistry;
 import com.graalmail.provider.api.ProviderType;
 import com.graalmail.provider.imap.ImapSettings;
 import com.graalmail.provider.imap.SecurityMode;
+import com.graalmail.provider.proton.ProtonBridgeAutoConfig;
 import com.graalmail.security.model.Credential;
 import com.graalmail.security.oauth.AuthorizationRequest;
 import com.graalmail.sync.AccountSessionFactory;
@@ -67,6 +68,8 @@ public final class AccountSetupDialog {
     private final TextField redirectUriField = new TextField("http://localhost:8080/oauth/callback");
     private final TextField redirectResultField = new TextField();
     private final Label status = new Label("");
+    private final Label helpLabel = new Label(
+            "Choose your provider and follow the sign-in steps. Your mail stays in GraalMail's local cache.");
     private final Button saveButton = new Button("Save account");
     private final Map<Node, Label> rowLabels = new java.util.HashMap<>();
     private final VBox stepContent = new VBox();
@@ -149,9 +152,8 @@ public final class AccountSetupDialog {
 
         Label heading = new Label("Add an account");
         heading.getStyleClass().add("compose-heading");
-        Label help = new Label("Choose your provider and follow the sign-in steps. Your mail stays in GraalMail's local cache.");
-        help.setWrapText(true);
-        VBox content = new VBox(UiScale.px(stage, 12), heading, help, stepContent, status, buttons);
+        helpLabel.setWrapText(true);
+        VBox content = new VBox(UiScale.px(stage, 12), heading, helpLabel, stepContent, status, buttons);
         content.getStyleClass().add("account-setup");
         if (new DesktopSettings(context.store()).darkTheme()) content.getStyleClass().add("dark-theme");
         content.setPadding(UiScale.insets(stage, 16));
@@ -213,6 +215,7 @@ public final class AccountSetupDialog {
 
     private void updateVisibility(ProviderType type) {
         boolean generic = type == ProviderType.GENERIC;
+        boolean proton = type == ProviderType.PROTON;
         imapHostField.setDisable(!generic);
         imapPortField.setDisable(!generic);
         imapSecurityField.setDisable(!generic);
@@ -220,9 +223,9 @@ public final class AccountSetupDialog {
         smtpPortField.setDisable(!generic);
         smtpSecurityField.setDisable(!generic);
         passwordField.setDisable(type == ProviderType.GMAIL || type == ProviderType.MICROSOFT);
-        clientIdField.setDisable(type == ProviderType.GENERIC);
-        redirectUriField.setDisable(type == ProviderType.GENERIC);
-        redirectResultField.setDisable(type == ProviderType.GENERIC);
+        clientIdField.setDisable(type == ProviderType.GENERIC || proton);
+        redirectUriField.setDisable(type == ProviderType.GENERIC || proton);
+        redirectResultField.setDisable(type == ProviderType.GENERIC || proton);
         setRowVisible(imapHostField, generic);
         setRowVisible(imapPortField, generic);
         setRowVisible(imapSecurityField, generic);
@@ -230,9 +233,21 @@ public final class AccountSetupDialog {
         setRowVisible(smtpPortField, generic);
         setRowVisible(smtpSecurityField, generic);
         setRowVisible(passwordField, type != ProviderType.GMAIL && type != ProviderType.MICROSOFT);
-        setRowVisible(clientIdField, type != ProviderType.GENERIC);
-        setRowVisible(redirectUriField, type != ProviderType.GENERIC);
-        setRowVisible(redirectResultField, type != ProviderType.GENERIC);
+        setRowVisible(clientIdField, type != ProviderType.GENERIC && !proton);
+        setRowVisible(redirectUriField, type != ProviderType.GENERIC && !proton);
+        setRowVisible(redirectResultField, type != ProviderType.GENERIC && !proton);
+        Label passwordCaption = rowLabels.get(passwordField);
+        if (passwordCaption != null) {
+            passwordCaption.setText(proton ? "Bridge password" : "Password or app password");
+        }
+        if (proton) {
+            helpLabel.setText("Only the Proton login and the Bridge password are needed. "
+                    + "Start Proton Mail Bridge on this machine first; GraalMail finds its "
+                    + "ports and verifies its certificate automatically.");
+        } else {
+            helpLabel.setText("Choose your provider and follow the sign-in steps. "
+                    + "Your mail stays in GraalMail's local cache.");
+        }
     }
 
     private void setRowVisible(Node field, boolean visible) {
@@ -328,6 +343,9 @@ public final class AccountSetupDialog {
             return oauth.completeAuthorization(pendingSetup, code, pendingAuthorization.state(),
                     extractState(redirect), pendingAuthorization.codeVerifier());
         }
+        if (type == ProviderType.PROTON) {
+            return buildProtonSetup(email, displayName);
+        }
         if (type == ProviderType.GENERIC) {
             Map<String, String> settings = new LinkedHashMap<>();
             settings.put(ImapSettings.IMAP_HOST, imapHostField.getText());
@@ -350,6 +368,38 @@ public final class AccountSetupDialog {
                 .email(email)
                 .displayName(displayName)
                 .password(email, passwordField.getText() == null ? "" : passwordField.getText())
+                .build();
+    }
+
+    /**
+     * Builds a Proton setup from the login and the Bridge password only. The
+     * Bridge endpoint (ports, TLS mode, certificate) is detected automatically
+     * and the login is verified before the account is saved.
+     */
+    private AccountSetup buildProtonSetup(String email, String displayName) {
+        String bridgePassword = passwordField.getText() == null ? "" : passwordField.getText();
+        if (bridgePassword.isEmpty()) {
+            throw new ProviderException(ErrorCode.CONFIGURATION_ERROR,
+                    "Enter the Bridge password shown in Proton Mail Bridge.", false);
+        }
+        status.setText("Detecting Proton Mail Bridge on this machine…");
+        ProtonBridgeAutoConfig.Endpoint endpoint;
+        try {
+            endpoint = new ProtonBridgeAutoConfig().resolveAndVerify(
+                    "", null, null, null, email, bridgePassword);
+        } catch (ProviderException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            LOG.warn("Proton Mail Bridge detection failed: {}", e.getMessage());
+            throw new ProviderException(ErrorCode.CONNECTION_REFUSED,
+                    "Proton Mail Bridge could not be reached. Start it and retry.", true, e);
+        }
+        status.setText("Proton Mail Bridge found; the account can be saved.");
+        return AccountSetup.builder(AuthMethod.BRIDGE)
+                .email(email)
+                .displayName(displayName)
+                .password(email, bridgePassword)
+                .settings(endpoint.settings(email))
                 .build();
     }
 

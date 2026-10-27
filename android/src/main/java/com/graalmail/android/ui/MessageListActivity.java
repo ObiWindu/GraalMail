@@ -140,8 +140,23 @@ public final class MessageListActivity extends AppCompatActivity {
 
         RecyclerView list = findViewById(R.id.message_list);
         list.setLayoutManager(new LinearLayoutManager(this));
-        adapter = new MessageAdapter(this::openMessage, this::onMessageLongClick);
+        adapter = new MessageAdapter(this::openMessage, this::onMessageLongClick, this::toggleStar);
         list.setAdapter(adapter);
+        new MessageSwipeHelper(adapter::messageAt, new MessageSwipeHelper.SwipeActions() {
+            @Override public void onSwipeRight(Message message) {
+                toggleRead(message);
+            }
+
+            @Override public void onSwipeLeft(Message message) {
+                int position = adapter.getMessages().indexOf(message);
+                queueDeletion(java.util.List.of(message));
+                if (position >= 0) adapter.notifyItemChanged(position);
+            }
+
+            @Override public boolean isSwipeEnabled() {
+                return actionMode == null;
+            }
+        }).attach(list);
         list.addOnScrollListener(new RecyclerView.OnScrollListener() {
             @Override public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy) {
                 var layout = (LinearLayoutManager) recyclerView.getLayoutManager();
@@ -297,6 +312,7 @@ public final class MessageListActivity extends AppCompatActivity {
     private void onMessageLongClick(Message message) {
         if (actionMode == null) {
             actionMode = startSupportActionMode(new ActionModeCallback());
+            adapter.setSelectionMode(true);
         }
         toggleSelection(message);
     }
@@ -382,6 +398,7 @@ public final class MessageListActivity extends AppCompatActivity {
             actionMode = null;
             selectedMessages.clear();
             adapter.setSelectedMessages(List.of());
+            adapter.setSelectionMode(false);
         }
     }
 
@@ -488,8 +505,31 @@ public final class MessageListActivity extends AppCompatActivity {
                 }).show();
     }
 
-    private void markSelectedAsRead(boolean read) {
-        List<Message> target = new ArrayList<>(selectedMessages);
+    private void toggleStar(Message message) {
+        boolean flagged = !message.flagged();
+        var account = context.store().account(message.accountId());
+        if (account.isEmpty()) return;
+        context.syncEngine().queue(account.get(),
+                flagged ? PendingAction.Type.FLAG : PendingAction.Type.UNFLAG, message.id(), "");
+        Message updated = message.toBuilder().flagged(flagged).build();
+        context.store().saveMessage(updated);
+        adapter.updateMessage(updated);
+    }
+
+    private void toggleRead(Message message) {
+        boolean read = message.unread();
+        var account = context.store().account(message.accountId());
+        if (account.isEmpty()) return;
+        context.syncEngine().queue(account.get(),
+                read ? PendingAction.Type.MARK_READ : PendingAction.Type.MARK_UNREAD, message.id(), "");
+        Message updated = message.toBuilder().unread(!read).build();
+        context.store().saveMessage(updated);
+        adapter.updateMessage(updated);
+        Toast.makeText(this, read ? R.string.action_mark_read : R.string.action_mark_unread,
+                Toast.LENGTH_SHORT).show();
+    }
+
+    private void markSelectedAsRead(boolean read) {        List<Message> target = new ArrayList<>(selectedMessages);
         int queued = 0;
         for (Message message : target) {
             var account = context.store().account(message.accountId());
@@ -519,11 +559,15 @@ public final class MessageListActivity extends AppCompatActivity {
         private final List<Message> messages = new ArrayList<>();
         private final OnMessageSelected listener;
         private final OnMessageLongClick longClickListener;
+        private final OnStarToggled starListener;
         private List<Message> selectedMessages = new ArrayList<>();
+        private boolean selectionMode;
 
-        MessageAdapter(OnMessageSelected listener, OnMessageLongClick longClickListener) {
+        MessageAdapter(OnMessageSelected listener, OnMessageLongClick longClickListener,
+                       OnStarToggled starListener) {
             this.listener = listener;
             this.longClickListener = longClickListener;
+            this.starListener = starListener;
         }
 
         void submit(List<Message> values) {
@@ -542,9 +586,30 @@ public final class MessageListActivity extends AppCompatActivity {
             return new ArrayList<>(messages);
         }
 
+        Message messageAt(int position) {
+            return position >= 0 && position < messages.size() ? messages.get(position) : null;
+        }
+
+        void updateMessage(Message updated) {
+            for (int i = 0; i < messages.size(); i++) {
+                if (messages.get(i).id().equals(updated.id())) {
+                    messages.set(i, updated);
+                    notifyItemChanged(i);
+                    return;
+                }
+            }
+        }
+
         void setSelectedMessages(List<Message> selected) {
             this.selectedMessages = selected;
             notifyDataSetChanged();
+        }
+
+        void setSelectionMode(boolean enabled) {
+            if (selectionMode != enabled) {
+                selectionMode = enabled;
+                notifyDataSetChanged();
+            }
         }
 
         @NonNull
@@ -557,7 +622,8 @@ public final class MessageListActivity extends AppCompatActivity {
 
         @Override
         public void onBindViewHolder(@NonNull Holder holder, int position) {
-            holder.bind(messages.get(position), selectedMessages, listener, longClickListener);
+            holder.bind(messages.get(position), selectedMessages, selectionMode,
+                    listener, longClickListener, starListener);
         }
 
         @Override
@@ -575,28 +641,40 @@ public final class MessageListActivity extends AppCompatActivity {
             void onMessageLongClick(Message message);
         }
 
+        /** The callback that is called when the star of a message is tapped. */
+        interface OnStarToggled {
+            void onStarToggled(Message message);
+        }
+
         /** One row of the list. */
         static final class Holder extends RecyclerView.ViewHolder {
+            private final TextView avatar;
+            private final android.widget.CheckBox checkbox;
             private final TextView sender;
             private final TextView subject;
             private final TextView snippet;
             private final TextView date;
-            private final View unreadDot;
+            private final android.widget.ImageButton star;
+            private final View attachmentIcon;
 
             Holder(View view) {
                 super(view);
+                avatar = view.findViewById(R.id.message_avatar);
+                checkbox = view.findViewById(R.id.message_checkbox);
                 sender = view.findViewById(R.id.message_sender);
                 subject = view.findViewById(R.id.message_subject);
                 snippet = view.findViewById(R.id.message_snippet);
                 date = view.findViewById(R.id.message_date);
-                unreadDot = view.findViewById(R.id.message_unread_dot);
+                star = view.findViewById(R.id.message_star);
+                attachmentIcon = view.findViewById(R.id.message_attachment_icon);
             }
 
-            void bind(Message message, List<Message> selected, OnMessageSelected listener,
-                      OnMessageLongClick longClickListener) {
+            void bind(Message message, List<Message> selected, boolean selectionMode,
+                      OnMessageSelected listener, OnMessageLongClick longClickListener,
+                      OnStarToggled starListener) {
                 boolean isSelected = selected.contains(message);
-                sender.setText(message.from().displayLabel());
-                unreadDot.setVisibility(message.unread() ? View.VISIBLE : View.GONE);
+                String senderLabel = message.from().displayLabel();
+                sender.setText(senderLabel);
                 subject.setText(message.subject());
                 snippet.setText(TextTools.snippet(
                         message.snippet().isEmpty() ? message.bodyText() : message.snippet(), 120));
@@ -605,13 +683,42 @@ public final class MessageListActivity extends AppCompatActivity {
                         ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
                 subject.setTypeface(null, message.unread()
                         ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
+                attachmentIcon.setVisibility(message.attachments().isEmpty() ? View.GONE : View.VISIBLE);
+
+                if (selectionMode) {
+                    avatar.setVisibility(View.INVISIBLE);
+                    checkbox.setVisibility(View.VISIBLE);
+                    checkbox.setChecked(isSelected);
+                } else {
+                    avatar.setVisibility(View.VISIBLE);
+                    checkbox.setVisibility(View.GONE);
+                    avatar.setText(AvatarColors.initials(
+                            message.from().name(), message.from().email()));
+                    avatar.getBackground().mutate().setTint(AvatarColors.colorFor(
+                            message.from().name(), message.from().email()));
+                    avatar.setContentDescription(senderLabel);
+                }
+
+                star.setImageResource(message.flagged()
+                        ? R.drawable.ic_star_filled : R.drawable.ic_star_outline);
+                star.setImageTintList(android.content.res.ColorStateList.valueOf(
+                        message.flagged() ? androidx.core.content.ContextCompat.getColor(
+                                        star.getContext(), R.color.star_active)
+                                : com.google.android.material.color.MaterialColors.getColor(star,
+                                        com.google.android.material.R.attr.colorOnSurfaceVariant)));
+                star.setContentDescription(star.getResources().getString(
+                        message.flagged() ? R.string.action_unstar : R.string.action_star));
+                star.setOnClickListener(view -> {
+                    if (starListener != null) starListener.onStarToggled(message);
+                });
+
                 itemView.setActivated(isSelected);
                 itemView.setSelected(isSelected);
                 itemView.setBackgroundTintList(android.content.res.ColorStateList.valueOf(
                         com.google.android.material.color.MaterialColors.getColor(itemView,
                                 isSelected ? com.google.android.material.R.attr.colorPrimaryContainer
                                         : com.google.android.material.R.attr.colorSurface)));
-                StringBuilder summary = new StringBuilder(message.from().displayLabel())
+                StringBuilder summary = new StringBuilder(senderLabel)
                         .append(". ").append(message.subject() == null ? "" : message.subject()).append(". ")
                         .append(TextTools.snippet(message.snippet().isEmpty()
                                 ? message.bodyText() : message.snippet(), 120));
@@ -622,11 +729,11 @@ public final class MessageListActivity extends AppCompatActivity {
                 if (isSelected) summary.append(". ").append(itemView.getResources().getString(
                         R.string.message_list_selection_count, selected.size()));
                 itemView.setContentDescription(summary.toString());
-                
+
                 itemView.setOnClickListener(view -> {
                     if (listener != null) listener.onMessageSelected(message);
                 });
-                
+
                 itemView.setOnLongClickListener(view -> {
                     if (longClickListener != null) {
                         longClickListener.onMessageLongClick(message);

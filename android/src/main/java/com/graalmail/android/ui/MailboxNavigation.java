@@ -77,10 +77,19 @@ final class MailboxNavigation implements FolderAdapter.OnFolderSelected {
         adapter.submit(accounts, (account, ignored) -> context.store().listFolders(account.id()));
         adapter.setSelectedMailbox(showingUnifiedInbox, currentAccountId, currentFolderId);
         TextView summary = activity.findViewById(R.id.drawer_account_summary);
+        TextView headerAvatar = activity.findViewById(R.id.drawer_account_avatar);
         if (accounts.size() == 1) {
-            summary.setText(accounts.get(0).email());
+            Account account = accounts.get(0);
+            summary.setText(account.email());
+            String display = account.displayName().isBlank() ? account.email() : account.displayName();
+            headerAvatar.setText(AvatarColors.initials(account.displayName(), account.email()));
+            headerAvatar.getBackground().mutate().setTint(
+                    AvatarColors.colorFor(account.displayName(), account.email()));
+            headerAvatar.setContentDescription(display);
+            headerAvatar.setVisibility(View.VISIBLE);
         } else {
             summary.setText(activity.getString(R.string.mailbox_navigation_account_count, accounts.size()));
+            headerAvatar.setVisibility(View.GONE);
         }
     }
 

@@ -21,6 +21,10 @@
     <dimen name="list_row_spacing">12dp</dimen>
     <dimen name="list_bottom_inset">88dp</dimen>
     <dimen name="message_unread_dot_size">8dp</dimen>
+    <dimen name="message_avatar_size">40dp</dimen>
+    <dimen name="message_divider_inset">68dp</dimen>
+    <dimen name="touch_target_small">40dp</dimen>
+    <dimen name="icon_size_small">16dp</dimen>
     <dimen name="icon_size_medium">24dp</dimen>
     <dimen name="folder_row_inset">40dp</dimen>
 </resources>

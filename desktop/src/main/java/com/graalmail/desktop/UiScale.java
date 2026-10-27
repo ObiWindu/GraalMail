@@ -4,8 +4,12 @@
  */
 package com.graalmail.desktop;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.WeakHashMap;
+import javafx.animation.PauseTransition;
+import javafx.application.Platform;
 import javafx.scene.Group;
 import javafx.geometry.Dimension2D;
 import javafx.geometry.Insets;
@@ -15,24 +19,49 @@ import javafx.scene.Scene;
 import javafx.stage.Screen;
 import javafx.stage.Stage;
 import javafx.stage.Window;
+import javafx.util.Duration;
 
-/** Screen-aware sizing shared by all desktop windows. */
+/**
+ * Screen- and window-aware sizing shared by all desktop windows.
+ *
+ * <p>The scale combines three signals:</p>
+ * <ul>
+ *   <li>screen size: larger screens get a larger base scale,</li>
+ *   <li>screen density: high-DPI screens get a modest boost on top,</li>
+ *   <li>window size: enlarging a window grows content slightly, shrinking it
+ *   compacts content slightly, so the UI keeps fitting.</li>
+ * </ul>
+ *
+ * <p>Most styling lives in CSS {@code em} units, so updating the root
+ * {@code -fx-font-size} rescales fonts, paddings, radii and pane minima at
+ * once. Java-side pixel math ({@link #px}, {@link #insets}, icons, avatars,
+ * the reader zoom) follows through the {@link #onScale} callbacks, which fire
+ * debounced whenever the window is resized or moved to another screen.</p>
+ */
 final class UiScale {
 
     private static final double BASE_SCREEN_WIDTH = 1440;
     private static final double BASE_SCREEN_HEIGHT = 900;
+    private static final double BASE_DPI = 96;
     private static final double BASE_FONT_SIZE = 13;
+    private static final double DESIGN_WINDOW_WIDTH = 1520;
+    private static final double DESIGN_WINDOW_HEIGHT = 980;
+    private static final double MIN_SCALE = 0.8;
+    private static final double MAX_SCALE = 1.6;
+    private static final double RESCALE_EPSILON = 0.005;
+
     private static final WeakHashMap<Stage, Boolean> WATCHED_STAGES = new WeakHashMap<>();
     private static final WeakHashMap<Stage, MinimumSize> MINIMUM_SIZES = new WeakHashMap<>();
+    private static final WeakHashMap<Stage, Double> APPLIED_SCALES = new WeakHashMap<>();
+    private static final WeakHashMap<Stage, List<Runnable>> SCALE_LISTENERS = new WeakHashMap<>();
+    private static final WeakHashMap<Stage, PauseTransition> RESCALE_DEBOUNCERS = new WeakHashMap<>();
     private static volatile double currentScale = 1;
 
     private UiScale() { }
 
+    /** The combined scale for the screen and window the given window is on. */
     static double scale(Window window) {
-        Rectangle2D bounds = visualBounds(window);
-        double areaScale = Math.sqrt((bounds.getWidth() * bounds.getHeight())
-                / (BASE_SCREEN_WIDTH * BASE_SCREEN_HEIGHT));
-        return clamp(areaScale, 0.85, 1.35);
+        return clamp(screenScale(screenFor(window)) * windowFactor(window), MIN_SCALE, MAX_SCALE);
     }
 
     static double currentScale() {
@@ -61,6 +90,16 @@ final class UiScale {
                 Math.min(bounds.getHeight() * 0.90, designHeight * scale));
     }
 
+    /**
+     * Registers a callback that runs (debounced, on the FX thread) whenever the
+     * effective scale of the stage changes through resize or screen moves.
+     * Use it to rebuild size-frozen content such as list cells, avatars and
+     * web-view zoom levels.
+     */
+    static synchronized void onScale(Stage stage, Runnable callback) {
+        SCALE_LISTENERS.computeIfAbsent(stage, key -> new ArrayList<>()).add(callback);
+    }
+
     static void configure(Stage stage, Scene scene, Window anchor,
                           double designWidth, double designHeight,
                           double minimumWidth, double minimumHeight) {
@@ -78,9 +117,47 @@ final class UiScale {
 
     static void install(Scene scene, Stage stage) {
         applyFontScale(scene == null ? null : scene.getRoot(), stage);
-        if (WATCHED_STAGES.putIfAbsent(stage, Boolean.TRUE) == null) {
-            stage.xProperty().addListener((observable, oldValue, newValue) -> applyCurrentScene(stage));
-            stage.yProperty().addListener((observable, oldValue, newValue) -> applyCurrentScene(stage));
+        synchronized (UiScale.class) {
+            if (WATCHED_STAGES.putIfAbsent(stage, Boolean.TRUE) != null) return;
+            PauseTransition debouncer = new PauseTransition(Duration.millis(120));
+            debouncer.setOnFinished(event -> rescale(stage));
+            RESCALE_DEBOUNCERS.put(stage, debouncer);
+            Runnable schedule = () -> {
+                PauseTransition pending;
+                synchronized (UiScale.class) {
+                    pending = RESCALE_DEBOUNCERS.get(stage);
+                }
+                if (pending != null) pending.playFromStart();
+            };
+            stage.xProperty().addListener((observable, oldValue, newValue) -> schedule.run());
+            stage.yProperty().addListener((observable, oldValue, newValue) -> schedule.run());
+            stage.widthProperty().addListener((observable, oldValue, newValue) -> schedule.run());
+            stage.heightProperty().addListener((observable, oldValue, newValue) -> schedule.run());
+        }
+    }
+
+    private static void rescale(Stage stage) {
+        if (!Platform.isFxApplicationThread()) {
+            Platform.runLater(() -> rescale(stage));
+            return;
+        }
+        double before;
+        synchronized (UiScale.class) {
+            before = APPLIED_SCALES.getOrDefault(stage, Double.NaN);
+        }
+        applyCurrentScene(stage);
+        double after = currentScale;
+        if (!Double.isNaN(before) && Math.abs(after - before) < RESCALE_EPSILON) return;
+        List<Runnable> listeners;
+        synchronized (UiScale.class) {
+            listeners = new ArrayList<>(SCALE_LISTENERS.getOrDefault(stage, List.of()));
+        }
+        for (Runnable listener : listeners) {
+            try {
+                listener.run();
+            } catch (RuntimeException ignored) {
+                // A stale listener must not break rescaling of the rest.
+            }
         }
     }
 
@@ -103,14 +180,59 @@ final class UiScale {
         stage.setMinHeight(Math.min(bounds.getHeight() * 0.96, minimum.height() * scale));
     }
 
+    /** Screen part: area scale with a modest high-density boost. */
+    private static double screenScale(Screen screen) {
+        Rectangle2D bounds = screen.getVisualBounds();
+        double areaScale = Math.sqrt((bounds.getWidth() * bounds.getHeight())
+                / (BASE_SCREEN_WIDTH * BASE_SCREEN_HEIGHT));
+        areaScale = clamp(areaScale, 0.8, 1.45);
+        double dpiFactor = 1.0;
+        try {
+            double dpi = screen.getDpi();
+            if (dpi > 0) dpiFactor = clamp(dpi / BASE_DPI, 1.0, 1.3);
+        } catch (RuntimeException ignored) {
+            dpiFactor = 1.0;
+        }
+        return areaScale * dpiFactor;
+    }
+
+    /**
+     * Window part: grows content slightly on large windows, compacts it on
+     * small ones. Gentle (cube-root-ish response) so it assists fitting without
+     * fighting the user's resize.
+     */
+    private static double windowFactor(Window window) {
+        double width = -1;
+        double height = -1;
+        if (window != null) {
+            Scene scene = window instanceof Stage stage ? stage.getScene() : null;
+            if (scene != null && scene.getWidth() > 0 && scene.getHeight() > 0) {
+                width = scene.getWidth();
+                height = scene.getHeight();
+            } else if (window.getWidth() > 0 && window.getHeight() > 0) {
+                width = window.getWidth();
+                height = window.getHeight();
+            }
+        }
+        if (width <= 0 || height <= 0) return 1.0;
+        double relative = Math.sqrt((width / DESIGN_WINDOW_WIDTH) * (height / DESIGN_WINDOW_HEIGHT));
+        return clamp(Math.pow(relative, 0.35), 0.88, 1.12);
+    }
+
     private static void applyFontScale(Node root, Window window) {
+        double scale = scale(window);
+        currentScale = scale;
+        if (window instanceof Stage stage) {
+            synchronized (UiScale.class) {
+                APPLIED_SCALES.put(stage, scale);
+            }
+        }
         if (root == null) return;
         String existing = root.getStyle();
         String style = existing == null ? "" : existing.trim();
         style = style.replaceAll("(?i)(^|;)\\s*-fx-font-size\\s*:[^;]*;?", "$1").trim();
         if (!style.isEmpty() && !style.endsWith(";")) style += ";";
-        double fontSize = BASE_FONT_SIZE * scale(window);
-        currentScale = scale(window);
+        double fontSize = BASE_FONT_SIZE * scale;
         root.setStyle(style + String.format(Locale.ROOT, " -fx-font-size: %.2fpx;", fontSize));
         if (root.getScene() != null) {
             root.applyCss();
@@ -118,7 +240,7 @@ final class UiScale {
                 if (icon instanceof Group group) {
                     Object baseScale = group.getProperties().get(ThunderbirdIcons.BASE_SCALE_PROPERTY);
                     if (baseScale instanceof Number base) {
-                        double iconScale = base.doubleValue() * currentScale;
+                        double iconScale = base.doubleValue() * scale;
                         group.setScaleX(iconScale);
                         group.setScaleY(iconScale);
                     }

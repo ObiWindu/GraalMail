@@ -19,5 +19,7 @@ public interface DeliveryCoordinator {
      * @param recipientEncryptionPrivateKey PKCS#8 encoded recipient X25519 private key
      */
     CompletionStage<Void> processNotification(NotificationEvent event, String senderAddress, byte[] recipientEncryptionPrivateKey);
+    /** True if the message was already retrieved and stored (deduplication probe, spec 7.4). */
+    boolean hasDelivered(String messageId);
     List<String> inboxMessageIds();
 }

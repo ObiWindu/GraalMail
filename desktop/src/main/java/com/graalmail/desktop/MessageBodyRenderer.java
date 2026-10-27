@@ -18,17 +18,23 @@ final class MessageBodyRenderer {
     private MessageBodyRenderer() { }
 
     static String render(Message message, boolean allowRemoteImages, boolean dark) {
-        String text = dark ? "#e5e9f0" : "#202633";
-        String background = dark ? "#202631" : "#ffffff";
-        String muted = dark ? "#aab4c4" : "#667085";
+        String text = dark ? "#EFEDF7" : "#1B1340";
+        String background = dark ? "#1E1C2A" : "#ffffff";
+        String muted = dark ? "#9B96B3" : "#6E6A85";
+        String accent = dark ? "#9B7CFF" : "#6D4AFF";
+        String rule = dark ? "#34304A" : "#E6E1F5";
         StringBuilder html = new StringBuilder();
-        html.append("<html><head><meta charset='UTF-8'><style>body{font-family:system-ui,sans-serif;")
-                .append("font-size:14px;line-height:1.65;color:").append(text)
+        html.append("<html><head><meta charset='UTF-8'><style>body{font-family:system-ui,-apple-system,'Segoe UI',sans-serif;")
+                .append("font-size:14.5px;line-height:1.7;color:").append(text)
                 .append(";background:").append(background)
-                .append(";margin:28px;max-width:900px;}h1{font-size:23px;line-height:1.3;margin:0 0 18px}")
-                .append(".meta{color:").append(muted).append(";font-size:13px;}")
-                .append("hr{border:0;border-top:1px solid #e4e7ec;margin:20px 0}")
-                .append("pre{white-space:pre-wrap;word-wrap:break-word;font:inherit}</style></head><body>");
+                .append(";margin:28px;max-width:880px;}h1{font-size:22px;line-height:1.35;margin:0 0 16px;letter-spacing:-0.01em}")
+                .append(".meta{color:").append(muted).append(";font-size:13px;line-height:1.6}")
+                .append("a{color:").append(accent).append("}")
+                .append("hr{border:0;border-top:1px solid ").append(rule).append(";margin:20px 0}")
+                .append("blockquote{border-left:3px solid ").append(rule)
+                .append(";margin:12px 0;padding:4px 0 4px 14px;color:").append(muted).append("}")
+                .append("pre{white-space:pre-wrap;word-wrap:break-word;font:inherit;background:")
+                .append(dark ? "#262433" : "#F6F4FC").append(";border-radius:10px;padding:14px 16px}</style></head><body>");
         html.append("<h1>").append(escape(message.subject().isBlank() ? "(No subject)" : message.subject()))
                 .append("</h1><p class='meta'><b>From</b> ").append(escape(formatAddress(message.from())))
                 .append("<br>");

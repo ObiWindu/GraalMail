@@ -96,6 +96,7 @@ public final class FolderAdapter extends RecyclerView.Adapter<RecyclerView.ViewH
     private final Map<String, List<Folder>> folderSnapshot = new HashMap<>();
     private boolean showUnifiedInbox;
     private boolean unifiedInboxSelected;
+    private int unifiedInboxUnread;
     private String selectedAccountId;
     private String selectedFolderId;
 
@@ -120,6 +121,7 @@ public final class FolderAdapter extends RecyclerView.Adapter<RecyclerView.ViewH
         List<Entry> replacement = new ArrayList<>();
         folderSnapshot.clear();
         showUnifiedInbox = !accounts.isEmpty();
+        unifiedInboxUnread = 0;
 
         if (showUnifiedInbox) {
             // Add unified inbox entry
@@ -139,6 +141,13 @@ public final class FolderAdapter extends RecyclerView.Adapter<RecyclerView.ViewH
                 }
             }
             else folderSnapshot.put(account.id(), new ArrayList<>(folders.apply(account, account.id())));
+        }
+        for (List<Folder> snapshot : folderSnapshot.values()) {
+            for (Folder folder : snapshot) {
+                if (folder.type() == FolderType.INBOX) {
+                    unifiedInboxUnread += folder.unreadCount();
+                }
+            }
         }
         List<Entry> previous = new ArrayList<>(entries);
         entries.clear();
@@ -224,7 +233,7 @@ public final class FolderAdapter extends RecyclerView.Adapter<RecyclerView.ViewH
     public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position) {
         Entry entry = entries.get(position);
         if (holder instanceof UnifiedInboxHolder unifiedHolder) {
-            unifiedHolder.bind(listener, unifiedInboxSelected);
+            unifiedHolder.bind(listener, unifiedInboxSelected, unifiedInboxUnread);
         } else if (holder instanceof AccountHolder accountHolder) {
             accountHolder.bind(entry.account(), collapsed.contains(entry.account().id()), () -> toggle(entry.account().id()));
         } else if (holder instanceof FolderHolder folderHolder) {
@@ -262,10 +271,19 @@ public final class FolderAdapter extends RecyclerView.Adapter<RecyclerView.ViewH
             count = view.findViewById(R.id.folder_count);
         }
 
-        void bind(OnFolderSelected listener, boolean selected) {
+        void bind(OnFolderSelected listener, boolean selected, int unread) {
             name.setText(R.string.mailbox_unified_inbox);
             summary.setText(R.string.mailbox_unified_summary);
-            count.setText("");
+            if (unread > 0) {
+                count.setText(unread > 99 ? "99+" : String.valueOf(unread));
+                count.setVisibility(View.VISIBLE);
+                count.setContentDescription(itemView.getResources().getString(
+                        R.string.cd_unread_count, unread));
+            } else {
+                count.setText("");
+                count.setVisibility(View.GONE);
+                count.setContentDescription(null);
+            }
             itemView.setActivated(selected);
             int contentColor = MaterialColors.getColor(itemView, selected
                     ? com.google.android.material.R.attr.colorOnSecondaryContainer
@@ -286,17 +304,23 @@ public final class FolderAdapter extends RecyclerView.Adapter<RecyclerView.ViewH
 
     /** Shows the account in the header row. */
     static final class AccountHolder extends RecyclerView.ViewHolder {
+        private final TextView avatar;
         private final TextView name;
         private final ImageButton expand;
 
         AccountHolder(View view) {
             super(view);
+            avatar = view.findViewById(R.id.account_avatar);
             name = view.findViewById(R.id.account_name);
             expand = view.findViewById(R.id.account_expand);
         }
 
         void bind(Account account, boolean isCollapsed, Runnable toggle) {
             String display = account.displayName().isBlank() ? account.email() : account.displayName();
+            avatar.setText(AvatarColors.initials(account.displayName(), account.email()));
+            avatar.getBackground().mutate().setTint(
+                    AvatarColors.colorFor(account.displayName(), account.email()));
+            avatar.setContentDescription(display);
             name.setText(display.equals(account.email()) ? display : display + "\n" + account.email());
             name.setContentDescription(display.equals(account.email()) ? account.email()
                     : display + ", " + account.email());

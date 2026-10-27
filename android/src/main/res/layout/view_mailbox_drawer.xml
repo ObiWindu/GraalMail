@@ -12,11 +12,30 @@
         android:layout_height="@dimen/navigation_header_height"
         android:background="@drawable/drawer_header_background"
         android:gravity="bottom"
-        android:orientation="vertical"
+        android:orientation="horizontal"
         android:paddingStart="@dimen/space_5"
         android:paddingEnd="@dimen/space_5"
         android:paddingTop="@dimen/space_5"
         android:paddingBottom="20dp">
+
+        <TextView
+            android:id="@+id/drawer_account_avatar"
+            android:layout_width="@dimen/message_avatar_size"
+            android:layout_height="@dimen/message_avatar_size"
+            android:layout_gravity="center_vertical"
+            android:layout_marginEnd="@dimen/space_3"
+            android:background="@drawable/avatar_circle"
+            android:gravity="center"
+            android:textColor="#FFFFFF"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:visibility="gone" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
 
         <TextView
             android:layout_width="match_parent"
@@ -34,6 +53,7 @@
             android:ellipsize="end"
             android:textAppearance="@style/TextAppearance.GraalMail.Caption"
             android:text="@string/mailbox_navigation_title" />
+        </LinearLayout>
     </LinearLayout>
 
     <View

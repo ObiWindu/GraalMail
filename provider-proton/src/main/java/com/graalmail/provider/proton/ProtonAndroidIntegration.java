@@ -18,6 +18,13 @@ public final class ProtonAndroidIntegration {
     /** Web client of Proton Mail. */
     public static final String WEB_URL = "https://mail.proton.me";
 
+    /** Package name of the official Proton Mail Android application. */
+    public static final String APP_PACKAGE = "ch.protonmail.android";
+
+    /** Store listing of the official Proton Mail Android application. */
+    public static final String PLAY_STORE_URL =
+            "https://play.google.com/store/apps/details?id=ch.protonmail.android";
+
     /** Alternatives that GraalMail points to instead of pretending to support Proton. */
     public static final List<String> OFFICIAL_ALTERNATIVES = List.of(
             "Open the Proton Mail Android app",

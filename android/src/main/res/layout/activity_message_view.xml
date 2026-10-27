@@ -38,16 +38,43 @@
                 android:layout_height="wrap_content"
                 android:textAppearance="@style/TextAppearance.Material3.TitleLarge" />
 
-            <TextView
-                android:id="@+id/view_from"
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp" />
+                android:layout_marginTop="12dp"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
 
-            <TextView
-                android:id="@+id/view_to"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content" />
+                <TextView
+                    android:id="@+id/view_avatar"
+                    android:layout_width="@dimen/message_avatar_size"
+                    android:layout_height="@dimen/message_avatar_size"
+                    android:layout_marginEnd="@dimen/space_3"
+                    android:background="@drawable/avatar_circle"
+                    android:gravity="center"
+                    android:textColor="#FFFFFF"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/view_from"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/view_to"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:textAppearance="@style/TextAppearance.GraalMail.Snippet" />
+                </LinearLayout>
+            </LinearLayout>
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/view_recipient_details_toggle"

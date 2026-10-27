@@ -4,8 +4,13 @@ import com.graalmail.p2p.blockchain.NotificationEvent;
 import com.graalmail.p2p.blockchain.NotificationRequest;
 import com.graalmail.p2p.blockchain.PolygonNotificationService;
 import com.graalmail.p2p.crypto.EncryptionService;
+import com.graalmail.p2p.blockchain.DepositPolicy;
+import com.graalmail.p2p.delivery.DeliveryStore;
+import com.graalmail.p2p.delivery.MessageRecord;
+import com.graalmail.p2p.delivery.OutgoingEntry;
 import com.graalmail.p2p.identity.IdentityService;
 import com.graalmail.p2p.mailbox.InboxRepository;
+import com.graalmail.p2p.mailbox.StoragePolicy;
 import com.graalmail.p2p.mailbox.StorageReceipt;
 import com.graalmail.p2p.protocol.Envelope;
 
@@ -25,7 +30,10 @@ public class DefaultDeliveryCoordinator implements DeliveryCoordinator {
     private final NetworkId networkId;
     private final String contractAddress;
     private final String senderWallet;
-    private final int requiredReplicas;
+    private final StoragePolicy storagePolicy;
+    private final RateLimiter sendRateLimiter;
+    private final DeliveryStore deliveryStore;
+    private volatile DepositPolicy depositPolicy = DepositPolicy.disabled();
 
     public DefaultDeliveryCoordinator(IdentityService identityService,
                                      EncryptionService crypto,
@@ -49,6 +57,38 @@ public class DefaultDeliveryCoordinator implements DeliveryCoordinator {
                                      String contractAddress,
                                      String senderWallet,
                                      int requiredReplicas) {
+        this(identityService, crypto, peerNetwork, polygon, inbox, mailboxPeers, networkId,
+                contractAddress, senderWallet, StoragePolicy.withReplicas(Math.max(1, requiredReplicas)),
+                new RateLimiter(60, 60_000));
+    }
+
+    public DefaultDeliveryCoordinator(IdentityService identityService,
+                                     EncryptionService crypto,
+                                     PeerNetworkService peerNetwork,
+                                     PolygonNotificationService polygon,
+                                     InboxRepository inbox,
+                                     List<PeerAddress> mailboxPeers,
+                                     NetworkId networkId,
+                                     String contractAddress,
+                                     String senderWallet,
+                                     StoragePolicy storagePolicy,
+                                     RateLimiter sendRateLimiter) {
+        this(identityService, crypto, peerNetwork, polygon, inbox, mailboxPeers, networkId,
+                contractAddress, senderWallet, storagePolicy, sendRateLimiter, null);
+    }
+
+    public DefaultDeliveryCoordinator(IdentityService identityService,
+                                     EncryptionService crypto,
+                                     PeerNetworkService peerNetwork,
+                                     PolygonNotificationService polygon,
+                                     InboxRepository inbox,
+                                     List<PeerAddress> mailboxPeers,
+                                     NetworkId networkId,
+                                     String contractAddress,
+                                     String senderWallet,
+                                     StoragePolicy storagePolicy,
+                                     RateLimiter sendRateLimiter,
+                                     DeliveryStore deliveryStore) {
         this.identityService = identityService;
         this.crypto = crypto;
         this.peerNetwork = peerNetwork;
@@ -58,11 +98,26 @@ public class DefaultDeliveryCoordinator implements DeliveryCoordinator {
         this.networkId = networkId;
         this.contractAddress = contractAddress;
         this.senderWallet = senderWallet;
-        this.requiredReplicas = Math.max(1, requiredReplicas);
+        this.storagePolicy = storagePolicy;
+        this.sendRateLimiter = sendRateLimiter;
+        this.deliveryStore = deliveryStore;
     }
 
     @Override
     public CompletionStage<SendResult> send(SendRequest request) {
+        try {
+            depositPolicy.checkSend(request.depositTxProof());
+        } catch (PolyMailException e) {
+            return CompletableFuture.failedFuture(e);
+        }
+        if (!sendRateLimiter.tryAcquire("send:" + request.senderAddress())) {
+            return CompletableFuture.failedFuture(new PolyMailException(
+                    com.graalmail.core.error.ErrorCode.RATE_LIMITED, "send rate limit exceeded"));
+        }
+        if (request.contentBytes() == null || request.contentBytes().length > storagePolicy.maxContentBytes()) {
+            return CompletableFuture.failedFuture(new PolyMailException(
+                    com.graalmail.core.error.ErrorCode.INVALID_MESSAGE, "content exceeds storage policy size"));
+        }
         return identityService.resolve(request.recipientAddress()).thenCompose(identity -> {
             if (!identityService.verify(identity)) {
                 return CompletableFuture.failedFuture(new PolyMailException(com.graalmail.core.error.ErrorCode.KEY_UNTRUSTED, "recipient identity untrusted"));
@@ -88,22 +143,42 @@ public class DefaultDeliveryCoordinator implements DeliveryCoordinator {
             Envelope finalEnv = new Envelope(ProtocolConstants.PROTOCOL_VERSION, networkId.code(), messageId, hash,
                     cipherBytes, aad, request.senderKeyVersion(), identity.keyVersion(), now, expiresAt, sig);
 
-            // Phase B: store content on the required number of peers (spec section 10.2).
-            List<CompletableFuture<StorageReceipt>> futures = new ArrayList<>();
+            // Durable outbox: persist the pending operation and message record before
+            // touching the network so a crash never loses the send (spec section 10.1).
+            String operationId = java.util.UUID.randomUUID().toString();
+            byte[] envelopeBytes = finalEnv.toBytes();
+            persistOutgoing(operationId, messageId, "UPLOADING", 0, now, "", envelopeBytes);
+            persistMessage(new MessageRecord(messageId, "OUT", request.senderAddress(), request.recipientAddress(),
+                    now, expiresAt, hex(hash), "", "QUEUED", "UNVERIFIED", ""));
+
+            // Phase B: store content and count only cryptographically verified receipts
+            // toward the quorum (spec sections 9.2, 10.2, 13.4). A receipt from an unknown
+            // peer, or one whose signature does not verify, never counts.
+            List<CompletableFuture<Boolean>> futures = new ArrayList<>();
             for (PeerAddress pa : mailboxPeers) {
-                futures.add(peerNetwork.storeMessage(pa, finalEnv).toCompletableFuture());
+                futures.add(peerNetwork.storeMessage(pa, finalEnv)
+                        .thenCompose(receipt -> verifiedReceipt(pa, receipt).thenApply(ok -> {
+                            if (deliveryStore != null) deliveryStore.saveReceiptRecord(receipt, ok);
+                            return ok;
+                        }))
+                        .handle((ok, err) -> ok != null && ok)
+                        .toCompletableFuture());
             }
             CompletionStage<Void> stored = CompletableFuture.allOf(futures.toArray(new CompletableFuture<?>[0]))
                     .thenApply(v -> {
-                        int success = 0;
-                        for (CompletableFuture<StorageReceipt> f : futures) {
+                        int verified = 0;
+                        for (CompletableFuture<Boolean> f : futures) {
                             try {
-                                if (f.getNow(null) != null) success++;
+                                if (Boolean.TRUE.equals(f.getNow(false))) verified++;
                             } catch (Exception ignored) {}
                         }
-                        if (success < requiredReplicas) {
-                            throw new PolyMailException(com.graalmail.core.error.ErrorCode.STORAGE_QUORUM_NOT_MET, "storage quorum not met");
+                        if (verified < storagePolicy.requiredReplicas() && !storagePolicy.bestEffortDelivery()) {
+                            failOutgoing(operationId, messageId, "STORAGE_QUORUM_NOT_MET");
+                            throw new PolyMailException(com.graalmail.core.error.ErrorCode.STORAGE_QUORUM_NOT_MET,
+                                    "storage quorum not met: " + verified + "/" + storagePolicy.requiredReplicas() + " verified receipts");
                         }
+                        updateOutgoing(operationId, "STORED", 0, now, "");
+                        updateMessage(messageId, "STORED", "UNVERIFIED", "");
                         return null;
                     });
             // Phase C: publish the notification only after storage is confirmed (spec section 10.3).
@@ -113,14 +188,137 @@ public class DefaultDeliveryCoordinator implements DeliveryCoordinator {
                 byte[] inboxTag = NotificationTag.generate(identity.encryptionPublicKey(), messageId);
                 NotificationRequest nr = new NotificationRequest(networkId, contractAddress, messageId, hash, inboxTag, expiresAt, senderWallet);
                 return polygon.publishNotification(nr)
-                        .thenApply(tx -> new SendResult(messageId, tx, DeliveryState.NOTIFICATION_SUBMITTED));
+                        .thenApply(tx -> {
+                            updateOutgoing(operationId, "NOTIFICATION_SUBMITTED", 0, now, "");
+                            if (deliveryStore != null) deliveryStore.updateMessageNotification(messageId, tx);
+                            updateMessage(messageId, "NOTIFICATION_SUBMITTED", "UNVERIFIED", "");
+                            return new SendResult(messageId, tx, DeliveryState.NOTIFICATION_SUBMITTED);
+                        })
+                        .exceptionallyCompose(err -> {
+                            failOutgoing(operationId, messageId, errorCodeOf(err));
+                            return CompletableFuture.failedFuture(err instanceof RuntimeException re ? re : new RuntimeException(err));
+                        });
             });
         });
     }
 
+    /**
+     * Re-drives pending durable operations after a restart or outage (spec section 14).
+     * Operations stuck in {@code UPLOADING}/{@code STORED} are re-stored and re-published
+     * from the persisted envelope; {@code NOTIFICATION_SUBMITTED} operations are
+     * reconciled against the chain. Returns the number of operations now confirmed.
+     */
+    /** Sets the anti-spam deposit policy; disabled by default (spec 5.5). */
+    public void depositPolicy(DepositPolicy policy) {
+        this.depositPolicy = policy == null ? DepositPolicy.disabled() : policy;
+    }
+
+    public CompletionStage<Integer> resumePending() {
+        if (deliveryStore == null) return CompletableFuture.completedFuture(0);
+        List<OutgoingEntry> pending = deliveryStore.pendingOutgoing();
+        CompletionStage<Integer> acc = CompletableFuture.completedFuture(0);
+        for (OutgoingEntry entry : pending) {
+            acc = acc.thenCompose(n -> resumeOne(entry).thenApply(ok -> n + (ok ? 1 : 0)));
+        }
+        return acc;
+    }
+
+    private CompletionStage<Boolean> resumeOne(OutgoingEntry entry) {
+        if ("NOTIFICATION_SUBMITTED".equals(entry.state())) {
+            MessageRecord rec = deliveryStore.messageRecord(entry.messageId());
+            String tx = rec == null ? "" : rec.notificationTxHash();
+            if (tx == null || tx.isBlank()) return CompletableFuture.completedFuture(false);
+            return polygon.track(tx).thenApply(status -> {
+                if (status == com.graalmail.p2p.blockchain.TransactionStatus.CONFIRMED
+                        || status == com.graalmail.p2p.blockchain.TransactionStatus.FINALIZED) {
+                    deliveryStore.updateOutgoing(entry.operationId(), "NOTIFICATION_CONFIRMED",
+                            entry.retryCount(), System.currentTimeMillis(), "");
+                    updateMessage(entry.messageId(), "NOTIFICATION_CONFIRMED", "UNVERIFIED", "");
+                    return true;
+                }
+                if (status == com.graalmail.p2p.blockchain.TransactionStatus.FAILED) {
+                    failOutgoing(entry.operationId(), entry.messageId(), "TRANSACTION_REVERTED");
+                }
+                return false;
+            }).exceptionally(err -> false);
+        }
+        if (entry.payload() == null) return CompletableFuture.completedFuture(false);
+        Envelope env;
+        try {
+            env = Envelope.fromBytes(entry.payload());
+        } catch (PolyMailException e) {
+            failOutgoing(entry.operationId(), entry.messageId(), "INVALID_MESSAGE");
+            return CompletableFuture.completedFuture(false);
+        }
+        MessageRecord rec = deliveryStore.messageRecord(entry.messageId());
+        if (rec == null) return CompletableFuture.completedFuture(false);
+        List<CompletableFuture<Boolean>> futures = new ArrayList<>();
+        for (PeerAddress pa : mailboxPeers) {
+            futures.add(peerNetwork.storeMessage(pa, env)
+                    .thenCompose(receipt -> verifiedReceipt(pa, receipt))
+                    .handle((ok, err) -> ok != null && ok)
+                    .toCompletableFuture());
+        }
+        return CompletableFuture.allOf(futures.toArray(new CompletableFuture<?>[0])).thenCompose(v -> {
+            int verified = 0;
+            for (CompletableFuture<Boolean> f : futures) {
+                try { if (Boolean.TRUE.equals(f.getNow(false))) verified++; } catch (Exception ignored) {}
+            }
+            if (verified < storagePolicy.requiredReplicas() && !storagePolicy.bestEffortDelivery()) {
+                deliveryStore.updateOutgoing(entry.operationId(), entry.state(), entry.retryCount() + 1,
+                        System.currentTimeMillis() + 60_000, "STORAGE_QUORUM_NOT_MET");
+                return CompletableFuture.completedFuture(false);
+            }
+            return identityService.resolve(rec.recipientIdentity()).thenCompose(identity -> {
+                byte[] inboxTag = NotificationTag.generate(identity.encryptionPublicKey(), entry.messageId());
+                NotificationRequest nr = new NotificationRequest(networkId, contractAddress, entry.messageId(),
+                        env.contentHash(), inboxTag, env.expiresAt(), senderWallet);
+                return polygon.publishNotification(nr).thenApply(tx -> {
+                    deliveryStore.updateOutgoing(entry.operationId(), "NOTIFICATION_SUBMITTED",
+                            entry.retryCount(), System.currentTimeMillis(), "");
+                    deliveryStore.updateMessageNotification(entry.messageId(), tx);
+                    updateMessage(entry.messageId(), "NOTIFICATION_SUBMITTED", "UNVERIFIED", "");
+                    return true;
+                });
+            });
+        }).exceptionally(err -> false);
+    }
+
+    private void persistOutgoing(String operationId, String messageId, String state, int retryCount, long nextAttemptAt, String lastError, byte[] payload) {
+        if (deliveryStore != null) {
+            deliveryStore.saveOutgoing(new OutgoingEntry(operationId, messageId, "SEND", state, retryCount, nextAttemptAt, lastError, payload));
+        }
+    }
+
+    private void updateOutgoing(String operationId, String state, int retryCount, long nextAttemptAt, String lastError) {
+        if (deliveryStore != null) {
+            deliveryStore.updateOutgoing(operationId, state, retryCount, nextAttemptAt, lastError);
+        }
+    }
+
+    private void failOutgoing(String operationId, String messageId, String errorCode) {
+        updateOutgoing(operationId, "FAILED", 0, System.currentTimeMillis(), errorCode);
+        updateMessage(messageId, "FAILED", "UNVERIFIED", errorCode);
+    }
+
+    private void persistMessage(MessageRecord record) {
+        if (deliveryStore != null) deliveryStore.saveMessageRecord(record);
+    }
+
+    private void updateMessage(String messageId, String deliveryState, String verificationState, String lastError) {
+        if (deliveryStore != null) deliveryStore.updateMessageState(messageId, deliveryState, verificationState, lastError);
+    }
+
+    private static String errorCodeOf(Throwable err) {
+        Throwable t = err;
+        while (t instanceof java.util.concurrent.CompletionException && t.getCause() != null) t = t.getCause();
+        if (t instanceof PolyMailException p) return p.code().name();
+        return "UNKNOWN";
+    }
+
     @Override
     public CompletionStage<Void> processNotification(NotificationEvent event, String senderAddress, byte[] recipientEncryptionPrivateKey) {
-        if (inbox.exists(event.messageId())) {
+        if (hasDelivered(event.messageId())) {
             return CompletableFuture.completedFuture(null); // idempotent (spec section 7.4)
         }
         if (event.expiresAt() > 0 && System.currentTimeMillis() > event.expiresAt()) {
@@ -142,9 +340,24 @@ public class DefaultDeliveryCoordinator implements DeliveryCoordinator {
                     return CompletableFuture.<Void>failedFuture(e);
                 }
                 inbox.save(event.messageId(), env, plaintext);
+                if (deliveryStore != null) {
+                    deliveryStore.saveMessageRecord(new MessageRecord(event.messageId(), "IN",
+                            senderAddress, "", System.currentTimeMillis(), env.expiresAt(),
+                            hex(env.contentHash()), event.transactionHash(), "DELIVERED", "VERIFIED", ""));
+                }
                 return CompletableFuture.<Void>completedFuture(null);
             });
         });
+    }
+
+    /** Verifies a storage receipt against the storing peer's key; false if unknown or invalid. */
+    private CompletionStage<Boolean> verifiedReceipt(PeerAddress peer, StorageReceipt receipt) {
+        if (receipt == null || receipt.signature() == null) return CompletableFuture.completedFuture(false);
+        return peerNetwork.peerSigningKey(peer).thenApply(key -> {
+            if (key.isEmpty()) return false;
+            if (!ProtocolConstants.PROTOCOL_VERSION.equals(receipt.protocolVersion())) return false;
+            return crypto.verify(key.get(), receipt.signingBytes(), receipt.signature());
+        }).exceptionally(err -> false);
     }
 
     /** Tries each known peer in turn without blocking; fails with CONTENT_NOT_FOUND if none serve the content. */
@@ -196,6 +409,12 @@ public class DefaultDeliveryCoordinator implements DeliveryCoordinator {
 
     @Override
     public List<String> inboxMessageIds() { return inbox.messageIds(); }
+
+    @Override
+    public boolean hasDelivered(String messageId) {
+        if (inbox.exists(messageId)) return true;
+        return deliveryStore != null && deliveryStore.hasMessageRecord(messageId);
+    }
 
     private static String hex(byte[] b) {
         StringBuilder sb = new StringBuilder();

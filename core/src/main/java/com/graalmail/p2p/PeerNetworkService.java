@@ -17,4 +17,6 @@ public interface PeerNetworkService {
     CompletionStage<Envelope> fetchMessage(PeerAddress peer, String contentId);
     CompletionStage<List<PeerAddress>> discoverPeers();
     void registerPeer(PeerAddress address, MailboxPeer peer);
+    /** Ed25519 public key identifying a peer, used to verify its storage receipts. Empty if unknown. */
+    CompletionStage<java.util.Optional<byte[]>> peerSigningKey(PeerAddress peer);
 }

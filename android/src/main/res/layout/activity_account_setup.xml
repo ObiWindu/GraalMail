@@ -61,6 +61,7 @@
             </com.google.android.material.textfield.TextInputLayout>
 
             <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/setup_display_name_container"
                 style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content">
@@ -74,6 +75,7 @@
             </com.google.android.material.textfield.TextInputLayout>
 
             <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/setup_password_field_container"
                 style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content">
@@ -85,6 +87,51 @@
                     android:hint="@string/setup_password"
                     android:inputType="textPassword" />
             </com.google.android.material.textfield.TextInputLayout>
+
+            <LinearLayout
+                android:id="@+id/setup_proton_section"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingTop="4dp"
+                    android:text="@string/proton_unavailable_title"
+                    android:textAppearance="@style/TextAppearance.GraalMail.Subject" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingTop="4dp"
+                    android:paddingBottom="8dp"
+                    android:text="@string/proton_unavailable_reason"
+                    android:textAppearance="@style/TextAppearance.GraalMail.Snippet" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/proton_alternatives_title"
+                    android:textAppearance="@style/TextAppearance.GraalMail.Caption" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/setup_proton_open_app"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    style="@style/Widget.GraalMail.Button"
+                    android:layout_marginTop="@dimen/space_3"
+                    android:text="@string/proton_open_app" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/setup_proton_open_web"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_marginTop="@dimen/space_2"
+                    android:text="@string/proton_open_web" />
+            </LinearLayout>
 
             <LinearLayout
                 android:id="@+id/setup_generic_section"

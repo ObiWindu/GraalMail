@@ -4,9 +4,14 @@
  */
 package com.graalmail.android.ui;
 
+import android.content.ActivityNotFoundException;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.net.Uri;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.ArrayAdapter;
+import android.widget.Button;
 import android.widget.EditText;
 import android.widget.Spinner;
 import android.widget.TextView;
@@ -27,6 +32,7 @@ import com.graalmail.provider.api.AuthMethod;
 import com.graalmail.provider.api.ProviderRegistry;
 import com.graalmail.provider.api.ProviderSession;
 import com.graalmail.provider.api.ProviderType;
+import com.graalmail.provider.proton.ProtonAndroidIntegration;
 import com.graalmail.security.model.Credential;
 
 import org.slf4j.Logger;
@@ -52,6 +58,8 @@ public final class AccountSetupActivity extends AppCompatActivity {
     private EditText emailField;
     private EditText passwordField;
     private View passwordContainer;
+    private View displayNameContainer;
+    private View passwordFieldContainer;
     private EditText displayNameField;
     private EditText imapHostField;
     private EditText imapPortField;
@@ -61,6 +69,7 @@ public final class AccountSetupActivity extends AppCompatActivity {
     private Spinner imapSecurity;
     private Spinner smtpSecurity;
     private View genericSection;
+    private View protonSection;
     private TextView status;
     private TextView authExplanation;
     private View connectButton;
@@ -86,6 +95,8 @@ public final class AccountSetupActivity extends AppCompatActivity {
         emailField = findViewById(R.id.setup_email);
         passwordField = findViewById(R.id.setup_password);
         passwordContainer = findViewById(R.id.setup_password_container);
+        displayNameContainer = findViewById(R.id.setup_display_name_container);
+        passwordFieldContainer = findViewById(R.id.setup_password_field_container);
         displayNameField = findViewById(R.id.setup_display_name);
         imapHostField = findViewById(R.id.setup_imap_host);
         imapPortField = findViewById(R.id.setup_imap_port);
@@ -97,17 +108,20 @@ public final class AccountSetupActivity extends AppCompatActivity {
         configureSecuritySpinner(imapSecurity);
         configureSecuritySpinner(smtpSecurity);
         genericSection = findViewById(R.id.setup_generic_section);
+        protonSection = findViewById(R.id.setup_proton_section);
         status = findViewById(R.id.setup_status);
         authExplanation = findViewById(R.id.setup_auth_explanation);
         connectButton = findViewById(R.id.setup_connect);
+        Button protonOpenApp = findViewById(R.id.setup_proton_open_app);
+        protonOpenApp.setOnClickListener(view -> openProtonApp());
+        Button protonOpenWeb = findViewById(R.id.setup_proton_open_web);
+        protonOpenWeb.setOnClickListener(view -> openProtonWeb());
 
         List<String> names = new ArrayList<>();
         for (ProviderType type : ProviderType.values()) {
-            if (type == ProviderType.PROTON) {
-                continue;
-            }
             providers.add(type);
-            names.add(type.displayName());
+            names.add(type == ProviderType.PROTON
+                    ? getString(R.string.setup_provider_proton) : type.displayName());
         }
         providerSpinner.setAdapter(new ArrayAdapter<>(this,
                 android.R.layout.simple_spinner_dropdown_item, names));
@@ -117,8 +131,7 @@ public final class AccountSetupActivity extends AppCompatActivity {
                                        long id) {
                 genericSection.setVisibility(providers.get(position) == ProviderType.GENERIC
                         ? View.VISIBLE : View.GONE);
-                updateProviderAuth(providers.get(position));
-            }
+                updateProviderAuth(providers.get(position));            }
 
             @Override
             public void onNothingSelected(android.widget.AdapterView<?> parent) {
@@ -136,6 +149,26 @@ public final class AccountSetupActivity extends AppCompatActivity {
     }
 
     private void updateProviderAuth(ProviderType type) {
+        if (type == ProviderType.PROTON) {
+            // Proton mailboxes cannot be opened on Android: there is no public
+            // Proton API for third-party mobile clients and Bridge does not run
+            // on Android. Offer the official alternatives instead of asking for
+            // credentials that could never be used here.
+            authUnavailable = true;
+            protonSection.setVisibility(View.VISIBLE);
+            passwordContainer.setVisibility(View.GONE);
+            displayNameContainer.setVisibility(View.GONE);
+            passwordFieldContainer.setVisibility(View.GONE);
+            genericSection.setVisibility(View.GONE);
+            authExplanation.setText(ProtonAndroidIntegration.status().reason());
+            connectButton.setEnabled(false);
+            status.setText("");
+            return;
+        }
+        protonSection.setVisibility(View.GONE);
+        passwordContainer.setVisibility(View.VISIBLE);
+        displayNameContainer.setVisibility(View.VISIBLE);
+        passwordFieldContainer.setVisibility(View.VISIBLE);
         AccountProvider provider = ProviderRegistry.find(type).orElse(null);
         boolean passwordAuth = provider != null && (provider.capabilities().supportsAuthMethod(AuthMethod.PASSWORD)
                 || provider.capabilities().supportsAuthMethod(AuthMethod.APP_PASSWORD));
@@ -158,6 +191,10 @@ public final class AccountSetupActivity extends AppCompatActivity {
 
     private void connect() {
         ProviderType type = providers.get(providerSpinner.getSelectedItemPosition());
+        if (type == ProviderType.PROTON) {
+            // No credentials are ever collected for Proton on Android.
+            return;
+        }
         String email = emailField.getText().toString().trim();
         if (email.isEmpty()) {
             status.setText(R.string.setup_field_required);
@@ -224,6 +261,33 @@ public final class AccountSetupActivity extends AppCompatActivity {
                     ? emailField.getText().toString().trim() : username);
         }
         return settings;
+    }
+
+    private void openProtonApp() {
+        PackageManager packages = getPackageManager();
+        Intent launch = packages.getLaunchIntentForPackage(ProtonAndroidIntegration.APP_PACKAGE);
+        if (launch != null) {
+            launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            try {
+                startActivity(launch);
+                return;
+            } catch (ActivityNotFoundException e) {
+                LOG.warn("The Proton Mail app could not be opened: {}", e.getMessage());
+            }
+        }
+        Toast.makeText(this, R.string.proton_app_missing, Toast.LENGTH_LONG).show();
+        openProtonWeb();
+    }
+
+    private void openProtonWeb() {
+        Intent view = new Intent(Intent.ACTION_VIEW,
+                Uri.parse(ProtonAndroidIntegration.webUrl()));
+        try {
+            startActivity(view);
+        } catch (ActivityNotFoundException e) {
+            LOG.warn("No browser is available for the Proton web client: {}", e.getMessage());
+            status.setText(R.string.proton_no_browser);
+        }
     }
 
     private void store(ProviderType type, String email, String password, Map<String, String> settings) {

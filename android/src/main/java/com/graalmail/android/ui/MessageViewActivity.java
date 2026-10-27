@@ -69,6 +69,17 @@ public final class MessageViewActivity extends AppCompatActivity {
     }
 
     @Override
+    public boolean onPrepareOptionsMenu(Menu menu) {
+        MenuItem star = menu.findItem(R.id.action_star);
+        if (star != null && message != null) {
+            star.setIcon(message.flagged() ? R.drawable.ic_star_filled : R.drawable.ic_star_outline);
+            star.setTitle(message.flagged() ? R.string.action_unstar : R.string.action_star);
+            star.setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM);
+        }
+        return super.onPrepareOptionsMenu(menu);
+    }
+
+    @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         int id = item.getItemId();
         if (id == R.id.action_star) {
@@ -97,6 +108,7 @@ public final class MessageViewActivity extends AppCompatActivity {
         queue(flagged ? PendingAction.Type.FLAG : PendingAction.Type.UNFLAG, "");
         message = message.toBuilder().flagged(flagged).build();
         context.store().saveMessage(message);
+        invalidateOptionsMenu();
     }
 
     private void queue(PendingAction.Type type, String folderId) {
@@ -158,6 +170,8 @@ public final class MessageViewActivity extends AppCompatActivity {
             return;
         }
         message = found.get();
+        toolbar.setTitle(message.subject() == null || message.subject().isBlank()
+                ? getString(R.string.message_view_title) : message.subject());
         render();
         markAsRead();
         findViewById(R.id.message_reply).setOnClickListener(view -> reply());
@@ -167,6 +181,7 @@ public final class MessageViewActivity extends AppCompatActivity {
 
     private void render() {
         TextView subject = findViewById(R.id.view_subject);
+        TextView avatar = findViewById(R.id.view_avatar);
         TextView from = findViewById(R.id.view_from);
         TextView to = findViewById(R.id.view_to);
         TextView date = findViewById(R.id.view_date);
@@ -175,6 +190,10 @@ public final class MessageViewActivity extends AppCompatActivity {
 
         subject.setText(message.subject() == null || message.subject().isBlank()
                 ? getString(R.string.message_view_subject) : message.subject());
+        avatar.setText(AvatarColors.initials(message.from().name(), message.from().email()));
+        avatar.getBackground().mutate().setTint(
+                AvatarColors.colorFor(message.from().name(), message.from().email()));
+        avatar.setContentDescription(message.from().displayLabel());
         from.setText(getString(R.string.message_view_from_value, message.from().format()));
         String recipientText = recipients();
         to.setText(getString(R.string.message_view_to_value, recipientText.isBlank()

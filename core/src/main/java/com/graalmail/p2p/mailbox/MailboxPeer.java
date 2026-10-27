@@ -5,6 +5,7 @@ import com.graalmail.p2p.ProtocolConstants;
 import com.graalmail.p2p.crypto.DefaultEncryptionService;
 import com.graalmail.p2p.crypto.EncryptionService;
 import com.graalmail.p2p.protocol.Envelope;
+import com.graalmail.core.error.ErrorCode;
 
 import java.security.KeyPair;
 import java.util.concurrent.CompletableFuture;
@@ -15,31 +16,66 @@ public class MailboxPeer {
     private final ContentStore store;
     private final KeyPair signingKey;
     private final EncryptionService crypto;
+    private final QuotaTracker quotas;
 
     public MailboxPeer(String peerId, ContentStore store, KeyPair signingKey) {
+        this(peerId, store, signingKey, QuotaTracker.unlimited());
+    }
+
+    public MailboxPeer(String peerId, ContentStore store, KeyPair signingKey, QuotaTracker quotas) {
         this.peerId = peerId;
         this.store = store;
         this.signingKey = signingKey;
         this.crypto = new DefaultEncryptionService();
+        this.quotas = quotas;
     }
 
     public CompletionStage<StorageReceipt> store(Envelope envelope) {
-        String contentId = hex(envelope.contentHash());
-        if (store.contains(contentId)) {
-            // idempotent: already stored
+        byte[] wire;
+        try {
+            wire = envelope.toBytes();
+        } catch (PolyMailException e) {
+            return CompletableFuture.failedFuture(e);
         }
-        store.store(contentId, envelope.toBytes());
-        byte[] receiptPayload = (contentId + "|" + envelope.messageId() + "|" + peerId).getBytes(java.nio.charset.StandardCharsets.UTF_8);
-        byte[] sig = crypto.sign(signingKey, receiptPayload);
+        if (wire.length > ProtocolConstants.MAX_MESSAGE_BYTES) {
+            return CompletableFuture.failedFuture(new PolyMailException(ErrorCode.INVALID_MESSAGE,
+                    "content exceeds maximum size", false, false, true));
+        }
+        if (envelope.isExpired(System.currentTimeMillis())) {
+            return CompletableFuture.failedFuture(new PolyMailException(ErrorCode.MESSAGE_EXPIRED,
+                    "content already expired", false, false, false));
+        }
+        String contentId = hex(envelope.contentHash());
+        if (!store.contains(contentId)) {
+            if (!quotas.tryAcquire(peerId, wire.length)) {
+                return CompletableFuture.failedFuture(new PolyMailException(ErrorCode.STORAGE_ERROR,
+                        "storage quota exceeded", true, false, true));
+            }
+            store.store(contentId, wire);
+        }
         long now = System.currentTimeMillis();
-        StorageReceipt receipt = new StorageReceipt(contentId, envelope.messageId(), peerId, now, now + ProtocolConstants.DEFAULT_RETENTION_SECONDS * 1000, ProtocolConstants.PROTOCOL_VERSION, sig);
+        long retentionUntil = now + ProtocolConstants.DEFAULT_RETENTION_SECONDS * 1000;
+        byte[] sig = crypto.sign(signingKey, StorageReceipt.signingBytes(
+                contentId, envelope.messageId(), peerId, now, retentionUntil, ProtocolConstants.PROTOCOL_VERSION));
+        StorageReceipt receipt = new StorageReceipt(contentId, envelope.messageId(), peerId,
+                now, retentionUntil, ProtocolConstants.PROTOCOL_VERSION, sig);
         return CompletableFuture.completedFuture(receipt);
     }
 
     public CompletionStage<Envelope> fetch(String contentId) {
         byte[] bytes = store.fetch(contentId);
-        if (bytes == null) return CompletableFuture.failedFuture(new PolyMailException(com.graalmail.core.error.ErrorCode.CONTENT_NOT_FOUND, "not found: " + contentId));
-        return CompletableFuture.completedFuture(Envelope.fromBytes(bytes));
+        if (bytes == null) return CompletableFuture.failedFuture(new PolyMailException(ErrorCode.CONTENT_NOT_FOUND, "not found: " + contentId));
+        Envelope env;
+        try {
+            env = Envelope.fromBytes(bytes);
+        } catch (PolyMailException e) {
+            return CompletableFuture.failedFuture(e);
+        }
+        if (env.isExpired(System.currentTimeMillis())) {
+            return CompletableFuture.failedFuture(new PolyMailException(ErrorCode.MESSAGE_EXPIRED,
+                    "content expired", false, false, false));
+        }
+        return CompletableFuture.completedFuture(env);
     }
 
     public String peerId() { return peerId; }

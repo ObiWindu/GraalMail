@@ -12,7 +12,6 @@ import com.graalmail.provider.api.AuthMethod;
 import com.graalmail.provider.api.ProviderCapabilities;
 import com.graalmail.provider.api.ProviderSession;
 import com.graalmail.provider.api.ProviderType;
-import java.util.List;
 
 /**
  * Proton Mail provider based on the local Proton Mail Bridge.
@@ -48,8 +47,11 @@ public final class ProtonProvider implements AccountProvider {
     public static final String MISSING_FINGERPRINT_MESSAGE =
             "Confirm the Proton Mail Bridge certificate fingerprint before connecting";
 
-    private static final List<String> REQUIRED_SETTINGS = List.of(
-            SETTING_HOST, SETTING_IMAP_PORT, SETTING_SMTP_PORT, SETTING_USERNAME, SETTING_PASSWORD);
+    /** Message shown when the stored certificate no longer matches the bridge. */
+    public static final String CERTIFICATE_CHANGED_MESSAGE =
+            "The Proton Mail Bridge certificate changed. " + ProtonTrustDecision.CHANGE_EXPLANATION
+                    + " If Proton Mail Bridge was reinstalled, remove the Proton account "
+                    + "in GraalMail and add it again with the login and the Bridge password.";
 
     private final String platform;
 
@@ -122,28 +124,53 @@ public final class ProtonProvider implements AccountProvider {
     }
 
     private ProtonBridgeConfig toConfig(AccountSetup setup) {
-        for (String key : REQUIRED_SETTINGS) {
-            if (setup.setting(key) == null || setup.setting(key).isBlank()) {
-                throw new ProviderException(ErrorCode.CONFIGURATION_ERROR,
-                        "The Proton Mail Bridge setting " + key + " is missing", false);
-            }
+        String username = setup.setting(SETTING_USERNAME);
+        if (username == null || username.isBlank()) {
+            username = setup.email();
         }
-        String fingerprint = setup.setting(SETTING_FINGERPRINT, "");
-        if (fingerprint.isBlank()) {
-            throw new ProviderException(ErrorCode.TLS_ERROR, MISSING_FINGERPRINT_MESSAGE, false);
+        if (username == null || username.isBlank()) {
+            throw new ProviderException(ErrorCode.CONFIGURATION_ERROR,
+                    "Enter the Proton login (the Proton Mail address).", false);
         }
         String password = setup.setting(SETTING_PASSWORD);
-        if (password.isEmpty() && setup.credential() != null) {
+        if ((password == null || password.isEmpty()) && setup.credential() != null) {
             password = setup.credential().secret();
         }
+        if (password == null || password.isEmpty()) {
+            throw new ProviderException(ErrorCode.CONFIGURATION_ERROR,
+                    "Enter the Bridge password shown in Proton Mail Bridge.", false);
+        }
+        // Only the login and the Bridge password are required. Host, ports and
+        // the TLS mode default to the local Bridge and are auto-detected when
+        // the defaults do not answer.
+        String host = setup.setting(SETTING_HOST, "");
+        Integer imapPort = parsePortOrNull(setup.setting(SETTING_IMAP_PORT));
+        Integer smtpPort = parsePortOrNull(setup.setting(SETTING_SMTP_PORT));
+        ProtonBridgeConfig.TlsMode tlsMode = parseTlsModeOrNull(setup.setting(SETTING_TLS_MODE));
+        String storedFingerprint = ProtonBridgeTrust.normalize(setup.setting(SETTING_FINGERPRINT, ""));
+        ProtonBridgeAutoConfig auto = new ProtonBridgeAutoConfig();
+        ProtonBridgeAutoConfig.Endpoint endpoint;
+        String fingerprint;
+        if (storedFingerprint.isEmpty()) {
+            // First use: detect the endpoint, verify the login and pin the
+            // observed certificate for this session.
+            endpoint = auto.resolveAndVerify(host, imapPort, smtpPort, tlsMode, username, password);
+            fingerprint = endpoint.fingerprint();
+        } else {
+            endpoint = auto.detect(host, imapPort, smtpPort, tlsMode);
+            fingerprint = ProtonBridgeTrust.normalize(endpoint.fingerprint());
+            if (!storedFingerprint.equals(fingerprint)) {
+                throw new ProviderException(ErrorCode.TLS_ERROR, CERTIFICATE_CHANGED_MESSAGE, false);
+            }
+        }
         ProtonBridgeConfig.Builder builder = ProtonBridgeConfig.builder()
-                .bridgeHost(setup.setting(SETTING_HOST))
-                .imapPort(parsePort(setup.setting(SETTING_IMAP_PORT)))
-                .smtpPort(parsePort(setup.setting(SETTING_SMTP_PORT)))
-                .bridgeUsername(setup.setting(SETTING_USERNAME))
+                .bridgeHost(endpoint.host())
+                .imapPort(endpoint.imapPort())
+                .smtpPort(endpoint.smtpPort())
+                .bridgeUsername(username)
                 .bridgePassword(password)
                 .pinnedCertificateFingerprint(fingerprint)
-                .tlsMode(parseTlsMode(setup.setting(SETTING_TLS_MODE)));
+                .tlsMode(endpoint.tlsMode());
         try {
             builder.sslContext(ProtonBridgeTrust.sslContextForPinnedFingerprint(fingerprint));
         } catch (Exception e) {
@@ -154,22 +181,32 @@ public final class ProtonProvider implements AccountProvider {
         return builder.build();
     }
 
-    private static int parsePort(String value) {
+    private static Integer parsePortOrNull(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
         try {
-            return Integer.parseInt(value.trim());
+            int port = Integer.parseInt(value.trim());
+            if (port <= 0 || port > 65535) {
+                throw new NumberFormatException("port out of range");
+            }
+            return port;
         } catch (NumberFormatException e) {
             throw new ProviderException(ErrorCode.CONFIGURATION_ERROR,
                     "The Proton Mail Bridge port is not a number", false, e);
         }
     }
 
-    private static ProtonBridgeConfig.TlsMode parseTlsMode(String value) {
+    private static ProtonBridgeConfig.TlsMode parseTlsModeOrNull(String value) {
         if (value == null || value.isBlank()) {
-            return ProtonBridgeConfig.TlsMode.STARTTLS;
+            return null;
         }
         if (value.trim().equalsIgnoreCase("SSL") || value.trim().equalsIgnoreCase("IMPLICIT")) {
             return ProtonBridgeConfig.TlsMode.SSL;
         }
-        return ProtonBridgeConfig.TlsMode.STARTTLS;
+        if (value.trim().equalsIgnoreCase("STARTTLS")) {
+            return ProtonBridgeConfig.TlsMode.STARTTLS;
+        }
+        return null;
     }
 }

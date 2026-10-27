@@ -218,7 +218,7 @@ public final class DesktopSettings {
     }
 
     public String listMode() {
-        return "Table".equalsIgnoreCase(store.setting(LIST_MODE, "Table")) ? "Table" : "Cards";
+        return "Table".equalsIgnoreCase(store.setting(LIST_MODE, "Cards")) ? "Table" : "Cards";
     }
 
     public void listMode(String value) {

@@ -123,6 +123,17 @@ public class Web3jPolygonNotificationService implements PolygonNotificationServi
         });
     }
 
+    @Override
+    public CompletionStage<Long> headBlock() {
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                return connect().ethBlockNumber().send().getBlockNumber().longValue();
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        });
+    }
+
     private static byte[] hexToBytes(String hex) {
         String h = hex.startsWith("0x") ? hex.substring(2) : hex;
         if (h.length() % 2 != 0) h = "0" + h;

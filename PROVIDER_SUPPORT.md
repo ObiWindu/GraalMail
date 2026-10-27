@@ -104,11 +104,14 @@ bridge application:
 
 1. Install Proton Mail Bridge for Linux and log in with the Proton account.
 2. Enable the IMAP and SMTP server in the Bridge settings.
-3. Configure GraalMail with the local bridge host and port. The Bridge uses
-  `127.0.0.1` with an automatically assigned port for IMAP and SMTP.
-4. GraalMail shows the Bridge certificate with its fingerprint. Trust it only
-   when it matches the certificate shown by the Bridge itself. The trust
-   applies to that certificate; the platform trust store stays active.
+3. In GraalMail, add a Proton account with the Proton login (the Proton Mail
+   address) and the Bridge password shown in Proton Mail Bridge.
+4. GraalMail finds the local Bridge ports and the TLS mode automatically,
+   verifies the login, and pins the Bridge certificate for the account. The
+   pin is created only together with a successful login and only for a Bridge
+   running on the same machine; a previously stored pin is always verified
+   strictly. If the Bridge is reinstalled with a new certificate, remove the
+   Proton account in GraalMail and add it again.
 
 The Bridge needs the user to be logged in, and it needs a paid Proton plan
 for some of the features. The Bridge is not available on Android.
@@ -127,6 +130,9 @@ Proton Mail offers no public API for third party mail clients.
 
 GraalMail therefore:
 
+* lists Proton Mail in the Android account setup with an explanation instead
+  of hiding it, and offers one-tap buttons for the official Proton Mail
+  application and the web client,
 * offers no Proton sign in on Android and asks for no Proton credential,
 * shows the reason in the account setup,
 * offers to open the official Proton Mail application or the web interface,

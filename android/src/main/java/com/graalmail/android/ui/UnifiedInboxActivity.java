@@ -88,8 +88,23 @@ public final class UnifiedInboxActivity extends AppCompatActivity {
 
         messageList = findViewById(R.id.message_list);
         messageList.setLayoutManager(new LinearLayoutManager(this));
-        adapter = new UnifiedMessageAdapter(this::openMessage);
+        adapter = new UnifiedMessageAdapter(this::openMessage, this::toggleStar);
         messageList.setAdapter(adapter);
+        new MessageSwipeHelper(adapter::messageAt, new MessageSwipeHelper.SwipeActions() {
+            @Override public void onSwipeRight(Message message) {
+                toggleRead(message);
+            }
+
+            @Override public void onSwipeLeft(Message message) {
+                int position = adapter.getMessages().indexOf(message);
+                deleteMessage(message);
+                if (position >= 0) adapter.notifyItemChanged(position);
+            }
+
+            @Override public boolean isSwipeEnabled() {
+                return true;
+            }
+        }).attach(messageList);
         messageList.addOnScrollListener(new RecyclerView.OnScrollListener() {
             @Override public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy) {
                 var layout = (LinearLayoutManager) recyclerView.getLayoutManager();
@@ -263,6 +278,52 @@ public final class UnifiedInboxActivity extends AppCompatActivity {
         startActivity(intent);
     }
 
+    private void toggleStar(Message message) {
+        boolean flagged = !message.flagged();
+        var account = context.store().account(message.accountId());
+        if (account.isEmpty()) return;
+        context.syncEngine().queue(account.get(),
+                flagged ? com.graalmail.storage.PendingAction.Type.FLAG
+                        : com.graalmail.storage.PendingAction.Type.UNFLAG,
+                message.id(), "");
+        Message updated = message.toBuilder().flagged(flagged).build();
+        context.store().saveMessage(updated);
+        adapter.updateMessage(updated);
+    }
+
+    private void toggleRead(Message message) {
+        boolean read = message.unread();
+        var account = context.store().account(message.accountId());
+        if (account.isEmpty()) return;
+        context.syncEngine().queue(account.get(),
+                read ? com.graalmail.storage.PendingAction.Type.MARK_READ
+                        : com.graalmail.storage.PendingAction.Type.MARK_UNREAD,
+                message.id(), "");
+        Message updated = message.toBuilder().unread(!read).build();
+        context.store().saveMessage(updated);
+        adapter.updateMessage(updated);
+        android.widget.Toast.makeText(this,
+                read ? R.string.action_mark_read : R.string.action_mark_unread,
+                android.widget.Toast.LENGTH_SHORT).show();
+    }
+
+    private void deleteMessage(Message message) {
+        var account = context.store().account(message.accountId());
+        if (account.isEmpty()) return;
+        com.graalmail.core.domain.Folder trash = context.store().listFolders(account.get().id()).stream()
+                .filter(folder -> folder.type() == com.graalmail.core.domain.FolderType.TRASH)
+                .findFirst().orElse(null);
+        if (trash == null) {
+            context.syncEngine().queue(account.get(),
+                    com.graalmail.storage.PendingAction.Type.DELETE, message.id(), "");
+        } else {
+            context.syncEngine().queue(account.get(),
+                    com.graalmail.storage.PendingAction.Type.MOVE, message.id(), trash.id());
+        }
+        load(false);
+        android.widget.Toast.makeText(this, R.string.action_delete, android.widget.Toast.LENGTH_SHORT).show();
+    }
+
     /**
      * The adapter for unified inbox messages.
      */
@@ -270,10 +331,12 @@ public final class UnifiedInboxActivity extends AppCompatActivity {
 
         private final List<Message> messages = new ArrayList<>();
         private final OnMessageSelected listener;
+        private final OnStarToggled starListener;
         private Map<String, String> accountLabels = Map.of();
 
-        UnifiedMessageAdapter(OnMessageSelected listener) {
+        UnifiedMessageAdapter(OnMessageSelected listener, OnStarToggled starListener) {
             this.listener = listener;
+            this.starListener = starListener;
         }
 
         void submit(List<Message> values) {
@@ -286,6 +349,24 @@ public final class UnifiedInboxActivity extends AppCompatActivity {
             int start = messages.size();
             messages.addAll(values);
             notifyItemRangeInserted(start, values.size());
+        }
+
+        List<Message> getMessages() {
+            return new ArrayList<>(messages);
+        }
+
+        Message messageAt(int position) {
+            return position >= 0 && position < messages.size() ? messages.get(position) : null;
+        }
+
+        void updateMessage(Message updated) {
+            for (int i = 0; i < messages.size(); i++) {
+                if (messages.get(i).id().equals(updated.id())) {
+                    messages.set(i, updated);
+                    notifyItemChanged(i);
+                    return;
+                }
+            }
         }
 
         void setAccountLabels(Map<String, String> labels) {
@@ -302,7 +383,8 @@ public final class UnifiedInboxActivity extends AppCompatActivity {
 
         @Override
         public void onBindViewHolder(@NonNull Holder holder, int position) {
-            holder.bind(messages.get(position), accountLabels.get(messages.get(position).accountId()), listener);
+            holder.bind(messages.get(position), accountLabels.get(messages.get(position).accountId()),
+                    listener, starListener);
         }
 
         @Override
@@ -314,27 +396,35 @@ public final class UnifiedInboxActivity extends AppCompatActivity {
             void onMessageSelected(Message message);
         }
 
+        interface OnStarToggled {
+            void onStarToggled(Message message);
+        }
+
         static final class Holder extends RecyclerView.ViewHolder {
+            private final TextView avatar;
             private final TextView sender;
             private final TextView subject;
             private final TextView snippet;
             private final TextView date;
             private final TextView accountBadge;
-            private final View unreadDot;
+            private final android.widget.ImageButton star;
+            private final View attachmentIcon;
 
             Holder(View view) {
                 super(view);
+                avatar = view.findViewById(R.id.message_avatar);
                 sender = view.findViewById(R.id.message_sender);
                 subject = view.findViewById(R.id.message_subject);
                 snippet = view.findViewById(R.id.message_snippet);
                 date = view.findViewById(R.id.message_date);
                 accountBadge = view.findViewById(R.id.message_account_badge);
-                unreadDot = view.findViewById(R.id.message_unread_dot);
+                star = view.findViewById(R.id.message_star);
+                attachmentIcon = view.findViewById(R.id.message_attachment_icon);
             }
 
-            void bind(Message message, String accountLabel, OnMessageSelected listener) {
+            void bind(Message message, String accountLabel, OnMessageSelected listener,
+                      OnStarToggled starListener) {
                 sender.setText(message.from().displayLabel());
-                unreadDot.setVisibility(message.unread() ? View.VISIBLE : View.GONE);
                 subject.setText(message.subject());
                 snippet.setText(TextTools.snippet(
                         message.snippet().isEmpty() ? message.bodyText() : message.snippet(), 120));
@@ -343,7 +433,26 @@ public final class UnifiedInboxActivity extends AppCompatActivity {
                         ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
                 subject.setTypeface(null, message.unread()
                         ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
-                
+                attachmentIcon.setVisibility(message.attachments().isEmpty() ? View.GONE : View.VISIBLE);
+
+                avatar.setText(AvatarColors.initials(message.from().name(), message.from().email()));
+                avatar.getBackground().mutate().setTint(AvatarColors.colorFor(
+                        message.from().name(), message.from().email()));
+                avatar.setContentDescription(message.from().displayLabel());
+
+                star.setImageResource(message.flagged()
+                        ? R.drawable.ic_star_filled : R.drawable.ic_star_outline);
+                star.setImageTintList(android.content.res.ColorStateList.valueOf(
+                        message.flagged() ? androidx.core.content.ContextCompat.getColor(
+                                        star.getContext(), R.color.star_active)
+                                : com.google.android.material.color.MaterialColors.getColor(star,
+                                        com.google.android.material.R.attr.colorOnSurfaceVariant)));
+                star.setContentDescription(star.getResources().getString(
+                        message.flagged() ? R.string.action_unstar : R.string.action_star));
+                star.setOnClickListener(view -> {
+                    if (starListener != null) starListener.onStarToggled(message);
+                });
+
                 if (accountLabel == null || accountLabel.isBlank()) {
                     accountBadge.setVisibility(View.GONE);
                 } else {
@@ -361,7 +470,7 @@ public final class UnifiedInboxActivity extends AppCompatActivity {
                                 R.string.message_list_flagged_indicator) : "")
                         + (!message.attachments().isEmpty() ? ". " + itemView.getResources().getString(
                                 R.string.message_list_attachment_indicator) : ""));
-                
+
                 itemView.setOnClickListener(view -> {
                     if (listener != null) {
                         listener.onMessageSelected(message);
