@@ -16,6 +16,7 @@ import android.content.SharedPreferences;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.recyclerview.widget.DiffUtil;
+import com.google.android.material.color.MaterialColors;
 
 import com.graalmail.android.R;
 import com.graalmail.core.domain.Account;
@@ -94,6 +95,9 @@ public final class FolderAdapter extends RecyclerView.Adapter<RecyclerView.ViewH
     private final Set<String> collapsed = new HashSet<>();
     private final Map<String, List<Folder>> folderSnapshot = new HashMap<>();
     private boolean showUnifiedInbox;
+    private boolean unifiedInboxSelected;
+    private String selectedAccountId;
+    private String selectedFolderId;
 
     /**
      * Creates the adapter.
@@ -158,6 +162,13 @@ public final class FolderAdapter extends RecyclerView.Adapter<RecyclerView.ViewH
         }).dispatchUpdatesTo(this);
     }
 
+    void setSelectedMailbox(boolean unifiedInbox, String accountId, String folderId) {
+        unifiedInboxSelected = unifiedInbox;
+        selectedAccountId = accountId;
+        selectedFolderId = folderId;
+        notifyDataSetChanged();
+    }
+
     private static int folderOrder(FolderType type) {
         return switch (type) {
             case INBOX -> 0;
@@ -213,11 +224,13 @@ public final class FolderAdapter extends RecyclerView.Adapter<RecyclerView.ViewH
     public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position) {
         Entry entry = entries.get(position);
         if (holder instanceof UnifiedInboxHolder unifiedHolder) {
-            unifiedHolder.bind(listener);
+            unifiedHolder.bind(listener, unifiedInboxSelected);
         } else if (holder instanceof AccountHolder accountHolder) {
             accountHolder.bind(entry.account(), collapsed.contains(entry.account().id()), () -> toggle(entry.account().id()));
         } else if (holder instanceof FolderHolder folderHolder) {
-            folderHolder.bind(entry.account(), entry.folder(), listener);
+            folderHolder.bind(entry.account(), entry.folder(), listener,
+                    entry.account().id().equals(selectedAccountId)
+                            && entry.folder().id().equals(selectedFolderId));
         }
     }
 
@@ -249,10 +262,17 @@ public final class FolderAdapter extends RecyclerView.Adapter<RecyclerView.ViewH
             count = view.findViewById(R.id.folder_count);
         }
 
-        void bind(OnFolderSelected listener) {
+        void bind(OnFolderSelected listener, boolean selected) {
             name.setText(R.string.mailbox_unified_inbox);
             summary.setText(R.string.mailbox_unified_summary);
             count.setText("");
+            itemView.setActivated(selected);
+            int contentColor = MaterialColors.getColor(itemView, selected
+                    ? com.google.android.material.R.attr.colorOnSecondaryContainer
+                    : com.google.android.material.R.attr.colorOnSurface);
+            name.setTextColor(contentColor);
+            summary.setTextColor(MaterialColors.getColor(itemView,
+                    com.google.android.material.R.attr.colorOnSurfaceVariant));
             itemView.setOnClickListener(view -> {
                 if (listener != null) {
                     // Create a special unified inbox folder and account
@@ -301,7 +321,7 @@ public final class FolderAdapter extends RecyclerView.Adapter<RecyclerView.ViewH
             count = view.findViewById(R.id.folder_count);
         }
 
-        void bind(Account account, Folder folder, OnFolderSelected listener) {
+        void bind(Account account, Folder folder, OnFolderSelected listener, boolean selected) {
             int iconResource = switch (folder.type()) {
                 case INBOX, ALL -> R.drawable.ic_folder_inbox;
                 case SENT, OUTBOX -> R.drawable.ic_send;
@@ -313,7 +333,13 @@ public final class FolderAdapter extends RecyclerView.Adapter<RecyclerView.ViewH
                 case UNIFIED_INBOX -> R.drawable.ic_mail;
             };
             icon.setImageResource(iconResource);
+            icon.setImageTintList(android.content.res.ColorStateList.valueOf(MaterialColors.getColor(
+                    itemView, selected ? com.google.android.material.R.attr.colorOnSecondaryContainer
+                            : com.google.android.material.R.attr.colorOnSurfaceVariant)));
             name.setText(folder.name());
+            name.setTextColor(MaterialColors.getColor(itemView, selected
+                    ? com.google.android.material.R.attr.colorOnSecondaryContainer
+                    : com.google.android.material.R.attr.colorOnSurface));
             count.setText(folder.unreadCount() > 0
                     ? String.valueOf(folder.unreadCount())
                     : "");
@@ -321,6 +347,7 @@ public final class FolderAdapter extends RecyclerView.Adapter<RecyclerView.ViewH
                     ? itemView.getResources().getString(R.string.cd_unread_count, folder.unreadCount()) : null);
             itemView.setContentDescription(folder.name() + (folder.unreadCount() > 0
                     ? ", " + itemView.getResources().getString(R.string.cd_unread_count, folder.unreadCount()) : ""));
+            itemView.setActivated(selected);
             itemView.setOnClickListener(view -> {
                 if (listener != null) {
                     listener.onFolderSelected(account, folder);

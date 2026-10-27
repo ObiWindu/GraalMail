@@ -338,13 +338,14 @@ public final class ComposeWindow {
 
     private void prepare(Stage owner) {
         var classes = stage.getScene().getRoot().getStyleClass();
-        if (new DesktopSettings(context.store()).theme().equals("Dark")) {
+        if (new DesktopSettings(context.store()).darkTheme()) {
             if (!classes.contains("dark-theme")) classes.add("dark-theme");
         } else classes.remove("dark-theme");
         if (owner != null && stage.getOwner() == null) {
             stage.initOwner(owner);
             stage.initModality(Modality.WINDOW_MODAL);
         }
+        UiScale.configure(stage, stage.getScene(), owner, 760, 680, 560, 420);
     }
 
     /**
@@ -353,10 +354,10 @@ public final class ComposeWindow {
      * @return the scene
      */
     public Scene build() {
-        VBox root = new VBox(8);
+        VBox root = new VBox(UiScale.px(stage, 8));
         root.getStyleClass().add("compose-window");
-        if (new DesktopSettings(context.store()).theme().equals("Dark")) root.getStyleClass().add("dark-theme");
-        root.setPadding(new Insets(10));
+        if (new DesktopSettings(context.store()).darkTheme()) root.getStyleClass().add("dark-theme");
+        root.setPadding(UiScale.insets(stage, 10));
         Label heading = new Label("Compose message");
         heading.getStyleClass().add("compose-heading");
 
@@ -373,12 +374,12 @@ public final class ComposeWindow {
             bccRow.setVisible(show);
             bccRow.setManaged(show);
         });
-        HBox toRow = new HBox(8, labelled("To", toField), recipientOptions);
+        HBox toRow = new HBox(UiScale.px(stage, 8), labelled("To", toField), recipientOptions);
         HBox.setHgrow(toRow.getChildren().getFirst(), Priority.ALWAYS);
         root.getChildren().addAll(toRow, ccRow, bccRow, labelled("Subject", subjectField));
         root.getChildren().add(0, heading);
 
-        suggestionList.setPrefHeight(120);
+        suggestionList.getStyleClass().add("recipient-suggestions");
         suggestionList.setVisible(false);
         suggestionList.setOnMouseClicked(event -> {
             RecipientSuggestion selected = suggestionList.getSelectionModel().getSelectedItem();
@@ -396,11 +397,10 @@ public final class ComposeWindow {
             accountButton.setVisible(false);
         }
 
-        bodyArea.setPrefRowCount(18);
         VBox.setVgrow(bodyArea, Priority.ALWAYS);
 
         // Attachments
-        attachmentList.setPrefHeight(80);
+        attachmentList.getStyleClass().add("attachment-list");
         attachmentList.setCellFactory(lv -> new javafx.scene.control.ListCell<>() {
             @Override
             protected void updateItem(Attachment item, boolean empty) {
@@ -409,10 +409,10 @@ public final class ComposeWindow {
                     setText(null);
                     setGraphic(null);
                 } else {
-                    HBox box = new HBox(8);
+                    HBox box = new HBox(UiScale.px(stage, 8));
                     Label name = new Label(item.fileName());
                     Label size = new Label(TextTools.formatBytes(item.size()));
-                    size.setTextFill(javafx.scene.paint.Color.DIMGREY);
+                    size.getStyleClass().add("attachment-size");
                     Button remove = new Button("Remove");
                     remove.setAccessibleText("Remove attachment " + item.fileName());
                     remove.setOnAction(e -> removeAttachment(item));
@@ -423,23 +423,26 @@ public final class ComposeWindow {
             }
         });
 
-        status.setTextFill(javafx.scene.paint.Color.DIMGREY);
+        status.getStyleClass().add("compose-status");
 
-        HBox buttons = new HBox(8, accountButton, draftButton, attachButton, sendButton);
+        HBox buttons = new HBox(UiScale.px(stage, 8), accountButton, draftButton, attachButton, sendButton);
         buttons.setAlignment(Pos.CENTER_RIGHT);
 
         root.getChildren().addAll(suggestionList, bodyArea, attachmentList, status, buttons);
 
         sendButton.setDefaultButton(true);
+        sendButton.setGraphic(ThunderbirdIcons.icon("sent", "toolbar-icon"));
         sendButton.getStyleClass().add("primary-action");
         sendButton.setOnAction(event -> send());
+        draftButton.setGraphic(ThunderbirdIcons.icon("draft", "toolbar-icon"));
         draftButton.setOnAction(event -> saveDraft());
+        attachButton.setGraphic(ThunderbirdIcons.icon("attachment", "toolbar-icon"));
         attachButton.setOnAction(event -> pickAttachments());
 
         wireSuggestions();
         wireShortcuts();
 
-        Scene scene = new Scene(root, 760, 680);
+        Scene scene = new Scene(root);
         scene.setOnKeyPressed(event -> {
             boolean command = event.isControlDown() || event.isMetaDown();
             if (command && event.getCode() == KeyCode.ENTER) {
@@ -465,8 +468,8 @@ public final class ComposeWindow {
 
     private VBox labelled(String label, TextField field) {
         Label caption = new Label(label);
-        caption.setMinWidth(60);
-        HBox row = new HBox(8, caption, field);
+        caption.getStyleClass().add("compose-caption");
+        HBox row = new HBox(UiScale.px(stage, 8), caption, field);
         HBox.setHgrow(field, Priority.ALWAYS);
         VBox box = new VBox(row);
         return box;

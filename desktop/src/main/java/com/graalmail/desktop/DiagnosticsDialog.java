@@ -59,8 +59,6 @@ public final class DiagnosticsDialog {
      */
     public Scene build() {
         report.setEditable(false);
-        report.setPrefRowCount(24);
-        report.setPrefColumnCount(80);
 
         Button refresh = new Button("Run diagnostics");
         refresh.setOnAction(event -> runDiagnostics());
@@ -74,14 +72,16 @@ public final class DiagnosticsDialog {
         Button close = new Button("Close");
         close.setOnAction(event -> stage.close());
 
-        HBox buttons = new HBox(8, refresh, copy, close);
+        HBox buttons = new HBox(UiScale.px(stage, 8), refresh, copy, close);
         buttons.setAlignment(Pos.CENTER_LEFT);
 
-        VBox root = new VBox(10, report, buttons);
+        VBox root = new VBox(UiScale.px(stage, 10), report, buttons);
         root.getStyleClass().add("diagnostics-window");
         if (darkTheme) root.getStyleClass().add("dark-theme");
-        root.setPadding(new Insets(12));
-        stage.setScene(new Scene(root, 760, 520));
+        root.setPadding(UiScale.insets(stage, 12));
+        Scene scene = new Scene(root);
+        stage.setScene(scene);
+        UiScale.configure(stage, scene, stage.getOwner(), 760, 520, 500, 340);
         return stage.getScene();
     }
 

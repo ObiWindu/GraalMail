@@ -14,15 +14,19 @@
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
             style="@style/Widget.GraalMail.Toolbar"
-            app:navigationIcon="@android:drawable/ic_menu_revert" />
+            app:navigationIcon="@drawable/ic_arrow_back" />
     </com.google.android.material.appbar.AppBarLayout>
 
-    <ScrollView
+    <com.graalmail.android.ui.AdaptiveFrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1">
+        android:layout_weight="1"
+        app:contentMaxWidth="@dimen/message_content_max_width">
 
-        <LinearLayout
+        <ScrollView
+            android:layout_width="match_parent"
+            android:layout_height="match_parent">
+          <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
@@ -47,7 +51,7 @@
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/view_recipient_details_toggle"
-                style="@style/Widget.Material3.Button.TextButton"
+                style="@style/Widget.GraalMail.TextButton"
                 android:layout_width="wrap_content"
                 android:layout_height="@dimen/touch_target_min"
                 android:text="@string/message_view_show_details" />
@@ -78,7 +82,7 @@
                 android:layout_marginTop="8dp"
                 android:layout_marginBottom="8dp"
                 android:background="?attr/colorSurfaceVariant"
-                android:padding="12dp"
+                android:padding="@dimen/space_3"
                 android:text="@string/message_view_remote_images_blocked"
                 android:textColor="?attr/colorOnSurfaceVariant"
                 android:visibility="gone" />
@@ -93,7 +97,7 @@
                 android:id="@+id/view_attachments"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
+                android:layout_marginTop="@dimen/space_4"
                 android:orientation="vertical"
                 android:visibility="gone">
 
@@ -103,21 +107,23 @@
                     android:layout_height="wrap_content"
                     android:visibility="gone" />
             </LinearLayout>
-        </LinearLayout>
-    </ScrollView>
+          </LinearLayout>
+        </ScrollView>
+    </com.graalmail.android.ui.AdaptiveFrameLayout>
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:paddingHorizontal="8dp"
-        android:paddingBottom="8dp">
+        android:paddingHorizontal="@dimen/space_2"
+        android:paddingBottom="@dimen/space_2">
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/message_reply"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_margin="8dp"
+            style="@style/Widget.GraalMail.OutlinedButton"
+            android:layout_margin="@dimen/space_2"
             android:layout_weight="1"
             android:text="@string/action_reply" />
 
@@ -125,7 +131,8 @@
             android:id="@+id/message_forward"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_margin="8dp"
+            style="@style/Widget.GraalMail.Button"
+            android:layout_margin="@dimen/space_2"
             android:layout_weight="1"
             android:text="@string/action_forward" />
     </LinearLayout>

@@ -1,286 +1,652 @@
-.mail-window {
-    -fx-font-family: "Segoe UI", "Noto Sans", "Ubuntu", "Cantarell", Arial, sans-serif;
-    -fx-font-size: 13px;
-    -fx-background-color: #f4f6f9;
-}
-.menu-bar { -fx-background-color: #f4f6f9; -fx-padding: 2 8 2 8; }
-.main-toolbar {
-    -fx-background-color: #ffffff;
-    -fx-border-color: transparent transparent #e3e7ee transparent;
-    -fx-padding: 9 12 9 12;
-    -fx-spacing: 8;
-}
-.main-toolbar .button, .status-bar .button {
-    -fx-background-color: #f4f6f9;
-    -fx-background-radius: 7;
-    -fx-padding: 8 12 8 12;
-    -fx-text-fill: #293449;
-    -fx-cursor: hand;
-}
-.main-toolbar .button:hover, .status-bar .button:hover { -fx-background-color: #e9edf4; }
-.main-toolbar .primary-action {
-    -fx-background-color: #3157c8;
-    -fx-text-fill: white;
-    -fx-font-weight: bold;
-}
-.main-toolbar .primary-action:hover { -fx-background-color: #2448b3; }
-.main-toolbar .text-field {
-    -fx-background-color: #f1f3f7;
-    -fx-background-radius: 18;
-    -fx-padding: 9 14 9 14;
-    -fx-prompt-text-fill: #7a8495;
-}
-.mail-split-pane { -fx-background-color: #f4f6f9; -fx-padding: 0; }
-.mail-split-pane > .split-pane-divider { -fx-background-color: #e7eaf0; -fx-padding: 0 1 0 1; }
-.mail-split-pane > * { -fx-border-color: transparent; }
-.mail-split-pane > .vbox:first-child { -fx-background-color: #f4f6f9; }
-.tree-view { -fx-background-color: transparent; -fx-padding: 10 6 10 8; }
-.tree-cell { -fx-background-color: transparent; -fx-padding: 8 9 8 7; -fx-text-fill: #475467; -fx-background-radius: 7; }
-.tree-cell:selected { -fx-background-color: #e1e8fb; -fx-text-fill: #2448a8; -fx-font-weight: bold; }
-.tree-cell:hover:filled { -fx-background-color: #e9edf4; }
-.message-list-pane { -fx-background-color: #ffffff; }
-.list-title-row { -fx-alignment: center-left; -fx-padding: 2 2 4 2; }
-.list-title-row .label:first-child { -fx-font-size: 18px; -fx-font-weight: bold; -fx-text-fill: #202939; }
-.list-title-row .label:last-child { -fx-text-fill: #7b8493; }
-.filter-chip {
-    -fx-background-color: #f2f4f7;
-    -fx-background-radius: 14;
-    -fx-padding: 5 10 5 10;
-    -fx-text-fill: #475467;
-    -fx-font-size: 11px;
-    -fx-cursor: hand;
-}
-.filter-chip.active { -fx-background-color: #e1e8fb; -fx-text-fill: #2448a8; -fx-font-weight: bold; }
-.list-view { -fx-background-color: transparent; -fx-border-color: transparent; }
-.list-cell {
-    -fx-background-color: #ffffff;
-    -fx-border-color: transparent transparent #eff1f5 transparent;
-    -fx-padding: 11 10 11 10;
-}
-.list-cell:filled:hover { -fx-background-color: #f7f8fb; }
-.list-cell:filled:selected { -fx-background-color: #edf2ff; }
-.list-cell.unread-row { -fx-border-color: transparent transparent #e7ebf2 #4770dc; -fx-border-width: 0 0 1 3; }
-.message-cell-content { -fx-padding: 1 2 1 3; }
-.message-sender { -fx-text-fill: #475467; -fx-font-size: 12px; }
-.message-sender.unread { -fx-text-fill: #202939; -fx-font-weight: bold; }
-.message-date { -fx-text-fill: #858d9b; -fx-font-size: 11px; }
-.message-subject { -fx-text-fill: #202939; -fx-font-size: 13px; -fx-font-weight: bold; }
-.message-snippet { -fx-text-fill: #778092; -fx-font-size: 12px; }
-.reader-pane { -fx-background-color: #ffffff; }
-.reader-pane .web-view { -fx-background-color: #ffffff; }
-.status-bar {
-    -fx-background-color: #ffffff;
-    -fx-border-color: #e3e7ee transparent transparent transparent;
-    -fx-alignment: center-left;
-}
-.status-bar .label { -fx-text-fill: #667085; }
-.status-bar .connection-indicator { -fx-text-fill: #2c8b5a; -fx-font-size: 11px; }
-.button:focused, .text-field:focused, .tree-cell:focused, .list-cell:focused {
-    -fx-effect: dropshadow(gaussian, #6f8fe866, 5, 0.2, 0, 0);
-}
-.compose-window, .account-setup {
-    -fx-background-color: #ffffff;
-    -fx-font-family: "Segoe UI", "Noto Sans", "Ubuntu", "Cantarell", Arial, sans-serif;
-    -fx-font-size: 13px;
-}
-.compose-window { -fx-padding: 16; }
-.compose-heading { -fx-font-size: 20px; -fx-font-weight: bold; -fx-text-fill: #202939; }
-.compose-window .text-field, .account-setup .text-field, .account-setup .combo-box {
-    -fx-background-radius: 6;
-    -fx-border-radius: 6;
-    -fx-border-color: #d8dee8;
-    -fx-padding: 8;
-}
-.compose-window .text-area {
-    -fx-border-color: #d8dee8;
-    -fx-border-radius: 6;
-}
-.compose-window .text-area .content { -fx-background-color: #ffffff; }
-.account-setup .scroll-pane, .account-setup .viewport { -fx-background-color: white; }
-.account-setup .button, .compose-window .button {
-    -fx-background-color: #f0f3f8;
-    -fx-background-radius: 6;
-    -fx-padding: 8 12 8 12;
-}
-.compose-window .primary-action { -fx-background-color: #3157c8; -fx-text-fill: white; }
-.mail-window.dark-theme, .compose-window.dark-theme, .account-setup.dark-theme {
-    -fx-background-color: #171b23;
-    -fx-text-fill: #e5e9f0;
-}
-.dark-theme .menu-bar, .dark-theme .main-toolbar, .dark-theme .message-list-pane,
-.dark-theme .reader-pane, .dark-theme .status-bar, .dark-theme .list-cell,
-.compose-window.dark-theme, .account-setup.dark-theme, .account-setup.dark-theme .viewport {
-    -fx-background-color: #202631;
-}
-.dark-theme .tree-view, .dark-theme .mail-split-pane { -fx-background-color: #1a202a; }
-.dark-theme .tree-cell { -fx-text-fill: #c7cfdd; }
-.dark-theme .tree-cell:selected, .dark-theme .list-cell:filled:selected { -fx-background-color: #303e5d; -fx-text-fill: #ffffff; }
-.dark-theme .tree-cell:hover:filled, .dark-theme .list-cell:filled:hover { -fx-background-color: #293140; }
-.dark-theme .list-cell { -fx-border-color: transparent transparent #303846 transparent; }
-.dark-theme .message-sender, .dark-theme .message-subject, .dark-theme .list-title-row .label:first-child,
-.dark-theme .compose-heading { -fx-text-fill: #e5e9f0; }
-.dark-theme .message-snippet, .dark-theme .message-date, .dark-theme .status-bar .label,
-.dark-theme .list-title-row .label:last-child { -fx-text-fill: #aab4c4; }
-.dark-theme .filter-chip, .dark-theme .main-toolbar .button, .dark-theme .status-bar .button,
-.compose-window.dark-theme .button, .account-setup.dark-theme .button {
-    -fx-background-color: #303846;
-    -fx-text-fill: #e5e9f0;
-}
-.dark-theme .filter-chip.active { -fx-background-color: #354b78; -fx-text-fill: #ffffff; }
-.dark-theme .main-toolbar .primary-action, .compose-window.dark-theme .primary-action {
-    -fx-background-color: #496dce;
-    -fx-text-fill: white;
-}
-.dark-theme .main-toolbar .text-field, .dark-theme .compose-window .text-field,
-.compose-window.dark-theme .text-field, .account-setup.dark-theme .text-field,
-.account-setup.dark-theme .combo-box, .compose-window.dark-theme .text-area {
-    -fx-background-color: #171d27;
-    -fx-text-fill: #e5e9f0;
-    -fx-prompt-text-fill: #929daf;
-    -fx-border-color: #3b4657;
-}
-.dark-theme .compose-window .text-area .content, .compose-window.dark-theme .text-area .content {
-    -fx-background-color: #171d27;
-}
-.dark-theme .mail-split-pane > .split-pane-divider { -fx-background-color: #303846; }
-.account-setup.dark-theme .scroll-pane { -fx-background-color: #202631; }
-
-/* Semantic desktop tokens. JavaFX looked-up colors keep component states aligned. */
-.mail-window {
-    -fx-gm-window: #f4f6f9;
-    -fx-gm-pane: #ffffff;
+/* Thunderbird's shared layout and control tokens, mapped to JavaFX. */
+.mail-window, .compose-window, .account-setup, .diagnostics-window {
+    -fx-font-family: "System";
+    -fx-font-size: 1em;
+    -fx-gm-window: #ffffff;
+    -fx-gm-pane: #fafafa;
+    -fx-gm-sidebar: #fafafa;
     -fx-gm-raised: #ffffff;
-    -fx-gm-subtle: #f7f8fa;
-    -fx-gm-hover: #eef1f5;
-    -fx-gm-selected: #e7eefc;
-    -fx-gm-border: #e2e6ed;
-    -fx-gm-text: #202939;
-    -fx-gm-secondary: #4b5668;
-    -fx-gm-muted: #687386;
-    -fx-gm-accent: #3157c8;
-    -fx-font-family: "Segoe UI", "Noto Sans", "Ubuntu", "Cantarell", Arial, sans-serif;
-    -fx-background-color: -fx-gm-window;
+    -fx-gm-subtle: #efeff1;
+    -fx-gm-lower: #f7f7f8;
+    -fx-gm-deep: #e4e4e7;
+    -fx-gm-hover: #f4f4f5;
+    -fx-gm-toolbar-hover: #efeff1;
+    -fx-gm-button: #e4e4e7;
+    -fx-gm-button-hover: #f4f4f5;
+    -fx-gm-pressed: #d4d4d8;
+    -fx-gm-selected: #f0f8ff;
+    -fx-gm-selected-muted: #e4e4e7;
+    -fx-gm-border: #d9d9de;
+    -fx-gm-border-strong: #a1a1aa;
+    -fx-gm-text: #18181b;
+    -fx-gm-secondary: #3f3f46;
+    -fx-gm-muted: #71717a;
+    -fx-gm-accent: #1373d9;
+    -fx-gm-accent-text: #ffffff;
+    -fx-gm-accent-hover: #175fb6;
+    -fx-gm-accent-soft: #f0f8ff;
+    -fx-gm-warning-bg: #fefae8;
+    -fx-gm-warning-text: #713f12;
+    -fx-gm-success: #1d783b;
+    -fx-gm-unread-badge: #71717a;
+    -fx-gm-star-fill: #fdba74;
+    -fx-gm-star-stroke: #ea580c;
+    -fx-gm-unread-dot: #16a34a;
+    -fx-gm-folder-inbox: #1373d9;
+    -fx-gm-folder-draft: #ae55f7;
+    -fx-gm-folder-sent: #1d783b;
+    -fx-gm-folder-archive: #713f12;
+    -fx-gm-folder-spam: #b91c1c;
+    -fx-gm-folder-trash: #52525b;
+    -fx-gm-folder-outbox: #25a6a0;
+    -fx-gm-folder-custom: #eabd08;
 }
-.mail-window.dark-theme {
-    -fx-gm-window: #171b23;
-    -fx-gm-pane: #202631;
-    -fx-gm-raised: #252d39;
-    -fx-gm-subtle: #1c222d;
-    -fx-gm-hover: #2b3442;
-    -fx-gm-selected: #303e5d;
-    -fx-gm-border: #303846;
-    -fx-gm-text: #e5e9f0;
-    -fx-gm-secondary: #c7cfdd;
-    -fx-gm-muted: #aab4c4;
-    -fx-gm-accent: #88a4f5;
+.mail-window.dark-theme, .compose-window.dark-theme, .account-setup.dark-theme,
+.diagnostics-window.dark-theme {
+    -fx-gm-window: #18181b;
+    -fx-gm-pane: #27272a;
+    -fx-gm-sidebar: #27272a;
+    -fx-gm-raised: #27272a;
+    -fx-gm-subtle: #232326;
+    -fx-gm-lower: #111113;
+    -fx-gm-deep: #3f3f46;
+    -fx-gm-hover: #71717a;
+    -fx-gm-toolbar-hover: #3f3f46;
+    -fx-gm-button: #52525b;
+    -fx-gm-button-hover: #71717a;
+    -fx-gm-pressed: #3f3f46;
+    -fx-gm-selected: #262c40;
+    -fx-gm-selected-muted: #3f3f46;
+    -fx-gm-border: #4c4d58;
+    -fx-gm-border-strong: #52525b;
+    -fx-gm-text: #f4f4f5;
+    -fx-gm-secondary: #d4d4d8;
+    -fx-gm-muted: #a1a1aa;
+    -fx-gm-accent: #58c9ff;
+    -fx-gm-accent-text: #18181b;
+    -fx-gm-accent-hover: #32aeff;
+    -fx-gm-accent-soft: #262c40;
+    -fx-gm-warning-bg: #423606;
+    -fx-gm-warning-text: #fee78a;
+    -fx-gm-success: #55d37e;
+    -fx-gm-unread-badge: #52525b;
+    -fx-gm-star-fill: #fb923c;
+    -fx-gm-star-stroke: #f97316;
+    -fx-gm-unread-dot: #22c55e;
+    -fx-gm-folder-inbox: #58c9ff;
+    -fx-gm-folder-draft: #ddb4fe;
+    -fx-gm-folder-sent: #c0f2cf;
+    -fx-gm-folder-archive: #fee78a;
+    -fx-gm-folder-spam: #f87171;
+    -fx-gm-folder-trash: #d4d4d8;
+    -fx-gm-folder-outbox: #27d3d6;
+    -fx-gm-folder-custom: #fee78a;
 }
-.main-toolbar {
-    -fx-background-color: -fx-gm-pane;
-    -fx-border-color: transparent transparent -fx-gm-border transparent;
-    -fx-padding: 6 10 6 10;
+.mail-window, .mail-shell, .workspace-host, .mail-split-pane { -fx-background-color: -fx-gm-window; }
+.spaces-toolbar {
+    -fx-alignment: top-center;
+    -fx-min-width: 3.4615em;
+    -fx-pref-width: 3.4615em;
+    -fx-max-width: 3.4615em;
+    -fx-spacing: 0.6923em;
+    -fx-padding: 0.4615em;
+    -fx-background-color: -fx-gm-lower;
+    -fx-border-color: transparent -fx-gm-border transparent transparent;
 }
-.main-toolbar .button, .main-toolbar .menu-button {
-    -fx-min-height: 34px;
-    -fx-background-radius: 6px;
-}
-.main-toolbar .text-field { -fx-min-height: 34px; }
-.main-toolbar .primary-action { -fx-background-color: -fx-gm-accent; }
-.mail-split-pane, .workspace-host { -fx-background-color: -fx-gm-window; }
-.mail-split-pane > .split-pane-divider { -fx-background-color: -fx-gm-border; }
-.tree-cell:selected, .list-cell:filled:selected { -fx-background-color: -fx-gm-selected; }
-.tree-cell:hover:filled, .list-cell:filled:hover { -fx-background-color: -fx-gm-hover; }
-.reader-pane, .message-list-pane, .status-bar { -fx-background-color: -fx-gm-pane; }
-.folder-unread-count, .message-indicator {
-    -fx-background-color: -fx-gm-subtle;
-    -fx-background-radius: 9px;
-    -fx-padding: 1 6 1 6;
-    -fx-font-size: 10px;
+.spaces-toolbar-container { -fx-alignment: top-center; -fx-spacing: 0.6923em; }
+.spaces-toolbar-button {
+    -fx-min-width: 2.4615em;
+    -fx-pref-width: 2.4615em;
+    -fx-max-width: 2.4615em;
+    -fx-min-height: 2.4615em;
+    -fx-pref-height: 2.4615em;
+    -fx-max-height: 2.4615em;
+    -fx-padding: 0.3846em;
+    -fx-background-color: transparent;
+    -fx-background-radius: 0.3077em;
+    -fx-border-color: transparent;
+    -fx-border-radius: 0.3077em;
+    -fx-graphic-text-gap: 0;
     -fx-text-fill: -fx-gm-secondary;
 }
-.selection-toolbar {
-    -fx-alignment: center-left;
-    -fx-padding: 6 8 6 8;
-    -fx-background-color: -fx-gm-subtle;
-    -fx-border-color: -fx-gm-border;
-    -fx-border-radius: 5px;
-    -fx-background-radius: 5px;
+.spaces-toolbar-button:hover { -fx-background-color: -fx-gm-toolbar-hover; }
+.spaces-toolbar-button.current {
+    -fx-background-color: -fx-gm-accent;
+    -fx-text-fill: -fx-gm-accent-text;
 }
-.selection-toolbar .label { -fx-font-weight: bold; -fx-text-fill: -fx-gm-secondary; }
-.pane-heading { -fx-font-size: 14px; -fx-font-weight: 600; -fx-text-fill: -fx-gm-text; }
-.tree-cell.account-row { -fx-font-weight: 600; -fx-text-fill: -fx-gm-text; }
-.tree-cell.folder-row { -fx-padding: 5 7 5 7; }
-.tree-cell.unified-inbox-row { -fx-font-weight: 600; -fx-text-fill: -fx-gm-accent; }
-.table-view {
-    -fx-background-color: -fx-gm-pane;
-    -fx-border-color: -fx-gm-border;
-    -fx-border-radius: 4px;
-    -fx-table-cell-border-color: -fx-gm-border;
-}
-.table-view .column-header-background { -fx-background-color: -fx-gm-subtle; }
-.table-view .column-header, .table-view .filler {
-    -fx-background-color: -fx-gm-subtle;
-    -fx-border-color: transparent transparent -fx-gm-border transparent;
-}
-.table-row-cell { -fx-cell-size: 32px; -fx-background-color: -fx-gm-pane; }
-.table-row-cell:filled:hover { -fx-background-color: -fx-gm-hover; }
-.table-row-cell:filled:selected { -fx-background-color: -fx-gm-selected; }
-.table-cell { -fx-text-fill: -fx-gm-secondary; -fx-padding: 4 7 4 7; }
-.table-row-cell:filled:selected .table-cell { -fx-text-fill: -fx-gm-text; }
-.dark-theme .table-view, .dark-theme .table-row-cell { -fx-background-color: -fx-gm-pane; }
-.dark-theme .table-view .column-header-background, .dark-theme .table-view .column-header,
-.dark-theme .table-view .filler { -fx-background-color: -fx-gm-subtle; }
-.dark-theme .table-cell { -fx-text-fill: -fx-gm-secondary; }
-.list-title-row .label:first-child { -fx-text-fill: -fx-gm-text; }
-.message-subject { -fx-font-weight: 600; }
-.main-toolbar .button:focused, .main-toolbar .menu-button:focused,
-.filter-chip:focused, .tree-cell:focused, .list-cell:focused,
-.text-field:focused, .combo-box:focused {
+.spaces-toolbar-button.current:hover { -fx-background-color: -fx-gm-accent; }
+.spaces-toolbar-button:focused {
     -fx-border-color: -fx-gm-accent;
-    -fx-border-width: 2px;
-    -fx-border-radius: 4px;
+    -fx-border-width: 0.1538em;
     -fx-effect: none;
 }
-.dark-theme .tree-cell:selected, .dark-theme .list-cell:filled:selected {
-    -fx-background-color: -fx-gm-selected;
+.mail-window .spaces-toolbar-button .mail-icon-fill { -fx-fill: -fx-gm-secondary; -fx-opacity: 0.2; }
+.mail-window .spaces-toolbar-button .mail-icon-stroke { -fx-fill: -fx-gm-secondary; }
+.mail-window .spaces-toolbar-button.current .mail-icon-fill,
+.mail-window .spaces-toolbar-button.current .mail-icon-stroke { -fx-fill: -fx-gm-accent-text; }
+.main-toolbar {
+    -fx-background-color: -fx-gm-pane;
+    -fx-border-color: transparent transparent -fx-gm-border transparent;
+    -fx-padding: 0.5385em 0.9231em;
+    -fx-spacing: 0.5385em;
 }
-.dark-theme .mail-split-pane > .split-pane-divider { -fx-background-color: -fx-gm-border; }
-.dark-theme .reader-pane, .dark-theme .message-list-pane, .dark-theme .status-bar,
-.dark-theme .main-toolbar { -fx-background-color: -fx-gm-pane; }
-.dark-theme .folder-unread-count, .dark-theme .message-indicator {
-    -fx-background-color: #303846;
-    -fx-text-fill: #c7cfdd;
+.main-toolbar .button, .main-toolbar .menu-button {
+    -fx-min-height: 2.4615em;
+    -fx-background-color: transparent;
+    -fx-background-radius: 0.2308em;
+    -fx-padding: 0.4615em 0.6154em;
+    -fx-text-fill: -fx-gm-secondary;
+    -fx-graphic-text-gap: 0.4615em;
+    -fx-cursor: hand;
 }
+.main-toolbar .button:hover, .main-toolbar .menu-button:hover { -fx-background-color: -fx-gm-toolbar-hover; }
+.main-toolbar .primary-action {
+    -fx-background-color: -fx-gm-accent;
+    -fx-border-color: derive(-fx-gm-accent, -12%);
+    -fx-border-width: 0.0769em;
+    -fx-background-radius: 0.2308em;
+    -fx-border-radius: 0.2308em;
+    -fx-text-fill: -fx-gm-accent-text;
+    -fx-font-weight: 600;
+    -fx-padding: 0.4615em 1.0769em;
+}
+.main-toolbar .primary-action:hover { -fx-background-color: -fx-gm-accent-hover; }
+.main-toolbar .text-field {
+    -fx-min-height: 2.4615em;
+    -fx-background-color: -fx-gm-pane;
+    -fx-background-radius: 0.2308em;
+    -fx-border-color: -fx-gm-border-strong;
+    -fx-border-width: 0.0769em;
+    -fx-border-radius: 0.2308em;
+    -fx-padding: 0.4615em 0.6154em;
+    -fx-prompt-text-fill: -fx-gm-muted;
+}
+.toolbar-search {
+    -fx-alignment: center-left;
+    -fx-min-width: 16.9231em;
+    -fx-pref-width: 27.6923em;
+    -fx-spacing: 0.4615em;
+    -fx-padding: 0 0.5385em;
+    -fx-background-color: -fx-gm-pane;
+    -fx-background-radius: 0.2308em;
+    -fx-border-color: -fx-gm-border-strong;
+    -fx-border-width: 0.0769em;
+    -fx-border-radius: 0.2308em;
+}
+.main-toolbar .toolbar-search { -fx-min-width: 16.9231em; -fx-pref-width: 27.6923em; }
+.toolbar-search .text-field {
+    -fx-background-color: transparent;
+    -fx-background-insets: 0;
+    -fx-border-color: transparent;
+    -fx-padding: 0.4615em 0.1538em;
+}
+.main-toolbar .combo-box {
+    -fx-min-height: 2.4615em;
+    -fx-background-color: -fx-gm-pane;
+    -fx-background-radius: 0.2308em;
+    -fx-border-color: -fx-gm-border-strong;
+    -fx-border-width: 0.0769em;
+    -fx-border-radius: 0.2308em;
+}
+.main-toolbar #search-scope { -fx-min-width: 8em; -fx-pref-width: 11.5385em; }
+.mail-split-pane { -fx-padding: 0; }
+.mail-split-pane > .split-pane-divider { -fx-background-color: -fx-gm-border; -fx-padding: 0 0.0769em; }
+.mail-split-pane > * { -fx-border-color: transparent; }
+.navigation-pane {
+    -fx-min-width: 13.4615em;
+    -fx-pref-width: 18.8462em;
+    -fx-background-color: -fx-gm-sidebar;
+    -fx-border-color: transparent -fx-gm-border transparent transparent;
+}
+.navigation-pane .tree-view { -fx-min-width: 13.4615em; }
+.dark-theme .navigation-pane { -fx-background-color: -fx-gm-sidebar; }
+.folder-pane-toolbar {
+    -fx-alignment: center-right;
+    -fx-spacing: 0.2308em;
+    -fx-padding: 0.3077em 0.4615em;
+    -fx-background-color: -fx-gm-sidebar;
+    -fx-border-color: transparent transparent -fx-gm-border transparent;
+}
+.mail-window .folder-pane-toolbar .button, .mail-window .folder-pane-toolbar .menu-button {
+    -fx-min-width: 2.3077em;
+    -fx-pref-width: 2.3077em;
+    -fx-max-width: 2.3077em;
+    -fx-min-height: 2.3077em;
+    -fx-pref-height: 2.3077em;
+    -fx-max-height: 2.3077em;
+    -fx-padding: 0.3846em;
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+    -fx-graphic-text-gap: 0;
+}
+.mail-window .folder-pane-toolbar .button:hover,
+.mail-window .folder-pane-toolbar .menu-button:hover,
+.mail-window .folder-pane-toolbar .menu-button:showing { -fx-background-color: -fx-gm-toolbar-hover; }
+.pane-heading { -fx-font-size: 0.9231em; -fx-font-weight: bold; -fx-text-fill: -fx-gm-secondary; }
+.tree-view { -fx-background-color: transparent; -fx-padding: 0.3077em 0.5385em 0.6154em; }
+.tree-cell {
+    -fx-background-color: transparent;
+    -fx-background-radius: 0.2308em;
+    -fx-padding: 0.3846em 0.5385em;
+    -fx-text-fill: -fx-gm-secondary;
+}
+.tree-cell:selected { -fx-background-color: -fx-gm-selected-muted; -fx-text-fill: -fx-gm-text; -fx-font-weight: 600; }
+.tree-cell:selected:focused { -fx-background-color: -fx-gm-selected; -fx-border-color: -fx-gm-accent; -fx-border-radius: 0.2308em; }
+.dark-theme .tree-cell:selected { -fx-background-color: -fx-gm-selected-muted; -fx-text-fill: -fx-gm-text; }
+.dark-theme .tree-cell:selected:focused { -fx-background-color: -fx-gm-selected; }
+.tree-cell:hover:filled { -fx-background-color: -fx-gm-toolbar-hover; }
+.tree-cell.account-row { -fx-font-weight: bold; -fx-text-fill: -fx-gm-text; }
+.tree-cell.folder-row { -fx-padding: 0.3846em 0.6154em; }
+.tree-cell.unified-inbox-row { -fx-font-weight: bold; -fx-text-fill: -fx-gm-accent; }
 
-.reader-header {
-    -fx-spacing: 6px;
-    -fx-padding: 12px 16px 10px 16px;
+.message-list-pane {
+    -fx-min-width: 23.0769em;
+    -fx-background-color: -fx-gm-pane;
+    -fx-border-color: transparent -fx-gm-border transparent transparent;
+}
+.list-title-row {
+    -fx-alignment: center-left;
+    -fx-padding: 0.2308em 0.4615em;
     -fx-background-color: -fx-gm-pane;
     -fx-border-color: transparent transparent -fx-gm-border transparent;
 }
-.reader-subject { -fx-font-size: 19px; -fx-font-weight: 600; -fx-text-fill: -fx-gm-text; }
-.reader-identity { -fx-alignment: center-left; -fx-spacing: 12px; }
-.reader-sender { -fx-font-size: 13px; -fx-font-weight: 600; -fx-text-fill: -fx-gm-text; }
-.reader-date, .reader-recipient-summary, .reader-indicators { -fx-text-fill: -fx-gm-muted; }
-.reader-details-toggle { -fx-padding: 2px 4px; -fx-background-color: transparent; -fx-text-fill: -fx-gm-accent; }
-.reader-recipient-details {
-    -fx-padding: 8px;
+.list-title-row { -fx-hgap: 0.6154em; -fx-vgap: 0.3077em; }
+.list-title-row .label:first-child { -fx-font-size: 1.2308em; -fx-font-weight: 600; -fx-text-fill: -fx-gm-text; }
+.list-title-row .label:last-child { -fx-text-fill: -fx-gm-secondary; -fx-font-size: 1em; }
+.list-title-row .button, .list-title-row .combo-box { -fx-min-height: 2.1538em; -fx-font-size: 0.9231em; }
+.filter-chip {
     -fx-background-color: -fx-gm-subtle;
-    -fx-background-radius: 4px;
+    -fx-background-radius: 0.2308em;
+    -fx-padding: 0.3077em 0.6154em;
+    -fx-text-fill: -fx-gm-secondary;
+    -fx-font-size: 0.8462em;
+    -fx-cursor: hand;
+}
+.filter-chip.active { -fx-background-color: -fx-gm-accent-soft; -fx-text-fill: -fx-gm-accent; -fx-font-weight: 600; }
+.quick-filter-bar {
+    -fx-hgap: 0.4615em;
+    -fx-vgap: 0.4615em;
+    -fx-padding: 0.3077em 0.5385em;
+    -fx-background-color: -fx-gm-pane;
+    -fx-border-color: transparent transparent -fx-gm-border transparent;
+}
+.list-view { -fx-background-color: transparent; -fx-border-color: transparent; }
+.message-list-pane .list-view, .message-list-pane .table-view { -fx-min-height: 12.3077em; }
+.list-cell {
+    -fx-background-color: -fx-gm-window;
+    -fx-border-color: transparent transparent -fx-gm-border transparent;
+    -fx-padding: 0.3077em 0.6154em;
+}
+.list-cell:filled:hover { -fx-background-color: -fx-gm-hover; }
+.list-cell:filled:selected { -fx-background-color: -fx-gm-selected; }
+.list-cell:filled:selected:focused { -fx-border-color: transparent transparent -fx-gm-border -fx-gm-accent; -fx-border-width: 0 0 0.0769em 0.1538em; }
+.dark-theme .list-cell:filled:hover { -fx-background-color: -fx-gm-deep; }
+.dark-theme .list-cell:filled:selected { -fx-background-color: -fx-gm-selected; }
+.list-cell.unread-row { -fx-border-color: transparent transparent -fx-gm-border transparent; -fx-border-width: 0 0 0.0769em 0; }
+.message-cell-content { -fx-padding: 0.0769em 0.1538em; }
+.message-read-status { -fx-min-width: 0.9231em; -fx-pref-width: 0.9231em; -fx-max-width: 0.9231em; }
+.message-sender { -fx-text-fill: -fx-gm-text; -fx-font-size: 1em; }
+.message-sender.unread { -fx-text-fill: -fx-gm-text; -fx-font-weight: 600; }
+.message-date { -fx-text-fill: -fx-gm-secondary; -fx-font-size: 0.9231em; -fx-opacity: 0.85; }
+.message-subject { -fx-text-fill: -fx-gm-text; -fx-font-size: 1em; -fx-font-weight: normal; }
+.message-subject.unread { -fx-font-weight: 600; }
+.selection-toolbar { -fx-alignment: center-left; -fx-hgap: 0.4615em; -fx-vgap: 0.4615em; -fx-padding: 0.4615em; -fx-background-color: -fx-gm-subtle; -fx-border-color: -fx-gm-border; -fx-background-radius: 0.2308em; }
+.selection-toolbar .label { -fx-font-weight: bold; -fx-text-fill: -fx-gm-secondary; }
+
+.reader-pane { -fx-min-width: 26.1538em; -fx-background-color: -fx-gm-pane; }
+.reader-pane .web-view { -fx-min-height: 15.3846em; -fx-background-color: -fx-gm-window; }
+.reader-actions { -fx-padding: 0.2308em; -fx-background-color: -fx-gm-pane; -fx-border-color: transparent transparent -fx-gm-border transparent; }
+.reader-actions .button, .reader-pane > .button {
+    -fx-min-height: 2.3077em;
+    -fx-background-color: transparent;
+    -fx-background-radius: 0.2308em;
+    -fx-padding: 0.3846em 0.6154em;
+    -fx-text-fill: -fx-gm-secondary;
+    -fx-cursor: hand;
+}
+.reader-actions .button:hover, .reader-pane > .button:hover { -fx-background-color: -fx-gm-toolbar-hover; }
+.reader-header {
+    -fx-spacing: 0.3077em;
+    -fx-padding: 0.4615em 0.9231em;
+    -fx-background-color: -fx-gm-pane;
+    -fx-border-color: transparent transparent -fx-gm-border transparent;
+}
+.reader-subject { -fx-font-size: 1.3846em; -fx-font-weight: 600; -fx-text-fill: -fx-gm-text; }
+.reader-identity { -fx-alignment: center-left; -fx-spacing: 0.7692em; }
+.reader-sender { -fx-font-size: 1em; -fx-font-weight: 600; -fx-text-fill: -fx-gm-text; }
+.reader-date, .reader-recipients, .reader-indicators { -fx-text-fill: -fx-gm-muted; -fx-font-size: 0.8462em; }
+.reader-details-toggle { -fx-padding: 0.1538em 0.2308em; -fx-background-color: transparent; -fx-text-fill: -fx-gm-accent; }
+.reader-recipient-details { -fx-padding: 0.6154em; -fx-background-color: -fx-gm-subtle; -fx-background-radius: 0.3077em; -fx-text-fill: -fx-gm-secondary; }
+.reader-state { -fx-padding: 0.4615em 0.7692em; -fx-background-color: -fx-gm-warning-bg; -fx-text-fill: -fx-gm-warning-text; }
+.reader-attachments { -fx-padding: 0.5385em 0 0; -fx-hgap: 0.6154em; -fx-vgap: 0.6154em; }
+.status-bar { -fx-background-color: -fx-gm-subtle; -fx-border-color: -fx-gm-border transparent transparent; -fx-alignment: center-left; }
+.status-bar .label { -fx-text-fill: -fx-gm-muted; }
+.status-bar .connection-indicator { -fx-text-fill: -fx-gm-success; -fx-font-size: 0.7692em; }
+.folder-unread-count, .message-indicator { -fx-background-color: -fx-gm-deep; -fx-background-radius: 7.6923em; -fx-padding: 0.0769em 0.3846em; -fx-font-size: 0.8462em; -fx-text-fill: -fx-gm-secondary; }
+.folder-unread-count { -fx-background-color: -fx-gm-unread-badge; -fx-text-fill: white; -fx-font-weight: 600; }
+.folder-row-content { -fx-alignment: center-left; -fx-spacing: 0.5385em; }
+.mail-window .thunderbird-icon .mail-icon-fill,
+.compose-window .thunderbird-icon .mail-icon-fill,
+.account-setup .thunderbird-icon .mail-icon-fill { -fx-fill: -fx-gm-secondary; -fx-opacity: 0.2; }
+.mail-window .thunderbird-icon .mail-icon-stroke,
+.compose-window .thunderbird-icon .mail-icon-stroke,
+.account-setup .thunderbird-icon .mail-icon-stroke { -fx-fill: -fx-gm-secondary; }
+.mail-window .main-toolbar .primary-action .mail-icon-fill,
+.mail-window .main-toolbar .primary-action .mail-icon-stroke,
+.compose-window .primary-action .mail-icon-fill,
+.compose-window .primary-action .mail-icon-stroke { -fx-fill: -fx-gm-accent-text; }
+.mail-window .message-star-icon .mail-icon-fill { -fx-fill: -fx-gm-star-fill; }
+.mail-window .message-star-icon .mail-icon-fill { -fx-opacity: 1; }
+.mail-window .message-star-icon .mail-icon-stroke { -fx-fill: -fx-gm-star-stroke; }
+.mail-window .message-attachment-icon .mail-icon-fill,
+.mail-window .message-attachment-icon .mail-icon-stroke { -fx-fill: -fx-gm-muted; }
+.mail-window .message-unread-dot { -fx-fill: -fx-gm-unread-dot; }
+.tree-cell.account-row .account-name { -fx-font-weight: 600; }
+.tree-cell.folder-row .folder-name { -fx-font-weight: normal; }
+.mail-window .tree-cell:selected .label { -fx-text-fill: -fx-gm-text; }
+.mail-window .mail-folder-icon.inbox .mail-icon-fill,
+.mail-window .mail-folder-icon.account .mail-icon-fill { -fx-fill: -fx-gm-folder-inbox; -fx-opacity: 0.2; }
+.mail-window .mail-folder-icon.inbox .mail-icon-stroke,
+.mail-window .mail-folder-icon.account .mail-icon-stroke { -fx-fill: -fx-gm-folder-inbox; }
+.mail-window .mail-folder-icon.draft .mail-icon-fill { -fx-fill: -fx-gm-folder-draft; -fx-opacity: 0.2; }
+.mail-window .mail-folder-icon.draft .mail-icon-stroke { -fx-fill: -fx-gm-folder-draft; }
+.mail-window .mail-folder-icon.sent .mail-icon-fill { -fx-fill: -fx-gm-folder-sent; -fx-opacity: 0.2; }
+.mail-window .mail-folder-icon.sent .mail-icon-stroke { -fx-fill: -fx-gm-folder-sent; }
+.mail-window .mail-folder-icon.archive .mail-icon-fill { -fx-fill: -fx-gm-folder-archive; -fx-opacity: 0.2; }
+.mail-window .mail-folder-icon.archive .mail-icon-stroke { -fx-fill: -fx-gm-folder-archive; }
+.mail-window .mail-folder-icon.spam .mail-icon-fill { -fx-fill: -fx-gm-folder-spam; -fx-opacity: 0.2; }
+.mail-window .mail-folder-icon.spam .mail-icon-stroke { -fx-fill: -fx-gm-folder-spam; }
+.mail-window .mail-folder-icon.trash .mail-icon-fill { -fx-fill: -fx-gm-folder-trash; -fx-opacity: 0.2; }
+.mail-window .mail-folder-icon.trash .mail-icon-stroke { -fx-fill: -fx-gm-folder-trash; }
+.mail-window .mail-folder-icon.outbox .mail-icon-fill { -fx-fill: -fx-gm-folder-outbox; -fx-opacity: 0.2; }
+.mail-window .mail-folder-icon.outbox .mail-icon-stroke { -fx-fill: -fx-gm-folder-outbox; }
+.mail-window .mail-folder-icon.folder .mail-icon-fill { -fx-fill: -fx-gm-folder-custom; -fx-opacity: 0.2; }
+.mail-window .mail-folder-icon.folder .mail-icon-stroke { -fx-fill: -fx-gm-folder-custom; }
+
+.table-view { -fx-background-color: -fx-gm-window; -fx-border-color: transparent; }
+.table-view .column-header-background, .table-view .column-header, .table-view .filler { -fx-background-color: -fx-gm-pane; }
+.table-view .column-header, .table-view .filler { -fx-border-color: transparent transparent -fx-gm-border transparent; }
+.table-row-cell { -fx-cell-size: 2.3077em; -fx-background-color: -fx-gm-window; }
+.table-row-cell:filled:hover { -fx-background-color: -fx-gm-hover; }
+.table-row-cell:filled:selected { -fx-background-color: -fx-gm-selected; }
+.table-cell { -fx-text-fill: -fx-gm-secondary; -fx-padding: 0.3077em 0.5385em; }
+.table-row-cell:filled:selected .table-cell { -fx-text-fill: -fx-gm-text; }
+.button:focused, .text-field:focused, .tree-cell:focused, .list-cell:focused, .combo-box:focused {
+    -fx-border-color: -fx-gm-accent;
+    -fx-border-width: 0.0769em;
+    -fx-border-radius: 0.2308em;
+    -fx-effect: none;
+}
+
+.compose-window, .account-setup { -fx-background-color: -fx-gm-window; }
+.compose-window { -fx-padding: 0.9231em; -fx-background-color: -fx-gm-window; }
+.compose-heading { -fx-font-size: 1.5385em; -fx-font-weight: 600; -fx-text-fill: -fx-gm-text; }
+.compose-window .text-field, .account-setup .text-field, .account-setup .combo-box, .compose-window .combo-box, .account-setup .password-field { -fx-background-color: -fx-gm-window; -fx-text-fill: -fx-gm-text; -fx-prompt-text-fill: -fx-gm-muted; -fx-background-radius: 0.2308em; -fx-border-radius: 0.2308em; -fx-border-color: -fx-gm-border-strong; -fx-border-width: 0.0769em; -fx-padding: 0.4615em 0.6154em; }
+.compose-window .text-area { -fx-background-color: -fx-gm-window; -fx-control-inner-background: -fx-gm-window; -fx-text-fill: -fx-gm-text; -fx-border-color: -fx-gm-border-strong; -fx-border-radius: 0.2308em; -fx-border-width: 0.0769em; }
+.compose-window .text-area .content, .account-setup .scroll-pane, .account-setup .viewport { -fx-background-color: -fx-gm-window; }
+.account-setup .button, .compose-window .button { -fx-background-color: -fx-gm-button; -fx-background-radius: 0.2308em; -fx-border-color: -fx-gm-border; -fx-border-radius: 0.2308em; -fx-border-width: 0.0769em; -fx-padding: 0.4615em 1.0769em; -fx-text-fill: -fx-gm-text; }
+.compose-window .primary-action { -fx-background-color: -fx-gm-accent; -fx-border-color: derive(-fx-gm-accent, -12%); -fx-text-fill: -fx-gm-accent-text; }
+.diagnostics-window { -fx-background-color: -fx-gm-window; -fx-padding: 1.2308em; -fx-spacing: 0.7692em; }
+.diagnostics-window .text-area { -fx-font-family: monospace; -fx-font-size: 0.9231em; -fx-control-inner-background: -fx-gm-window; -fx-text-fill: -fx-gm-text; -fx-border-color: -fx-gm-border; }
+.settings-explanation { -fx-text-fill: -fx-gm-muted; }
+
+.mail-window .button, .mail-window .toggle-button, .compose-window .button,
+.account-setup .button, .diagnostics-window .button, .mail-window .menu-button {
+    -fx-min-height: 2.4615em;
+    -fx-background-color: -fx-gm-button;
+    -fx-background-radius: 0.2308em;
+    -fx-background-insets: 0;
+    -fx-border-color: -fx-gm-border-strong;
+    -fx-border-width: 0.0769em;
+    -fx-border-insets: 0;
+    -fx-effect: none;
+    -fx-border-radius: 0.2308em;
+    -fx-padding: 0.4615em 1.0769em;
+    -fx-text-fill: -fx-gm-text;
+    -fx-cursor: hand;
+}
+.mail-window .button:hover, .compose-window .button:hover,
+.mail-window .toggle-button:hover, .account-setup .button:hover, .diagnostics-window .button:hover,
+.mail-window .menu-button:hover { -fx-background-color: -fx-gm-button-hover; }
+.mail-window .button:armed, .mail-window .toggle-button:armed, .compose-window .button:armed,
+.account-setup .button:armed, .diagnostics-window .button:armed,
+.mail-window .menu-button:showing { -fx-background-color: -fx-gm-pressed; }
+.mail-window .primary-action, .compose-window .primary-action {
+    -fx-background-color: -fx-gm-accent;
+    -fx-border-color: derive(-fx-gm-accent, -12%);
+    -fx-text-fill: -fx-gm-accent-text;
+    -fx-font-weight: 600;
+}
+.mail-window .primary-action:hover, .compose-window .primary-action:hover {
+    -fx-background-color: -fx-gm-accent-hover;
+}
+.mail-window .text-field, .mail-window .password-field,
+.compose-window .text-field, .compose-window .password-field,
+.account-setup .text-field, .account-setup .password-field,
+.diagnostics-window .text-field, .mail-window .combo-box,
+.compose-window .combo-box, .account-setup .combo-box {
+    -fx-background-color: -fx-gm-window;
+    -fx-background-radius: 0.2308em;
+    -fx-border-color: -fx-gm-border-strong;
+    -fx-border-radius: 0.2308em;
+    -fx-border-width: 0.0769em;
+    -fx-text-fill: -fx-gm-text;
+    -fx-prompt-text-fill: -fx-gm-muted;
+    -fx-highlight-fill: derive(-fx-gm-accent, 10%);
+    -fx-highlight-text-fill: -fx-gm-accent-text;
+}
+.mail-window .text-field:focused, .mail-window .password-field:focused,
+.compose-window .text-field:focused, .compose-window .password-field:focused,
+.account-setup .text-field:focused, .account-setup .password-field:focused,
+.mail-window .combo-box:focused, .compose-window .combo-box:focused,
+.account-setup .combo-box:focused {
+    -fx-border-color: -fx-gm-accent;
+    -fx-effect: dropshadow(gaussian, derive(-fx-gm-accent, 60%), 3, 0.12, 0, 0);
+}
+.mail-window .context-menu, .mail-window .menu-item,
+.compose-window .context-menu, .account-setup .context-menu {
+    -fx-background-color: -fx-gm-window;
+    -fx-text-fill: -fx-gm-text;
+    -fx-border-color: -fx-gm-border-strong;
+    -fx-border-width: 0.0769em;
+    -fx-background-radius: 0.2308em;
+    -fx-border-radius: 0.2308em;
+}
+.mail-window .menu-item:hover, .mail-window .menu-item:focused,
+.compose-window .menu-item:hover, .account-setup .menu-item:hover {
+    -fx-background-color: -fx-gm-accent-soft;
+    -fx-text-fill: -fx-gm-text;
+}
+.mail-window .combo-box-popup .list-view,
+.compose-window .combo-box-popup .list-view,
+.account-setup .combo-box-popup .list-view { -fx-background-color: -fx-gm-window; }
+.mail-window .combo-box-popup .list-cell,
+.compose-window .combo-box-popup .list-cell,
+.account-setup .combo-box-popup .list-cell { -fx-background-color: -fx-gm-window; -fx-text-fill: -fx-gm-text; }
+.mail-window .combo-box-popup .list-cell:filled:hover,
+.mail-window .combo-box-popup .list-cell:filled:selected,
+.compose-window .combo-box-popup .list-cell:filled:hover,
+.compose-window .combo-box-popup .list-cell:filled:selected,
+.account-setup .combo-box-popup .list-cell:filled:hover,
+.account-setup .combo-box-popup .list-cell:filled:selected { -fx-background-color: -fx-gm-accent-soft; -fx-text-fill: -fx-gm-text; }
+
+.mail-window, .compose-window, .account-setup, .diagnostics-window {
+    -fx-text-fill: -fx-gm-text;
+    -fx-background-color: -fx-gm-window;
+}
+.mail-window .label, .compose-window .label, .account-setup .label,
+.diagnostics-window .label {
+    -fx-text-fill: -fx-gm-text;
+}
+.main-toolbar .button:not(.primary-action), .main-toolbar .menu-button,
+.reader-actions .button, .reader-pane > .button,
+.mail-window .reader-details-toggle, .mail-window .filter-chip,
+.selection-toolbar .button {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+}
+.main-toolbar .button:not(.primary-action):hover, .main-toolbar .menu-button:hover,
+.reader-actions .button:hover, .reader-pane > .button:hover,
+.mail-window .reader-details-toggle:hover { -fx-background-color: -fx-gm-toolbar-hover; }
+.mail-window .text-area, .compose-window .text-area, .account-setup .text-area,
+.diagnostics-window .text-area {
+    -fx-background-color: -fx-gm-window;
+    -fx-control-inner-background: -fx-gm-window;
+    -fx-text-fill: -fx-gm-text;
+    -fx-prompt-text-fill: -fx-gm-muted;
+    -fx-highlight-fill: derive(-fx-gm-accent, 10%);
+    -fx-highlight-text-fill: -fx-gm-accent-text;
+}
+.mail-window .check-box, .compose-window .check-box, .account-setup .check-box,
+.mail-window .radio-button, .compose-window .radio-button, .account-setup .radio-button {
+    -fx-text-fill: -fx-gm-text;
+}
+.check-box .box, .radio-button .radio {
+    -fx-background-color: -fx-gm-window;
+    -fx-border-color: -fx-gm-border-strong;
+    -fx-border-radius: 0.2308em;
+}
+.radio-button .radio { -fx-background-radius: 7.6923em; }
+.check-box:selected .box, .radio-button:selected .radio {
+    -fx-background-color: -fx-gm-accent;
+    -fx-border-color: -fx-gm-accent;
+}
+.check-box:selected .mark, .radio-button:selected .dot { -fx-background-color: -fx-gm-accent-text; }
+.mail-window .tab-pane, .account-setup .tab-pane {
+    -fx-background-color: -fx-gm-window;
+    -fx-tab-min-height: 2.5385em;
+}
+.mail-window .tab-pane .tab-header-area, .account-setup .tab-pane .tab-header-area {
+    -fx-background-color: -fx-gm-pane;
+    -fx-border-color: transparent transparent -fx-gm-border transparent;
+}
+.mail-window .tab-pane .tab, .account-setup .tab-pane .tab {
+    -fx-background-color: transparent;
+    -fx-background-radius: 0.2308em 0.2308em 0 0;
+    -fx-border-color: transparent transparent -fx-gm-border transparent;
+    -fx-padding: 0.4615em 0.9231em;
+}
+.mail-window .tab-pane .tab:selected, .account-setup .tab-pane .tab:selected {
+    -fx-background-color: -fx-gm-window;
+    -fx-border-color: transparent transparent -fx-gm-accent transparent;
+    -fx-border-width: 0 0 0.1538em 0;
+}
+.mail-window .scroll-bar:vertical, .mail-window .scroll-bar:horizontal,
+.compose-window .scroll-bar:vertical, .account-setup .scroll-bar:vertical {
+    -fx-background-color: transparent;
+    -fx-padding: 0.0769em;
+}
+.mail-window .scroll-bar .thumb, .compose-window .scroll-bar .thumb,
+.account-setup .scroll-bar .thumb {
+    -fx-background-color: -fx-gm-border-strong;
+    -fx-background-radius: 0.3077em;
+}
+.mail-window .scroll-bar .track, .compose-window .scroll-bar .track,
+.account-setup .scroll-bar .track { -fx-background-color: transparent; }
+
+.mail-window .reader-state { -fx-text-fill: -fx-gm-warning-text; }
+.mail-window .reader-date, .mail-window .reader-recipients,
+.mail-window .reader-indicators, .mail-window .message-date {
+    -fx-text-fill: -fx-gm-muted;
+}
+.mail-window .message-date { -fx-text-fill: -fx-gm-secondary; }
+.mail-window .toolbar-search .thunderbird-icon .mail-icon-fill,
+.mail-window .toolbar-search .thunderbird-icon .mail-icon-stroke { -fx-fill: -fx-gm-muted; }
+.mail-window .toolbar-search .text-field:focused { -fx-border-color: transparent; -fx-effect: none; }
+.mail-window .filter-chip.active {
+    -fx-background-color: -fx-gm-accent-soft;
+    -fx-text-fill: -fx-gm-accent;
+    -fx-border-color: -fx-gm-accent-soft;
+}
+.mail-window .reader-details-toggle { -fx-text-fill: -fx-gm-accent; }
+.mail-window .status-bar .connection-indicator { -fx-text-fill: -fx-gm-success; }
+.account-setup .settings-explanation { -fx-text-fill: -fx-gm-muted; }
+.main-toolbar .toolbar-search.search-focused { -fx-border-color: -fx-gm-accent; }
+.mail-window .main-toolbar .toolbar-search .text-field {
+    -fx-background-color: transparent;
+    -fx-background-insets: 0;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+    -fx-effect: none;
+    -fx-padding: 0.4615em 0.1538em;
+}
+.mail-window .main-toolbar .toolbar-search .text-field:focused {
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+    -fx-effect: none;
+}
+.dark-theme .tree-cell:hover:filled { -fx-background-color: -fx-gm-deep; }
+.mail-window .spaces-toolbar-button {
+    -fx-min-width: 2.4615em;
+    -fx-pref-width: 2.4615em;
+    -fx-max-width: 2.4615em;
+    -fx-min-height: 2.4615em;
+    -fx-pref-height: 2.4615em;
+    -fx-max-height: 2.4615em;
+    -fx-padding: 0.3846em;
+    -fx-background-color: transparent;
+    -fx-background-radius: 0.3077em;
+    -fx-border-color: transparent;
+    -fx-border-radius: 0.3077em;
+    -fx-graphic-text-gap: 0;
     -fx-text-fill: -fx-gm-secondary;
 }
-.reader-state {
-    -fx-padding: 7px 12px;
+.mail-window .spaces-toolbar-button:hover { -fx-background-color: -fx-gm-toolbar-hover; }
+.mail-window .spaces-toolbar-button.current,
+.mail-window .spaces-toolbar-button.current:hover {
+    -fx-background-color: -fx-gm-accent;
+    -fx-text-fill: -fx-gm-accent-text;
+}
+.mail-window .spaces-toolbar-button:focused {
+    -fx-border-color: -fx-gm-accent;
+    -fx-border-width: 0.1538em;
+    -fx-effect: none;
+}
+.mail-window .filter-chip {
+    -fx-min-height: 2em;
     -fx-background-color: -fx-gm-subtle;
+    -fx-background-radius: 0.2308em;
+    -fx-border-color: transparent;
+    -fx-padding: 0.3077em 0.6154em;
     -fx-text-fill: -fx-gm-secondary;
+    -fx-font-size: 0.8462em;
 }
-.reader-attachments {
-    -fx-padding: 8px 0 0 0;
-    -fx-hgap: 8px;
-    -fx-vgap: 8px;
+.mail-window .filter-chip.active {
+    -fx-background-color: -fx-gm-accent-soft;
+    -fx-border-color: -fx-gm-accent-soft;
+    -fx-text-fill: -fx-gm-accent;
+    -fx-font-weight: 600;
 }
-.diagnostics-window { -fx-background-color: -fx-gm-window; -fx-padding: 18px; -fx-spacing: 12px; }
-.diagnostics-window .text-area { -fx-font-family: monospace; -fx-font-size: 12px; }
-.settings-explanation { -fx-text-fill: #687386; }
-.dark-theme .settings-explanation { -fx-text-fill: #aab4c4; }
-.dark-theme .reader-header, .dark-theme .reader-state { -fx-background-color: -fx-gm-pane; }
-.dark-theme .reader-recipient-details { -fx-background-color: -fx-gm-subtle; }
+.compose-window .list-view { -fx-background-color: -fx-gm-window; }
+.compose-window .list-cell { -fx-background-color: -fx-gm-window; }
+.compose-window .list-cell:filled:hover { -fx-background-color: -fx-gm-hover; }
+.compose-window .list-cell:filled:selected { -fx-background-color: -fx-gm-selected; }
+.compose-window .attachment-size, .compose-window .compose-status {
+    -fx-text-fill: -fx-gm-muted;
+    -fx-font-size: 0.9231em;
+}
+.compose-window .button, .account-setup .button { -fx-graphic-text-gap: 0.4615em; }
+.compose-window .recipient-suggestions { -fx-pref-height: 9.2308em; }
+.compose-window .attachment-list { -fx-pref-height: 6.1538em; }
+.compose-window .compose-caption { -fx-min-width: 4.6154em; }
+.mail-window .tooltip, .compose-window .tooltip, .account-setup .tooltip {
+    -fx-background-color: -fx-gm-window;
+    -fx-background-radius: 0.2308em;
+    -fx-border-color: -fx-gm-border-strong;
+    -fx-border-radius: 0.2308em;
+    -fx-text-fill: -fx-gm-text;
+    -fx-padding: 0.3846em 0.6154em;
+}
+.account-setup .spinner,
+.account-setup .spinner .text-field {
+    -fx-background-color: -fx-gm-window;
+    -fx-background-radius: 0.2308em;
+    -fx-border-color: -fx-gm-border-strong;
+    -fx-border-radius: 0.2308em;
+    -fx-text-fill: -fx-gm-text;
+}
+.account-setup .spinner .increment-arrow-button,
+.account-setup .spinner .decrement-arrow-button {
+    -fx-background-color: -fx-gm-subtle;
+    -fx-border-color: -fx-gm-border;
+}

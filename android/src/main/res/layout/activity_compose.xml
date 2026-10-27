@@ -14,19 +14,23 @@
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
             style="@style/Widget.GraalMail.Toolbar"
-            app:navigationIcon="@android:drawable/ic_menu_close_clear_cancel" />
+            app:navigationIcon="@drawable/ic_close" />
     </com.google.android.material.appbar.AppBarLayout>
 
-    <ScrollView
+    <com.graalmail.android.ui.AdaptiveFrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1">
 
-        <LinearLayout
+        <ScrollView
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:padding="16dp">
+            android:layout_height="match_parent">
+
+          <LinearLayout
+              android:layout_width="match_parent"
+              android:layout_height="wrap_content"
+              android:orientation="vertical"
+              android:padding="@dimen/screen_inset_phone">
 
             <TextView
                 android:layout_width="match_parent"
@@ -60,35 +64,55 @@
                 android:minHeight="48dp"
                 android:contentDescription="@string/compose_from_description" />
 
-            <EditText
-                android:id="@+id/compose_to"
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:hint="@string/compose_to"
-                android:inputType="textEmailAddress" />
+                android:layout_height="wrap_content">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/compose_to"
+                    style="@style/Widget.Material3.TextInputEditText.OutlinedBox"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="@string/compose_to"
+                    android:inputType="textEmailAddress" />
+            </com.google.android.material.textfield.TextInputLayout>
 
-            <EditText
-                android:id="@+id/compose_cc"
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/compose_cc_container"
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:hint="@string/compose_cc"
-                android:inputType="textEmailAddress"
-                android:visibility="gone" />
+                android:visibility="gone">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/compose_cc"
+                    style="@style/Widget.Material3.TextInputEditText.OutlinedBox"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="@string/compose_cc"
+                    android:inputType="textEmailAddress" />
+            </com.google.android.material.textfield.TextInputLayout>
 
-            <EditText
-                android:id="@+id/compose_bcc"
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/compose_bcc_container"
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:hint="@string/compose_bcc"
-                android:inputType="textEmailAddress"
-                android:visibility="gone" />
+                android:visibility="gone">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/compose_bcc"
+                    style="@style/Widget.Material3.TextInputEditText.OutlinedBox"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="@string/compose_bcc"
+                    android:inputType="textEmailAddress" />
+            </com.google.android.material.textfield.TextInputLayout>
 
             <LinearLayout
                 android:id="@+id/compose_cc_bcc_toggle"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
-                android:layout_marginTop="4dp"
+                android:layout_marginTop="@dimen/space_1"
                 android:minHeight="@dimen/touch_target_min"
                 android:background="?android:attr/selectableItemBackground">
 
@@ -109,21 +133,33 @@
                     android:layout_marginStart="8dp" />
             </LinearLayout>
 
-            <EditText
-                android:id="@+id/compose_subject"
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:hint="@string/compose_subject"
-                android:inputType="text" />
+                android:layout_height="wrap_content">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/compose_subject"
+                    style="@style/Widget.Material3.TextInputEditText.OutlinedBox"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="@string/compose_subject"
+                    android:inputType="text" />
+            </com.google.android.material.textfield.TextInputLayout>
 
-            <EditText
-                android:id="@+id/compose_body"
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:minHeight="240dp"
-                android:gravity="top|start"
-                android:hint="@string/compose_body"
-                android:inputType="textMultiLine" />
+                android:layout_height="wrap_content">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/compose_body"
+                    style="@style/Widget.Material3.TextInputEditText.OutlinedBox"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="@dimen/compose_body_min_height"
+                    android:gravity="top|start"
+                    android:hint="@string/compose_body"
+                    android:inputType="textMultiLine" />
+            </com.google.android.material.textfield.TextInputLayout>
 
             <LinearLayout
                 android:id="@+id/compose_attachments"
@@ -150,6 +186,7 @@
                 android:id="@+id/compose_add_attachment"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                style="@style/Widget.GraalMail.OutlinedButton"
                 android:layout_marginTop="8dp"
                 android:text="@string/compose_add_attachment" />
 
@@ -164,8 +201,10 @@
                 android:id="@+id/compose_draft"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
+                style="@style/Widget.GraalMail.OutlinedButton"
+                android:layout_marginTop="@dimen/space_4"
                 android:text="@string/compose_save_draft" />
-        </LinearLayout>
-    </ScrollView>
+          </LinearLayout>
+        </ScrollView>
+    </com.graalmail.android.ui.AdaptiveFrameLayout>
 </LinearLayout>

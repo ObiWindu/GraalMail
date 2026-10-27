@@ -58,8 +58,6 @@ public final class SettingsDialog {
             stage.initModality(Modality.WINDOW_MODAL);
         }
         stage.setResizable(true);
-        stage.setMinWidth(720);
-        stage.setMinHeight(520);
     }
 
     /**
@@ -104,17 +102,17 @@ public final class SettingsDialog {
         Button cancel = new Button("Cancel");
         cancel.setOnAction(event -> stage.close());
 
-        javafx.scene.layout.HBox buttons = new javafx.scene.layout.HBox(8, cancel, save);
+        javafx.scene.layout.HBox buttons = new javafx.scene.layout.HBox(UiScale.px(stage, 8), cancel, save);
         buttons.setAlignment(Pos.CENTER_RIGHT);
 
-        javafx.scene.layout.VBox syncSettings = new javafx.scene.layout.VBox(10,
+        javafx.scene.layout.VBox syncSettings = new javafx.scene.layout.VBox(UiScale.px(stage, 10),
                 intervalLabel, syncInterval, pageLabel, pageSize, notifications);
-        javafx.scene.layout.VBox appearanceSettings = new javafx.scene.layout.VBox(10,
+        javafx.scene.layout.VBox appearanceSettings = new javafx.scene.layout.VBox(UiScale.px(stage, 10),
                 new Label("Message list display"), listMode,
                 new Label("Message list density"), density, new Label("Theme"), theme);
         Label layoutHelp = new Label("Classic places the reader below the message list. Wide places it below the folder and list panes. Vertical shows all three panes side by side.");
         layoutHelp.setWrapText(true);
-        javafx.scene.layout.VBox layoutSettings = new javafx.scene.layout.VBox(10,
+        javafx.scene.layout.VBox layoutSettings = new javafx.scene.layout.VBox(UiScale.px(stage, 10),
                 new Label("Workspace layout"), layout, layoutHelp,
                 showNavigation, showReader,
                 new Label("You can also change pane visibility from the Layout menu in the main toolbar."));
@@ -129,15 +127,16 @@ public final class SettingsDialog {
         heading.getStyleClass().add("compose-heading");
         Label explanation = new Label("Choose how GraalMail looks, syncs, and arranges your workspace.");
         explanation.getStyleClass().add("settings-explanation");
-        javafx.scene.layout.VBox root = new javafx.scene.layout.VBox(10, heading, explanation, tabs, buttons);
+        javafx.scene.layout.VBox root = new javafx.scene.layout.VBox(UiScale.px(stage, 10), heading, explanation, tabs, buttons);
         root.getStyleClass().add("account-setup");
         if (darkTheme) root.getStyleClass().add("dark-theme");
-        root.setPadding(new Insets(14));
+        root.setPadding(UiScale.insets(stage, 14));
 
-        Scene scene = new Scene(root, 900, 650);
+        Scene scene = new Scene(root);
         var stylesheet = getClass().getResource("/styles/mail.css");
         if (stylesheet != null) scene.getStylesheets().add(stylesheet.toExternalForm());
         stage.setScene(scene);
+        UiScale.configure(stage, scene, stage.getOwner(), 900, 650, 600, 420);
         return stage.getScene();
     }
 

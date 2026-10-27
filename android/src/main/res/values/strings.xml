@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="mailbox_navigation_title">Mailboxes and accounts</string>
+    <string name="mailbox_open_navigation">Open mailbox navigation</string>
+    <string name="mailbox_navigation_account_count">%1$d accounts</string>
     <string name="app_name">GraalMail</string>
 
     <!-- Generic -->

@@ -72,6 +72,8 @@ public final class ComposeActivity extends AppCompatActivity {
     private EditText bccField;
     private EditText subjectField;
     private EditText bodyField;
+    private View ccContainer;
+    private View bccContainer;
     private LinearLayout ccBccToggle;
     private TextView showCcBcc;
     private ImageView ccBccArrow;
@@ -180,6 +182,8 @@ public final class ComposeActivity extends AppCompatActivity {
         toField = findViewById(R.id.compose_to);
         ccField = findViewById(R.id.compose_cc);
         bccField = findViewById(R.id.compose_bcc);
+        ccContainer = findViewById(R.id.compose_cc_container);
+        bccContainer = findViewById(R.id.compose_bcc_container);
         subjectField = findViewById(R.id.compose_subject);
         bodyField = findViewById(R.id.compose_body);
 
@@ -241,9 +245,9 @@ public final class ComposeActivity extends AppCompatActivity {
     }
 
     private void toggleCcBcc() {
-        boolean visible = ccField.getVisibility() == View.VISIBLE;
-        ccField.setVisibility(visible ? View.GONE : View.VISIBLE);
-        bccField.setVisibility(visible ? View.GONE : View.VISIBLE);
+        boolean visible = ccContainer.getVisibility() == View.VISIBLE;
+        ccContainer.setVisibility(visible ? View.GONE : View.VISIBLE);
+        bccContainer.setVisibility(visible ? View.GONE : View.VISIBLE);
         showCcBcc.setText(visible ? R.string.compose_show_cc_bcc : R.string.compose_hide_cc_bcc);
         androidx.core.view.ViewCompat.setStateDescription(ccBccToggle,
                 getString(visible ? R.string.compose_show_cc_bcc : R.string.compose_hide_cc_bcc));

@@ -69,7 +69,7 @@ public final class AccountSetupDialog {
     private final Label status = new Label("");
     private final Button saveButton = new Button("Save account");
     private final Map<Node, Label> rowLabels = new java.util.HashMap<>();
-    private final VBox stepContent = new VBox(12);
+    private final VBox stepContent = new VBox();
     private int currentStep;
 
     private AuthorizationRequest pendingAuthorization;
@@ -84,6 +84,7 @@ public final class AccountSetupDialog {
     public AccountSetupDialog(DesktopContext context, Stage stage) {
         this.context = context;
         this.stage = stage;
+        this.stepContent.setSpacing(UiScale.px(stage, 12));
     }
 
     /**
@@ -98,9 +99,9 @@ public final class AccountSetupDialog {
         GridPane connection = new GridPane();
         GridPane authorization = new GridPane();
         for (GridPane grid : new GridPane[]{identity, connection, authorization}) {
-            grid.setHgap(10);
-            grid.setVgap(8);
-            grid.setPadding(new Insets(12));
+            grid.setHgap(UiScale.px(stage, 10));
+            grid.setVgap(UiScale.px(stage, 8));
+            grid.setPadding(UiScale.insets(stage, 12));
         }
         addRow(identity, 0, "Provider", providerChoice);
         addRow(identity, 1, "Email", emailField);
@@ -141,24 +142,27 @@ public final class AccountSetupDialog {
         });
         saveButton.setOnAction(event -> save());
 
-        HBox buttons = new HBox(8, back, continueButton, openBrowser, saveButton, cancel);
+        javafx.scene.layout.FlowPane buttons = new javafx.scene.layout.FlowPane(
+                UiScale.px(stage, 8), UiScale.px(stage, 6),
+                back, continueButton, openBrowser, saveButton, cancel);
         buttons.setAlignment(javafx.geometry.Pos.CENTER_RIGHT);
 
         Label heading = new Label("Add an account");
         heading.getStyleClass().add("compose-heading");
         Label help = new Label("Choose your provider and follow the sign-in steps. Your mail stays in GraalMail's local cache.");
         help.setWrapText(true);
-        VBox content = new VBox(12, heading, help, stepContent, status, buttons);
+        VBox content = new VBox(UiScale.px(stage, 12), heading, help, stepContent, status, buttons);
         content.getStyleClass().add("account-setup");
-        if (new DesktopSettings(context.store()).theme().equals("Dark")) content.getStyleClass().add("dark-theme");
-        content.setPadding(new Insets(16));
+        if (new DesktopSettings(context.store()).darkTheme()) content.getStyleClass().add("dark-theme");
+        content.setPadding(UiScale.insets(stage, 16));
         javafx.scene.control.ScrollPane scroll = new javafx.scene.control.ScrollPane(content);
         scroll.setFitToWidth(true);
         scroll.setHbarPolicy(javafx.scene.control.ScrollPane.ScrollBarPolicy.NEVER);
-        javafx.scene.Scene scene = new javafx.scene.Scene(scroll, 600, 680);
+        javafx.scene.Scene scene = new javafx.scene.Scene(scroll);
         var stylesheet = getClass().getResource("/styles/mail.css");
         if (stylesheet != null) scene.getStylesheets().add(stylesheet.toExternalForm());
         stage.setScene(scene);
+        UiScale.install(scene, stage);
         updateVisibility(ProviderType.GENERIC);
         currentStep = 0;
         updateStep(identity, connection, authorization, openBrowser, back, continueButton);

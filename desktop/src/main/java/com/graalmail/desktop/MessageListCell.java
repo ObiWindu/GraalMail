@@ -14,18 +14,22 @@ import java.util.Locale;
 import javafx.geometry.Insets;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
-import javafx.scene.control.OverrunStyle;
+import javafx.scene.Node;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
+import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
+import javafx.scene.shape.Circle;
 
 /** Renders a scannable message row for the desktop inbox. */
 final class MessageListCell extends ListCell<Message> {
 
     private final boolean compact;
+    private final double scale;
 
-    MessageListCell(boolean compact) {
+    MessageListCell(boolean compact, double scale) {
         this.compact = compact;
+        this.scale = scale;
     }
 
     @Override
@@ -44,43 +48,42 @@ final class MessageListCell extends ListCell<Message> {
         Label date = new Label(formatDate(message.date()));
         date.getStyleClass().add("message-date");
         javafx.scene.layout.Region spacer = new javafx.scene.layout.Region();
-        HBox firstLine = new HBox(8, sender, spacer, date);
-        HBox.setHgrow(spacer, Priority.ALWAYS);
-        Label subject = new Label((message.flagged() ? "★  " : "")
-                + (message.subject().isBlank() ? "(No subject)" : message.subject()));
-        subject.getStyleClass().add("message-subject");
-        if (message.hasAttachments()) {
-            Label attachment = new Label("Attachment");
-            attachment.getStyleClass().add("message-indicator");
-            HBox subjectLine = new HBox(6, subject, attachment);
-            subjectLine.setFillHeight(true);
-            subjectLine.setAccessibleText((message.flagged() ? "Starred. " : "")
-                    + (message.subject().isBlank() ? "No subject" : message.subject())
-                    + ". Has attachment.");
-            subject.setMaxWidth(Double.MAX_VALUE);
-            HBox.setHgrow(subject, Priority.ALWAYS);
-            subjectLine.setMaxWidth(Double.MAX_VALUE);
-            setAccessibleText(accessibleSummary(message));
-            Label snippet = new Label(message.snippet());
-            snippet.getStyleClass().add("message-snippet");
-            snippet.setMaxWidth(Double.MAX_VALUE);
-            snippet.setTextOverrun(OverrunStyle.ELLIPSIS);
-            VBox content = new VBox(4, firstLine, subjectLine, snippet);
-            content.getStyleClass().add("message-cell-content");
-            setPadding(compact ? new Insets(6, 9, 6, 9) : new Insets(11, 10, 11, 10));
-            setGraphic(content);
-            setText(null);
-            getStyleClass().remove("unread-row");
-            if (message.unread()) getStyleClass().add("unread-row");
-            return;
+        StackPane readStatus = new StackPane();
+        readStatus.getStyleClass().add("message-read-status");
+        if (message.unread()) {
+            Circle unreadDot = new Circle(3 * scale);
+            unreadDot.getStyleClass().add("message-unread-dot");
+            readStatus.getChildren().add(unreadDot);
         }
-        Label snippet = new Label(message.snippet());
-        snippet.getStyleClass().add("message-snippet");
-        snippet.setMaxWidth(Double.MAX_VALUE);
-        snippet.setTextOverrun(OverrunStyle.ELLIPSIS);
-        VBox content = new VBox(4, firstLine, subject, snippet);
+        HBox firstLine = new HBox(5 * scale, readStatus, sender, spacer, date);
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+        Label subject = new Label(message.subject().isBlank() ? "(No subject)" : message.subject());
+        subject.getStyleClass().add("message-subject");
+        if (message.unread()) subject.getStyleClass().add("unread");
+        subject.setMaxWidth(Double.MAX_VALUE);
+        HBox.setHgrow(subject, Priority.ALWAYS);
+        HBox subjectLine = new HBox(subject);
+        subjectLine.setMaxWidth(Double.MAX_VALUE);
+        HBox metaLine = new HBox(6 * scale);
+        metaLine.setAlignment(javafx.geometry.Pos.CENTER_RIGHT);
+        metaLine.setMaxWidth(Double.MAX_VALUE);
+        if (message.hasAttachments()) {
+            Node attachment = ThunderbirdIcons.icon("attachment", "message-attachment-icon");
+            attachment.setAccessibleText("Attachment");
+            metaLine.getChildren().add(attachment);
+        }
+        if (message.flagged()) {
+            Node star = ThunderbirdIcons.icon("star", "message-star-icon");
+            star.setAccessibleText("Starred");
+            metaLine.getChildren().add(star);
+        }
+        subjectLine.setFillHeight(true);
+        metaLine.setAccessibleText((message.flagged() ? "Starred. " : "")
+                + (message.hasAttachments() ? "Has attachment." : ""));
+        VBox content = new VBox(1 * scale, firstLine, subjectLine, metaLine);
         content.getStyleClass().add("message-cell-content");
-        setPadding(compact ? new Insets(6, 9, 6, 9) : new Insets(11, 10, 11, 10));
+        setPadding(compact ? new Insets(3 * scale, 8 * scale, 3 * scale, 8 * scale)
+                : new Insets(6 * scale, 8 * scale, 6 * scale, 8 * scale));
         setGraphic(content);
         setText(null);
         setAccessibleText(accessibleSummary(message));

@@ -13,7 +13,6 @@ import android.text.style.ImageSpan;
 import android.view.View;
 import android.view.Menu;
 import android.view.MenuItem;
-import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -24,6 +23,8 @@ import androidx.appcompat.widget.Toolbar;
 
 import com.graalmail.android.AppContext;
 import com.graalmail.android.R;
+import com.google.android.material.button.MaterialButton;
+import com.google.android.material.color.MaterialColors;
 import com.graalmail.core.domain.Account;
 import com.graalmail.core.domain.Attachment;
 import com.graalmail.core.domain.Address;
@@ -254,12 +255,13 @@ public final class MessageViewActivity extends AppCompatActivity {
     private View createAttachmentView(Attachment attachment, Account account) {
         LinearLayout view = new LinearLayout(this);
         view.setOrientation(LinearLayout.HORIZONTAL);
-        view.setPadding(16, 8, 16, 8);
+        view.setPadding(dp(16), dp(8), dp(16), dp(8));
         view.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        view.setBackgroundResource(R.drawable.attachment_surface);
 
         // Icon based on mime type
         ImageView icon = new ImageView(this);
-        icon.setLayoutParams(new LinearLayout.LayoutParams(48, 48));
+        icon.setLayoutParams(new LinearLayout.LayoutParams(dp(48), dp(48)));
         icon.setScaleType(ImageView.ScaleType.CENTER_CROP);
         if (attachment.mimeType().startsWith("image/")) {
             // Load inline image
@@ -282,23 +284,26 @@ public final class MessageViewActivity extends AppCompatActivity {
         LinearLayout info = new LinearLayout(this);
         info.setOrientation(LinearLayout.VERTICAL);
         info.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-        info.setPadding(16, 0, 0, 0);
+        info.setPadding(dp(16), 0, 0, 0);
 
         TextView name = new TextView(this);
         name.setText(attachment.fileName());
-        name.setTextAppearance(android.R.style.TextAppearance_Medium);
+        name.setTextAppearance(R.style.TextAppearance_GraalMail_Account);
 
         TextView size = new TextView(this);
         size.setText(android.text.format.Formatter.formatFileSize(this, attachment.size()));
-        size.setTextAppearance(android.R.style.TextAppearance_Small);
-        size.setTextColor(getResources().getColor(android.R.color.secondary_text_dark));
+        size.setTextAppearance(R.style.TextAppearance_GraalMail_Caption);
+        size.setTextColor(MaterialColors.getColor(info,
+                com.google.android.material.R.attr.colorOnSurfaceVariant));
 
         info.addView(name);
         info.addView(size);
 
         // Download button
-        Button download = new Button(this);
+        MaterialButton download = new MaterialButton(this);
         download.setText(R.string.message_view_download);
+        download.setTextAppearance(R.style.TextAppearance_GraalMail_Button);
+        download.setMinHeight(dp(48));
         download.setOnClickListener(v -> downloadAttachment(attachment));
 
         view.addView(icon);
@@ -306,6 +311,10 @@ public final class MessageViewActivity extends AppCompatActivity {
         view.addView(download);
 
         return view;
+    }
+
+    private int dp(int value) {
+        return Math.round(value * getResources().getDisplayMetrics().density);
     }
 
 private void downloadAttachment(Attachment attachment) {

@@ -12,7 +12,6 @@ import android.widget.TextView;
 import android.widget.Toast;
 import android.widget.LinearLayout;
 import android.view.Gravity;
-import android.util.TypedValue;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
@@ -170,31 +169,30 @@ public final class SettingsActivity extends AppCompatActivity {
         if (configured.isEmpty()) {
             TextView empty = new TextView(this);
             empty.setText(R.string.diagnostics_no_accounts);
-            empty.setPadding(0, dp(12), 0, dp(12));
+            int inset = getResources().getDimensionPixelSize(R.dimen.space_3);
+            empty.setPadding(0, inset, 0, inset);
             accounts.addView(empty);
             return;
         }
         for (Account account : configured) {
             LinearLayout row = new LinearLayout(this);
             row.setGravity(Gravity.CENTER_VERTICAL);
-            row.setPadding(0, dp(4), 0, dp(4));
+            int inset = getResources().getDimensionPixelSize(R.dimen.space_1);
+            row.setPadding(0, inset, 0, inset);
             TextView email = new TextView(this);
             email.setText(account.displayName().isBlank() || account.displayName().equals(account.email())
                     ? account.email() : account.displayName() + "\n" + account.email());
-            email.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
+            email.setTextAppearance(R.style.TextAppearance_GraalMail_Account);
             email.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
             com.google.android.material.button.MaterialButton remove =
                     new com.google.android.material.button.MaterialButton(this);
+            remove.setTextAppearance(R.style.TextAppearance_GraalMail_Button);
             remove.setText(R.string.settings_remove_account);
             remove.setOnClickListener(view -> removeAccount(account));
             row.addView(email);
             row.addView(remove);
             accounts.addView(row);
         }
-    }
-
-    private int dp(int value) {
-        return Math.round(value * getResources().getDisplayMetrics().density);
     }
 
     private void removeAccount(Account account) {

@@ -2,19 +2,21 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="?android:attr/selectableItemBackground"
+    android:layout_marginStart="@dimen/space_2"
+    android:layout_marginEnd="@dimen/space_2"
+    android:background="@drawable/drawer_navigation_row"
     android:gravity="center_vertical"
     android:orientation="horizontal"
     android:minHeight="@dimen/mailbox_folder_row_min"
-    android:paddingStart="32dp"
-    android:paddingTop="8dp"
-    android:paddingEnd="16dp"
-    android:paddingBottom="8dp">
+    android:paddingStart="@dimen/folder_row_inset"
+    android:paddingTop="@dimen/space_2"
+    android:paddingEnd="@dimen/list_row_inset"
+    android:paddingBottom="@dimen/space_2">
 
     <ImageView
         android:id="@+id/folder_icon"
-        android:layout_width="24dp"
-        android:layout_height="24dp"
+        android:layout_width="@dimen/icon_size_medium"
+        android:layout_height="@dimen/icon_size_medium"
         android:layout_marginEnd="@dimen/space_4"
         android:src="@drawable/ic_mail"
         android:tint="?attr/colorOnSurfaceVariant"

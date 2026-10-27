@@ -12,4 +12,15 @@
     <dimen name="mailbox_folder_row_min">56dp</dimen>
     <dimen name="message_row_min">88dp</dimen>
     <dimen name="reader_page_inset">16dp</dimen>
+    <dimen name="navigation_drawer_width">320dp</dimen>
+    <dimen name="navigation_header_height">136dp</dimen>
+    <dimen name="compose_body_min_height">240dp</dimen>
+    <dimen name="content_max_width">640dp</dimen>
+    <dimen name="message_content_max_width">880dp</dimen>
+    <dimen name="list_row_inset">16dp</dimen>
+    <dimen name="list_row_spacing">12dp</dimen>
+    <dimen name="list_bottom_inset">88dp</dimen>
+    <dimen name="message_unread_dot_size">8dp</dimen>
+    <dimen name="icon_size_medium">24dp</dimen>
+    <dimen name="folder_row_inset">40dp</dimen>
 </resources>

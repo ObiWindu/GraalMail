@@ -14,33 +14,39 @@
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
             style="@style/Widget.GraalMail.Toolbar"
-            app:navigationIcon="@android:drawable/ic_menu_revert" />
+            app:navigationIcon="@drawable/ic_arrow_back" />
     </com.google.android.material.appbar.AppBarLayout>
 
-    <ScrollView
+    <com.graalmail.android.ui.AdaptiveFrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1">
 
-        <TextView
-            android:id="@+id/diagnostics_report"
+        <ScrollView
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:fontFamily="monospace"
-            android:padding="16dp"
-            android:textIsSelectable="true" />
-    </ScrollView>
+            android:layout_height="match_parent">
+            <TextView
+                android:id="@+id/diagnostics_report"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:fontFamily="monospace"
+                android:padding="@dimen/screen_inset_phone"
+                android:textIsSelectable="true" />
+        </ScrollView>
+    </com.graalmail.android.ui.AdaptiveFrameLayout>
 
     <com.google.android.material.button.MaterialButton
         android:id="@+id/diagnostics_test"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_margin="16dp"
+        style="@style/Widget.GraalMail.Button"
+        android:layout_margin="@dimen/space_4"
         android:text="@string/diagnostics_test_now" />
 
     <com.google.android.material.button.MaterialButton
         android:id="@+id/diagnostics_copy"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        style="@style/Widget.GraalMail.OutlinedButton"
         android:text="@string/diagnostics_copy_report" />
 </LinearLayout>

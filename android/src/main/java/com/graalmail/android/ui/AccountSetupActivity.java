@@ -51,6 +51,7 @@ public final class AccountSetupActivity extends AppCompatActivity {
     private Spinner providerSpinner;
     private EditText emailField;
     private EditText passwordField;
+    private View passwordContainer;
     private EditText displayNameField;
     private EditText imapHostField;
     private EditText imapPortField;
@@ -84,6 +85,7 @@ public final class AccountSetupActivity extends AppCompatActivity {
         providerSpinner = findViewById(R.id.setup_provider);
         emailField = findViewById(R.id.setup_email);
         passwordField = findViewById(R.id.setup_password);
+        passwordContainer = findViewById(R.id.setup_password_container);
         displayNameField = findViewById(R.id.setup_display_name);
         imapHostField = findViewById(R.id.setup_imap_host);
         imapPortField = findViewById(R.id.setup_imap_port);
@@ -140,7 +142,7 @@ public final class AccountSetupActivity extends AppCompatActivity {
         boolean oauthOnly = provider != null && provider.capabilities().supportsAuthMethod(AuthMethod.OAUTH2)
                 && !passwordAuth;
         authUnavailable = oauthOnly;
-        passwordField.setVisibility(oauthOnly ? View.GONE : View.VISIBLE);
+        passwordContainer.setVisibility(oauthOnly ? View.GONE : View.VISIBLE);
         connectButton.setEnabled(!oauthOnly);
         if (oauthOnly) {
             authExplanation.setText(R.string.setup_oauth_android_unavailable);

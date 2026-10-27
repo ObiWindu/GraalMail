@@ -10,7 +10,7 @@ import java.util.Map;
 /** Creates and migrates the local database schema. */
 public final class SqlSchema {
 
-    public static final int VERSION = 4;
+    public static final int VERSION = 5;
 
     private SqlSchema() {
     }
@@ -39,6 +39,12 @@ public final class SqlSchema {
         }
         if (current < 4) {
             migrateToVersion4(db);
+            db.update("DELETE FROM schema_version");
+            db.update("INSERT INTO schema_version (version) VALUES (?)", 4);
+            current = 4;
+        }
+        if (current < 5) {
+            migrateToVersion5(db);
             db.update("DELETE FROM schema_version");
             db.update("INSERT INTO schema_version (version) VALUES (?)", VERSION);
         }
@@ -118,5 +124,33 @@ public final class SqlSchema {
                     + "is_recovered INTEGER NOT NULL DEFAULT 0)");
             db.execute("CREATE INDEX IF NOT EXISTS idx_drafts_account ON local_drafts (account_id)");
         } catch (RuntimeException ignored) {}
+    }
+
+    private static void migrateToVersion5(SqlDatabase db) {
+        try { db.execute("CREATE TABLE IF NOT EXISTS polymail_notifications ("
+                + "notification_id TEXT PRIMARY KEY, chain_id TEXT NOT NULL, contract_address TEXT NOT NULL, "
+                + "transaction_hash TEXT NOT NULL, log_index INTEGER NOT NULL, block_number INTEGER NOT NULL, "
+                + "block_hash TEXT NOT NULL, message_id TEXT NOT NULL, content_hash TEXT NOT NULL, "
+                + "inbox_tag TEXT NOT NULL, expires_at INTEGER NOT NULL, processing_state TEXT NOT NULL)"); } catch (RuntimeException ignored) {}
+        try { db.execute("CREATE TABLE IF NOT EXISTS polymail_outgoing_queue ("
+                + "operation_id TEXT PRIMARY KEY, message_id TEXT NOT NULL, operation_type TEXT NOT NULL, "
+                + "current_state TEXT NOT NULL, retry_count INTEGER NOT NULL DEFAULT 0, "
+                + "next_attempt_at INTEGER NOT NULL, last_error_code TEXT NOT NULL DEFAULT '', "
+                + "created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)"); } catch (RuntimeException ignored) {}
+        try { db.execute("CREATE TABLE IF NOT EXISTS polymail_storage_receipts ("
+                + "receipt_id TEXT PRIMARY KEY, message_id TEXT NOT NULL, content_hash TEXT NOT NULL, "
+                + "peer_id TEXT NOT NULL, receipt_payload TEXT NOT NULL DEFAULT '', "
+                + "accepted_at INTEGER NOT NULL, retention_until INTEGER NOT NULL, "
+                + "verification_state TEXT NOT NULL)"); } catch (RuntimeException ignored) {}
+        try { db.execute("CREATE TABLE IF NOT EXISTS polymail_blockchain_cursor ("
+                + "chain_id TEXT NOT NULL, contract_address TEXT NOT NULL, last_block INTEGER NOT NULL, "
+                + "block_hash TEXT NOT NULL, PRIMARY KEY (chain_id, contract_address))"); } catch (RuntimeException ignored) {}
+        try { db.execute("CREATE TABLE IF NOT EXISTS polymail_messages ("
+                + "message_id TEXT PRIMARY KEY, mailbox_identity_id TEXT NOT NULL, direction TEXT NOT NULL, "
+                + "sender_identity TEXT NOT NULL, recipient_identity TEXT NOT NULL, created_at INTEGER NOT NULL, "
+                + "expires_at INTEGER NOT NULL, content_hash TEXT NOT NULL, ciphertext_location TEXT NOT NULL DEFAULT '', "
+                + "notification_transaction_hash TEXT NOT NULL DEFAULT '', notification_block_number INTEGER NOT NULL DEFAULT 0, "
+                + "delivery_state TEXT NOT NULL, verification_state TEXT NOT NULL, read_state TEXT NOT NULL, "
+                + "last_error_code TEXT NOT NULL DEFAULT '')"); } catch (RuntimeException ignored) {}
     }
 }

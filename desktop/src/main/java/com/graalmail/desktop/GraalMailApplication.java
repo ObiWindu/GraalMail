@@ -30,10 +30,7 @@ public final class GraalMailApplication extends Application {
         stage.setTitle("GraalMail");
         Scene scene = window.build(stage);
         stage.setScene(scene);
-        stage.setWidth(1200);
-        stage.setHeight(780);
-        stage.setMinWidth(960);
-        stage.setMinHeight(620);
+        UiScale.configure(stage, scene, stage, 1520, 980, 700, 480);
         stage.setOnCloseRequest(event -> context.close());
         stage.show();
     }

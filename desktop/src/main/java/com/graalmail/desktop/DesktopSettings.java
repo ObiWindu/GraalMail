@@ -157,9 +157,31 @@ public final class DesktopSettings {
     }
 
     public String theme() {
-        String value = store.setting(THEME, "Light");
+        String value = store.setting(THEME, "System");
         return "Dark".equalsIgnoreCase(value) ? "Dark"
                 : "System".equalsIgnoreCase(value) ? "System" : "Light";
+    }
+
+    public boolean darkTheme() {
+        String selected = theme();
+        if ("Dark".equals(selected)) return true;
+        if ("Light".equals(selected)) return false;
+        String override = System.getProperty("graalmail.theme", "");
+        if (!override.isBlank()) return "dark".equalsIgnoreCase(override);
+        String gtk = System.getenv("GTK_THEME");
+        String appearance = System.getProperty("apple.awt.application.appearance", "");
+        if (gtk != null && gtk.toLowerCase(java.util.Locale.ROOT).contains("dark")) return true;
+        if (appearance.toLowerCase(java.util.Locale.ROOT).contains("dark")) return true;
+        if (System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win")) {
+            try {
+                return java.util.prefs.Preferences.userRoot()
+                        .node("Software/Microsoft/Windows/CurrentVersion/Themes/Personalize")
+                        .getInt("AppsUseLightTheme", 1) == 0;
+            } catch (RuntimeException ignored) {
+                return false;
+            }
+        }
+        return false;
     }
 
     public void theme(String value) {
@@ -196,7 +218,7 @@ public final class DesktopSettings {
     }
 
     public String listMode() {
-        return "Table".equalsIgnoreCase(store.setting(LIST_MODE, "Cards")) ? "Table" : "Cards";
+        return "Table".equalsIgnoreCase(store.setting(LIST_MODE, "Table")) ? "Table" : "Cards";
     }
 
     public void listMode(String value) {

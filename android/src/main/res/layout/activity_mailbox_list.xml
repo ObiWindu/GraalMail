@@ -28,8 +28,8 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:clipToPadding="false"
-            android:paddingTop="8dp"
-            android:paddingBottom="88dp" />
+            android:paddingTop="@dimen/space_2"
+            android:paddingBottom="@dimen/list_bottom_inset" />
     </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
 
     <TextView
@@ -38,7 +38,7 @@
         android:layout_height="wrap_content"
         android:layout_gravity="center"
         android:gravity="center"
-        android:padding="24dp"
+        android:padding="@dimen/space_5"
         android:text="@string/mailbox_no_accounts"
         android:visibility="gone" />
 
@@ -47,8 +47,8 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|end"
-        android:layout_margin="16dp"
+        android:layout_margin="@dimen/space_4"
         android:contentDescription="@string/mailbox_add_account"
-        android:src="@drawable/ic_mail" />
+        android:src="@drawable/ic_add_account" />
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

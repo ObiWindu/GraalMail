@@ -1,9 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.coordinatorlayout.widget.CoordinatorLayout
+<androidx.drawerlayout.widget.DrawerLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/mailbox_drawer"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
+
+    <androidx.coordinatorlayout.widget.CoordinatorLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
 
     <com.google.android.material.appbar.AppBarLayout
         android:layout_width="match_parent"
@@ -14,7 +19,8 @@
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
             style="@style/Widget.GraalMail.Toolbar"
-            app:navigationIcon="@android:drawable/ic_menu_revert" />
+            app:navigationIcon="@drawable/ic_menu"
+            app:navigationContentDescription="@string/mailbox_open_navigation" />
 
         <HorizontalScrollView
             android:layout_width="match_parent"
@@ -25,49 +31,54 @@
                 android:id="@+id/message_filters"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:paddingStart="12dp"
-                android:paddingEnd="12dp"
-                android:paddingBottom="4dp"
+                android:paddingStart="@dimen/space_3"
+                android:paddingEnd="@dimen/space_3"
+                android:paddingBottom="@dimen/space_1"
                 app:singleSelection="false">
                 <com.google.android.material.chip.Chip
                     android:id="@+id/filter_unread"
                     style="@style/Widget.Material3.Chip.Filter"
                     android:layout_width="wrap_content"
-                    android:layout_height="48dp"
+                    android:layout_height="@dimen/touch_target_min"
                     android:checkable="true"
                     android:text="@string/message_list_unread_indicator" />
                 <com.google.android.material.chip.Chip
                     android:id="@+id/filter_starred"
                     style="@style/Widget.Material3.Chip.Filter"
                     android:layout_width="wrap_content"
-                    android:layout_height="48dp"
+                    android:layout_height="@dimen/touch_target_min"
                     android:checkable="true"
                     android:text="@string/message_list_filter_starred" />
                 <com.google.android.material.chip.Chip
                     android:id="@+id/filter_attachments"
                     style="@style/Widget.Material3.Chip.Filter"
                     android:layout_width="wrap_content"
-                    android:layout_height="48dp"
+                    android:layout_height="@dimen/touch_target_min"
                     android:checkable="true"
                     android:text="@string/message_list_filter_attachments" />
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/filter_clear"
                     style="@style/Widget.Material3.Button.TextButton"
                     android:layout_width="wrap_content"
-                    android:layout_height="48dp"
+                    android:layout_height="@dimen/touch_target_min"
                     android:text="@string/message_list_clear_filters"
                     android:visibility="gone" />
             </com.google.android.material.chip.ChipGroup>
         </HorizontalScrollView>
     </com.google.android.material.appbar.AppBarLayout>
 
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/message_list"
+    <com.graalmail.android.ui.AdaptiveFrameLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:clipToPadding="false"
-        android:paddingBottom="88dp"
-        app:layout_behavior="@string/appbar_scrolling_view_behavior" />
+        app:contentMaxWidth="@dimen/message_content_max_width"
+        app:layout_behavior="@string/appbar_scrolling_view_behavior">
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/message_list"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clipToPadding="false"
+            android:paddingBottom="@dimen/list_bottom_inset" />
+    </com.graalmail.android.ui.AdaptiveFrameLayout>
 
     <TextView
         android:id="@+id/message_empty"
@@ -75,7 +86,7 @@
         android:layout_height="wrap_content"
         android:layout_gravity="center"
         android:gravity="center"
-        android:padding="24dp"
+        android:padding="@dimen/space_5"
         android:text="@string/message_list_empty"
         android:visibility="gone" />
 
@@ -85,8 +96,8 @@
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|center_horizontal"
         android:background="?attr/colorSurfaceContainerHigh"
-        android:paddingHorizontal="16dp"
-        android:paddingVertical="10dp"
+        android:paddingHorizontal="@dimen/space_4"
+        android:paddingVertical="@dimen/space_2"
         android:textAppearance="@style/TextAppearance.GraalMail.Snippet"
         android:visibility="gone" />
 
@@ -95,9 +106,9 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|end"
-        android:layout_margin="16dp"
+        android:layout_margin="@dimen/space_4"
         android:contentDescription="@string/compose_title"
-        android:src="@drawable/ic_mail" />
+        android:src="@drawable/ic_compose" />
 
     <androidx.appcompat.widget.ActionBarContainer
         android:id="@+id/action_mode_bar"
@@ -112,4 +123,11 @@
             android:layout_height="match_parent" />
     </androidx.appcompat.widget.ActionBarContainer>
 
-</androidx.coordinatorlayout.widget.CoordinatorLayout>
+    </androidx.coordinatorlayout.widget.CoordinatorLayout>
+
+    <include
+        android:id="@+id/mailbox_drawer_content"
+        layout="@layout/view_mailbox_drawer"
+        android:layout_gravity="start" />
+
+</androidx.drawerlayout.widget.DrawerLayout>

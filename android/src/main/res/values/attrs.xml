@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <declare-styleable name="AdaptiveFrameLayout">
+        <attr name="contentMaxWidth" format="dimension" />
+    </declare-styleable>
+</resources>

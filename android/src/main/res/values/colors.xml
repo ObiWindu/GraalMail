@@ -1,39 +1,43 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="brand_primary">#315D73</color>
-    <color name="brand_primary_dark">#183746</color>
-    <color name="brand_secondary">#536B77</color>
-    <color name="brand_accent">#A9D2E2</color>
+    <color name="brand_primary">#0060DF</color>
+    <color name="brand_primary_dark">#003EAA</color>
+    <color name="brand_secondary">#4E5975</color>
+    <color name="brand_accent">#8CB4FF</color>
 
     <color name="surface_light">#FFFFFF</color>
-    <color name="surface_dark">#121212</color>
-    <color name="background_light">#F5F5F5</color>
-    <color name="background_dark">#1E1E1E</color>
-    <color name="text_primary_light">#1A1A1A</color>
-    <color name="text_primary_dark">#ECECEC</color>
-    <color name="text_secondary_light">#5F6368</color>
-    <color name="text_secondary_dark">#B0B0B0</color>
+    <color name="surface_dark">#1C1B22</color>
+    <color name="background_light">#F6F7F9</color>
+    <color name="background_dark">#14141A</color>
+    <color name="text_primary_light">#20212A</color>
+    <color name="text_primary_dark">#F4F3FA</color>
+    <color name="text_secondary_light">#5C5F6B</color>
+    <color name="text_secondary_dark">#C4C3CE</color>
 
-    <color name="unread_dot">#1B5E20</color>
+    <color name="unread_dot">#0060DF</color>
     <color name="star_active">#F9A825</color>
     <color name="error">#C62828</color>
     <color name="warning">#EF6C00</color>
 
     <!-- Semantic surface and content tokens shared by every Android screen. -->
-    <color name="surface_container_light">#F4F6F8</color>
-    <color name="surface_container_dark">#20262D</color>
-    <color name="surface_variant_light">#E8EDF0</color>
-    <color name="surface_variant_dark">#343E48</color>
-    <color name="text_variant_light">#4C5A62</color>
-    <color name="text_variant_dark">#BBC6CC</color>
-    <color name="outline_light">#74828A</color>
-    <color name="outline_dark">#89969E</color>
-    <color name="primary_container_light">#D2E8F0</color>
-    <color name="on_primary_container_light">#102D3A</color>
-    <color name="secondary_container_light">#E0E8EC</color>
-    <color name="on_secondary_container_light">#182A33</color>
-    <color name="primary_container_dark">#294958</color>
-    <color name="on_primary_container_dark">#D2E8F0</color>
-    <color name="secondary_container_dark">#364A55</color>
-    <color name="on_secondary_container_dark">#DCE8ED</color>
+    <color name="surface_container_light">#F2F3F7</color>
+    <color name="surface_container_dark">#25242D</color>
+    <color name="surface_variant_light">#E9EAF0</color>
+    <color name="surface_variant_dark">#393842</color>
+    <color name="text_variant_light">#515360</color>
+    <color name="text_variant_dark">#C7C5D0</color>
+    <color name="outline_light">#777985</color>
+    <color name="outline_dark">#92919D</color>
+    <color name="outline_variant_light">#D9DAE1</color>
+    <color name="outline_variant_dark">#44434D</color>
+    <color name="primary_container_light">#DCE7FF</color>
+    <color name="on_primary_container_light">#001B3F</color>
+    <color name="secondary_container_light">#E5E6EF</color>
+    <color name="on_secondary_container_light">#1B1B27</color>
+    <color name="primary_container_dark">#243C68</color>
+    <color name="on_primary_container_dark">#DCE7FF</color>
+    <color name="secondary_container_dark">#343444</color>
+    <color name="on_secondary_container_dark">#E5E6EF</color>
+    <color name="divider_light">#E0E1E7</color>
+    <color name="divider_dark">#35343E</color>
 </resources>

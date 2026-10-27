@@ -20,6 +20,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.view.ActionMode;
 import androidx.appcompat.widget.SearchView;
 import androidx.appcompat.widget.Toolbar;
+import androidx.drawerlayout.widget.DrawerLayout;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -56,6 +57,7 @@ public final class MessageListActivity extends AppCompatActivity {
     private static final int PAGE_SIZE = 50;
 
     private AppContext context;
+    private MailboxNavigation mailboxNavigation;
     private String accountId;
     private String folderId;
     private MessageAdapter adapter;
@@ -98,16 +100,14 @@ public final class MessageListActivity extends AppCompatActivity {
         Toolbar toolbar = findViewById(R.id.toolbar);
         toolbar.setTitle(folderName == null ? getString(R.string.message_list_title) : folderName);
         setSupportActionBar(toolbar);
+        toolbar.setNavigationIcon(R.drawable.ic_menu);
+        toolbar.setNavigationContentDescription(R.string.mailbox_open_navigation);
+        DrawerLayout mailboxDrawer = findViewById(R.id.mailbox_drawer);
+        mailboxNavigation = new MailboxNavigation(this, mailboxDrawer, false, accountId, folderId);
         toolbar.inflateMenu(R.menu.menu_message_list);
-        if (getSupportActionBar() != null) {
-            getSupportActionBar().setDisplayHomeAsUpEnabled(true);
-        }
         toolbar.setNavigationOnClickListener(view -> {
-            if (actionMode != null) {
-                actionMode.finish();
-            } else {
-                finish();
-            }
+            if (actionMode != null) actionMode.finish();
+            else mailboxNavigation.open();
         });
 
         MenuItem searchItem = toolbar.getMenu().findItem(R.id.action_search_messages);

@@ -18,6 +18,7 @@ import androidx.appcompat.widget.Toolbar;
 import androidx.appcompat.widget.SearchView;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+import androidx.drawerlayout.widget.DrawerLayout;
 
 import com.graalmail.android.AppContext;
 import com.graalmail.android.R;
@@ -42,6 +43,7 @@ public final class UnifiedInboxActivity extends AppCompatActivity {
     private static final int PAGE_SIZE = 50;
 
     private AppContext context;
+    private MailboxNavigation mailboxNavigation;
     private UnifiedMessageAdapter adapter;
     private TextView emptyView;
     private TextView pagingStatus;
@@ -77,11 +79,12 @@ public final class UnifiedInboxActivity extends AppCompatActivity {
         Toolbar toolbar = findViewById(R.id.toolbar);
         toolbar.setTitle(R.string.mailbox_unified_inbox);
         setSupportActionBar(toolbar);
+        toolbar.setNavigationIcon(R.drawable.ic_menu);
+        toolbar.setNavigationContentDescription(R.string.mailbox_open_navigation);
+        DrawerLayout mailboxDrawer = findViewById(R.id.mailbox_drawer);
+        mailboxNavigation = new MailboxNavigation(this, mailboxDrawer, true, null, null);
         toolbar.inflateMenu(R.menu.menu_message_list);
-        if (getSupportActionBar() != null) {
-            getSupportActionBar().setDisplayHomeAsUpEnabled(true);
-        }
-        toolbar.setNavigationOnClickListener(view -> finish());
+        toolbar.setNavigationOnClickListener(view -> mailboxNavigation.open());
 
         messageList = findViewById(R.id.message_list);
         messageList.setLayoutManager(new LinearLayoutManager(this));

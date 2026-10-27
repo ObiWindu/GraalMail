@@ -6,10 +6,10 @@
     android:gravity="center_vertical"
     android:orientation="horizontal"
     android:background="?android:attr/selectableItemBackground"
-    android:paddingStart="16dp"
-    android:paddingTop="8dp"
-    android:paddingEnd="8dp"
-    android:paddingBottom="8dp">
+    android:paddingStart="@dimen/list_row_inset"
+    android:paddingTop="@dimen/space_2"
+    android:paddingEnd="@dimen/space_1"
+    android:paddingBottom="@dimen/space_2">
 
     <TextView
         android:id="@+id/account_name"
@@ -23,8 +23,8 @@
         android:layout_width="@dimen/touch_target_min"
         android:layout_height="@dimen/touch_target_min"
         android:background="?attr/selectableItemBackgroundBorderless"
-        android:padding="12dp"
-        android:src="@android:drawable/arrow_down_float"
+        android:padding="@dimen/space_3"
+        android:src="@drawable/ic_expand"
         android:tint="?attr/colorOnSurfaceVariant"
         android:contentDescription="@string/mailbox_collapse_account"
         android:scaleType="centerInside" />
