@@ -117,9 +117,10 @@ public final class MainWindow {
     private final javafx.scene.layout.StackPane readerAvatarHost = new javafx.scene.layout.StackPane();
     private final Button readerDetailsToggle = new Button("Show details");
     private VBox readerHeader;
-    private final javafx.scene.layout.FlowPane attachmentActions = new javafx.scene.layout.FlowPane(
-            UiScale.px(null, 8), UiScale.px(null, 8));
+    private final javafx.scene.layout.FlowPane attachmentActions = new javafx.scene.layout.FlowPane(8, 8);
     private final Label status = new Label("Ready");
+    private final Label polyMailStatus = new Label("");
+    private DesktopPolyMailService polyMail;
     private final Label viewTitle = new Label("Unified Inbox");
     private final Label messageCount = new Label("0 messages");
     private final ToggleButton unreadFilter = new ToggleButton("Unread");
@@ -150,7 +151,7 @@ public final class MainWindow {
     private VBox readerPane;
     private VBox spacesToolbar;
     private CheckMenuItem showSpacesToolbar;
-    private javafx.scene.layout.FlowPane readerActionsPane;
+    private javafx.scene.layout.HBox readerActionsPane;
     private String activeLayoutMode;
     private Scene mainScene;
     private boolean remoteImagesAllowed;
@@ -228,6 +229,10 @@ public final class MainWindow {
             boolean editingText = event.getTarget() instanceof TextInputControl
                     || (event.getTarget() instanceof Node target && isInsideReader(target));
             if (editingText) return;
+            boolean singleKeySafe = event.getTarget() == messageList
+                    || event.getTarget() == messageTable
+                    || (event.getTarget() instanceof Node target
+                    && (isInsideMessageList(target) || target == root));
             if (event.isControlDown() && event.getCode() == KeyCode.N) {
                 composeNewMessage();
                 event.consume();
@@ -252,28 +257,28 @@ public final class MainWindow {
                 searchField.requestFocus();
                 searchField.selectAll();
                 event.consume();
-            } else if (!event.isControlDown() && !event.isMetaDown() && event.getCode() == KeyCode.C) {
+            } else if (singleKeySafe && !event.isControlDown() && !event.isMetaDown() && event.getCode() == KeyCode.C) {
                 composeNewMessage();
                 event.consume();
-            } else if (!event.isControlDown() && !event.isMetaDown() && event.getCode() == KeyCode.E) {
+            } else if (singleKeySafe && !event.isControlDown() && !event.isMetaDown() && event.getCode() == KeyCode.E) {
                 archiveSelected();
                 event.consume();
-            } else if (!event.isControlDown() && !event.isMetaDown() && event.getCode() == KeyCode.U) {
+            } else if (singleKeySafe && !event.isControlDown() && !event.isMetaDown() && event.getCode() == KeyCode.U) {
                 toggleReadSelected();
                 event.consume();
-            } else if (!event.isControlDown() && !event.isMetaDown() && event.getCode() == KeyCode.S) {
+            } else if (singleKeySafe && !event.isControlDown() && !event.isMetaDown() && event.getCode() == KeyCode.S) {
                 toggleStarSelected();
                 event.consume();
-            } else if (!event.isControlDown() && !event.isMetaDown() && event.getCode() == KeyCode.J) {
+            } else if (singleKeySafe && !event.isControlDown() && !event.isMetaDown() && event.getCode() == KeyCode.J) {
                 selectAdjacent(1);
                 event.consume();
-            } else if (!event.isControlDown() && !event.isMetaDown() && event.getCode() == KeyCode.K) {
+            } else if (singleKeySafe && !event.isControlDown() && !event.isMetaDown() && event.getCode() == KeyCode.K) {
                 selectAdjacent(-1);
                 event.consume();
-            } else if (!event.isControlDown() && !event.isMetaDown() && event.getCode() == KeyCode.A) {
+            } else if (singleKeySafe && !event.isControlDown() && !event.isMetaDown() && event.getCode() == KeyCode.A) {
                 archiveSelected();
                 event.consume();
-            } else if (!event.isControlDown() && !event.isMetaDown() && event.getCode() == KeyCode.OPEN_BRACKET) {
+            } else if (singleKeySafe && !event.isControlDown() && !event.isMetaDown() && event.getCode() == KeyCode.OPEN_BRACKET) {
                 settings.showNavigation(!settings.showNavigation());
                 rebuildWorkspace();
                 event.consume();
@@ -293,6 +298,7 @@ public final class MainWindow {
         scene.widthProperty().addListener((observable, oldWidth, newWidth) -> {
             if (!effectiveLayoutMode().equals(activeLayoutMode)) rebuildWorkspace();
         });
+        javafx.application.Platform.runLater(this::startPolyMail);
         return scene;
     }
 
@@ -620,20 +626,26 @@ public final class MainWindow {
         readerStarButton.setOnAction(event -> toggleStarSelected());
         readerArchiveButton.setText("Archive");
         readerArchiveButton.setOnAction(event -> archiveSelected());
+        readerJunkButton.setText("Junk");
         readerJunkButton.setOnAction(event -> junkSelected());
         readerDeleteButton.setText("Delete");
         readerDeleteButton.setOnAction(event -> deleteSelected());
         readerReplyButton.setGraphic(ThunderbirdIcons.icon("reply", "toolbar-icon"));
         readerForwardButton.setGraphic(ThunderbirdIcons.icon("forward", "toolbar-icon"));
+        readerUnreadButton.setGraphic(ThunderbirdIcons.icon("unread", "toolbar-icon"));
+        readerStarButton.setGraphic(ThunderbirdIcons.icon("star", "toolbar-icon"));
+        readerJunkButton.setGraphic(ThunderbirdIcons.icon("spam", "toolbar-icon"));
         readerArchiveButton.setGraphic(ThunderbirdIcons.icon("archive", "toolbar-icon"));
         readerDeleteButton.setGraphic(ThunderbirdIcons.icon("trash", "toolbar-icon"));
         readerReplyButton.getStyleClass().add("proton-reply");
         moveButton.setOnAction(event -> showMoveMenu());
         moveButton.setGraphic(ThunderbirdIcons.icon("folder", "toolbar-icon"));
-        previousButton.setText("");
+        previousButton.setText("‹ Prev");
         previousButton.setGraphic(ThunderbirdIcons.icon("collapse", "toolbar-icon"));
-        nextButton.setText("");
-        nextButton.setGraphic(ThunderbirdIcons.icon("collapse", "toolbar-icon"));
+        nextButton.setText("Next ›");
+        javafx.scene.Group nextIcon = ThunderbirdIcons.icon("collapse", "toolbar-icon");
+        nextIcon.setRotate(180);
+        nextButton.setGraphic(nextIcon);
         previousButton.setOnAction(event -> selectAdjacent(-1));
         nextButton.setOnAction(event -> selectAdjacent(1));
         remoteImagesButton.setOnAction(event -> {
@@ -658,10 +670,12 @@ public final class MainWindow {
                 javafx.geometry.Side.BOTTOM, 0, 0));
         javafx.scene.layout.Region readerSpacer = new javafx.scene.layout.Region();
         HBox.setHgrow(readerSpacer, Priority.ALWAYS);
-        readerActionsPane = new javafx.scene.layout.FlowPane(
-                UiScale.px(owner, 7), UiScale.px(owner, 7), readerReplyButton, readerForwardButton,
+        readerActionsPane = new HBox(
+                UiScale.px(owner, 7), readerReplyButton, readerForwardButton,
+                readerUnreadButton, readerStarButton,
                 readerSpacer, previousButton, nextButton,
-                readerArchiveButton, moveButton, readerDeleteButton, moreActions);
+                readerArchiveButton, readerJunkButton, moveButton, readerDeleteButton, moreActions);
+        readerActionsPane.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
         readerActionsPane.setPadding(UiScale.insets(owner, 10));
         readerActionsPane.getStyleClass().add("reader-actions");
         readerReplyButton.setAccessibleText("Reply to selected message");
@@ -981,7 +995,9 @@ public final class MainWindow {
     private HBox buildStatusBar() {
         Label connection = new Label("Local cache");
         connection.getStyleClass().add("connection-indicator");
-        HBox box = new HBox(UiScale.px(owner, 10), connection, status);
+        polyMailStatus.getStyleClass().add("polymail-indicator");
+        polyMailStatus.setAccessibleText("PolyMail network status");
+        HBox box = new HBox(UiScale.px(owner, 10), connection, status, polyMailStatus);
         HBox.setHgrow(status, Priority.ALWAYS);
         box.setPadding(UiScale.insets(owner, 7, 12, 7, 12));
         box.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
@@ -1044,6 +1060,26 @@ public final class MainWindow {
         return null;
     }
 
+    private void selectFolderInTree(Account account, Folder folder) {
+        if (folderTree.getRoot() == null || folder == null) {
+            return;
+        }
+        for (TreeItem<Object> accountItem : folderTree.getRoot().getChildren()) {
+            if (accountItem.getValue() instanceof Account candidate
+                    && candidate.id().equals(account.id())) {
+                accountItem.setExpanded(true);
+                for (TreeItem<Object> folderItem : accountItem.getChildren()) {
+                    if (folderItem.getValue() instanceof Folder candidateFolder
+                            && candidateFolder.id().equals(folder.id())) {
+                        folderTree.getSelectionModel().select(folderItem);
+                        folderTree.scrollTo(folderTree.getRow(folderItem));
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
     private List<TreeItem<Object>> buildTreeItems() {
         List<TreeItem<Object>> items = new java.util.ArrayList<>();
         TreeItem<Object> unified = new TreeItem<>(UNIFIED_INBOX);
@@ -1099,15 +1135,27 @@ public final class MainWindow {
             selectedAccount.set(account);
             refreshSearchScope();
             List<Folder> folders = context.store().listFolders(account.id());
-            selectedFolder.set(folders.stream().filter(folder -> folder.id().equals(settings.lastFolderId()))
-                    .findFirst().orElseGet(() -> folders.stream()
-                            .filter(folder -> folder.type() == com.graalmail.core.domain.FolderType.INBOX)
-                            .findFirst().orElse(null)));
+            Folder preferred = folders.stream()
+                    .filter(folder -> folder.id().equals(settings.lastFolderId()))
+                    .findFirst().orElse(null);
+            final String preferredId = preferred == null ? null : preferred.id();
+            boolean preferredBelongsToAccount = preferredId != null
+                    && folders.stream().anyMatch(folder -> folder.id().equals(preferredId));
+            if (!preferredBelongsToAccount) {
+                preferred = folders.stream()
+                        .filter(folder -> folder.type() == com.graalmail.core.domain.FolderType.INBOX)
+                        .findFirst().orElse(folders.isEmpty() ? null : folders.getFirst());
+            }
+            selectedFolder.set(preferred);
             messages.clear();
             status.setText(account.email());
             viewTitle.setText(account.displayName().isBlank() ? account.email() : account.displayName());
             settings.lastAccountId(account.id());
-            if (selectedFolder.get() != null) loadMessages(account.id(), selectedFolder.get().id());
+            if (selectedFolder.get() != null) {
+                settings.lastFolderId(selectedFolder.get().id());
+                loadMessages(account.id(), selectedFolder.get().id());
+            }
+            selectFolderInTree(account, selectedFolder.get());
         } else if (value instanceof Folder folder) {
             unifiedInboxSelected = false;
             selectedFolder.set(folder);
@@ -1119,6 +1167,12 @@ public final class MainWindow {
                 viewTitle.setText(folder.name());
                 loadMessages(account.id(), folder.id());
             }
+        } else {
+            messages.clear();
+            messageCount.setText("0 messages");
+            viewTitle.setText("GraalMail");
+            status.setText("Add an account to get started.");
+            onMessageSelected(null);
         }
     }
 
@@ -1283,7 +1337,7 @@ public final class MainWindow {
         updateReaderControls(message);
         attachmentActions.getChildren().clear();
         if (message == null) {
-            readerState.setText(" ");
+            setReaderState("");
             readerHeader.setVisible(false);
             readerHeader.setManaged(false);
             remoteImagesAllowed = false;
@@ -1338,7 +1392,7 @@ public final class MainWindow {
                 }
                 currentMessage = displayMessage;
                 showReaderHeader(displayMessage);
-                readerState.setText(pendingState);
+                setReaderState(pendingState);
                 boolean remoteImages = containsRemoteImages(displayMessage.bodyHtml());
                 remoteImagesButton.setText("Show remote images for this message");
                 remoteImagesButton.setVisible(remoteImages);
@@ -1347,6 +1401,13 @@ public final class MainWindow {
                 showAttachments(displayMessage);
             });
         });
+    }
+
+    private void setReaderState(String text) {
+        boolean empty = text == null || text.isBlank();
+        readerState.setText(empty ? "" : text);
+        readerState.setVisible(!empty);
+        readerState.setManaged(!empty);
     }
 
     private String render(Message message) {
@@ -1363,7 +1424,7 @@ public final class MainWindow {
                 .map(action -> action.state() == PendingAction.State.FAILED
                         ? "A mail action failed: " + action.lastError()
                         : "This change is waiting to synchronise")
-                .findFirst().orElse(" ");
+                .findFirst().orElse("");
     }
 
     private static boolean containsRemoteImages(String html) {
@@ -1669,16 +1730,30 @@ public final class MainWindow {
     }
 
     private List<Message> selectedMessages() {
-        List<Message> selected = new ArrayList<>(messageList.getSelectionModel().getSelectedItems());
-        if (selected.isEmpty() && messageList.getSelectionModel().getSelectedItem() != null)
-            selected.add(messageList.getSelectionModel().getSelectedItem());
+        boolean tableMode = "Table".equalsIgnoreCase(settings.listMode());
+        List<Message> selected = new ArrayList<>(tableMode
+                ? messageTable.getSelectionModel().getSelectedItems()
+                : messageList.getSelectionModel().getSelectedItems());
+        if (selected.isEmpty()) {
+            Message current = tableMode
+                    ? messageTable.getSelectionModel().getSelectedItem()
+                    : messageList.getSelectionModel().getSelectedItem();
+            if (current != null) {
+                selected.add(current);
+            } else {
+                Message fallback = !tableMode
+                        ? messageTable.getSelectionModel().getSelectedItem()
+                        : messageList.getSelectionModel().getSelectedItem();
+                if (fallback != null) {
+                    selected.add(fallback);
+                }
+            }
+        }
         return selected;
     }
 
     private void deleteSelected() {
-        List<Message> selected = new ArrayList<>(messageList.getSelectionModel().getSelectedItems());
-        if (selected.isEmpty() && messageList.getSelectionModel().getSelectedItem() != null)
-            selected.add(messageList.getSelectionModel().getSelectedItem());
+        List<Message> selected = selectedMessages();
         if (selected.isEmpty()) return;
         boolean permanent = selected.stream().anyMatch(message -> context.store().listFolders(message.accountId()).stream()
                 .noneMatch(folder -> folder.type() == com.graalmail.core.domain.FolderType.TRASH));
@@ -1687,7 +1762,10 @@ public final class MainWindow {
                     "At least one selected account has no Trash folder. Delete those messages permanently?");
             confirm.setTitle("Delete message");
             confirm.setHeaderText(null);
-            if (confirm.showAndWait().filter(button -> button == javafx.scene.control.ButtonType.OK).isEmpty()) return;
+            boolean maximized = UiScale.isMaximized(owner);
+            var choice = confirm.showAndWait();
+            UiScale.restoreMaximized(owner, maximized);
+            if (choice.filter(button -> button == javafx.scene.control.ButtonType.OK).isEmpty()) return;
         }
         int movedToTrash = 0;
         for (Message message : selected) {
@@ -1722,11 +1800,93 @@ public final class MainWindow {
         searchDelay.stop();
         dividerSaveDelay.stop();
         notifier.dispose();
+        if (polyMail != null) {
+            try {
+                polyMail.close();
+            } catch (RuntimeException e) {
+                LOG.warn("PolyMail service did not stop cleanly: {}", e.getMessage());
+            }
+            polyMail = null;
+        }
         io.shutdownNow();
+    }
+
+    /** Starts the PolyMail node from settings; safe to call when disabled. */
+    public void startPolyMail() {
+        stopPolyMail();
+        try {
+            var service = DesktopPolyMailService.fromSettings(context.paths(), settings);
+            if (service.isEmpty()) {
+                Platform.runLater(() -> {
+                    polyMailStatus.setText(settings.polyMailEnabled() ? "PolyMail: not configured" : "");
+                });
+                return;
+            }
+            polyMail = service.get();
+            compose.polyMailService(polyMail);
+            polyMail.node().addListener(new com.graalmail.p2p.PolyMailNode.NodeListener() {
+                @Override
+                public void onStatus(com.graalmail.p2p.transport.NetworkStatus status) {
+                    Platform.runLater(() -> polyMailStatus.setText("PolyMail: " + status));
+                }
+
+                @Override
+                public void onScan(com.graalmail.p2p.delivery.ScanReport report) {
+                    Platform.runLater(() -> {
+                        if (report.delivered() > 0) {
+                            polyMailStatus.setText("PolyMail: " + report.delivered() + " new");
+                            reloadCurrentView();
+                            if (settings.notificationsEnabled()) {
+                                notifier.notifyNewMail(report.delivered());
+                            }
+                        } else {
+                            polyMailStatus.setText("PolyMail: up to date");
+                        }
+                    });
+                }
+
+                @Override
+                public void onError(String context, Throwable err) {
+                    Platform.runLater(() -> polyMailStatus.setText("PolyMail: "
+                            + (err.getMessage() == null ? context : err.getMessage())));
+                }
+            });
+            polyMailStatus.setText("PolyMail: starting…");
+            polyMail.start();
+        } catch (RuntimeException e) {
+            LOG.warn("PolyMail could not be started: {}", e.getMessage());
+            polyMailStatus.setText("PolyMail: unavailable");
+        }
+    }
+
+    private void stopPolyMail() {
+        if (polyMail != null) {
+            try {
+                polyMail.close();
+            } catch (RuntimeException e) {
+                LOG.debug("PolyMail stop: {}", e.getMessage());
+            }
+            polyMail = null;
+            compose.polyMailService(null);
+        }
+    }
+
+    /** One PolyMail scan pass for manual refresh / RPC reconnect. */
+    public void scanPolyMail() {
+        if (polyMail == null) {
+            return;
+        }
+        polyMailStatus.setText("PolyMail: scanning…");
+        polyMail.scan().whenComplete((report, err) -> {
+            if (err != null) {
+                LOG.warn("PolyMail scan failed: {}", err.getMessage());
+            }
+        });
     }
 
     private void syncNow() {
         status.setText("Synchronising…");
+        scanPolyMail();
         Thread worker = new Thread(() -> {
             try {
                 var reports = context.syncEngine().syncAll();
@@ -1766,6 +1926,13 @@ public final class MainWindow {
         return false;
     }
 
+    private boolean isInsideMessageList(Node node) {
+        for (Node current = node; current != null; current = current.getParent()) {
+            if (current == messageList || current == messageTable || current == listPane) return true;
+        }
+        return false;
+    }
+
     private void composeNewMessage() {
         Account account = selectedAccount.get();
         if (account == null) {
@@ -1775,7 +1942,10 @@ public final class MainWindow {
             showInfo("No account is configured yet. Add an account first.");
             return;
         }
+        boolean maximized = UiScale.isMaximized(owner);
         compose.newMessage(account, owner);
+        // Modeless window: re-check on the next pulse, right after the open.
+        javafx.application.Platform.runLater(() -> UiScale.restoreMaximized(owner, maximized));
     }
 
     private void replyToSelected() {
@@ -1785,7 +1955,9 @@ public final class MainWindow {
             showInfo("Select a message first.");
             return;
         }
+        boolean maximized = UiScale.isMaximized(owner);
         compose.reply(account, message, owner);
+        javafx.application.Platform.runLater(() -> UiScale.restoreMaximized(owner, maximized));
     }
 
     private void forwardSelected() {
@@ -1795,7 +1967,9 @@ public final class MainWindow {
             showInfo("Select a message first.");
             return;
         }
+        boolean maximized = UiScale.isMaximized(owner);
         compose.forward(account, message, owner);
+        javafx.application.Platform.runLater(() -> UiScale.restoreMaximized(owner, maximized));
     }
 
     private Account firstAccount() {
@@ -1804,11 +1978,14 @@ public final class MainWindow {
     }
 
     private void showSettings() {
+        boolean maximized = UiScale.isMaximized(owner);
         new SettingsDialog(settings, owner, isDarkTheme()).show();
+        UiScale.restoreMaximized(owner, maximized);
         messageList.setCellFactory(view -> new MessageListCell(settings.compactDensity(), UiScale.scale(owner)));
         listModePicker.setValue(settings.listMode());
         updateListDisplayMode();
         rebuildWorkspace();
+        startPolyMail();
         if (mainScene != null) {
             if (isDarkTheme()) {
                 if (!mainScene.getRoot().getStyleClass().contains("dark-theme"))
@@ -1819,22 +1996,30 @@ public final class MainWindow {
     }
 
     private void showDiagnostics() {
+        boolean maximized = UiScale.isMaximized(owner);
         new DiagnosticsDialog(context, isDarkTheme()).show(owner);
+        // Modeless: restore on the next pulse if the window manager dropped
+        // the maximized state while opening the dialog.
+        javafx.application.Platform.runLater(() -> UiScale.restoreMaximized(owner, maximized));
     }
 
     private void showInfo(String message) {
+        boolean maximized = UiScale.isMaximized(owner);
         Alert alert = new Alert(Alert.AlertType.INFORMATION);
         alert.setTitle("GraalMail");
         alert.setHeaderText(null);
         alert.setContentText(message);
         alert.showAndWait();
+        UiScale.restoreMaximized(owner, maximized);
     }
 
     private void addAccount() {
+        boolean maximized = UiScale.isMaximized(owner);
         Stage stage = new Stage();
         stage.setTitle("Add account");
         AccountSetupDialog dialog = new AccountSetupDialog(context, stage);
         dialog.showAndWait(owner);
+        UiScale.restoreMaximized(owner, maximized);
         refreshFolders();
     }
 
@@ -1859,7 +2044,10 @@ public final class MainWindow {
         confirm.setHeaderText("Remove " + name + "?");
         confirm.setContentText("The account, its cached messages and its stored credentials "
                 + "are deleted from this machine. Mail on the server is not touched.");
-        if (confirm.showAndWait().filter(button -> button == javafx.scene.control.ButtonType.OK)
+        boolean maximized = UiScale.isMaximized(owner);
+        var choice = confirm.showAndWait();
+        UiScale.restoreMaximized(owner, maximized);
+        if (choice.filter(button -> button == javafx.scene.control.ButtonType.OK)
                 .isEmpty()) {
             return;
         }
@@ -1890,15 +2078,18 @@ public final class MainWindow {
     }
 
     private void showAbout() {
+        boolean maximized = UiScale.isMaximized(owner);
         Alert alert = new Alert(Alert.AlertType.INFORMATION);
         alert.setTitle("GraalMail");
         alert.setHeaderText("GraalMail desktop");
         alert.setContentText("A cross platform email client. Data directory: "
                 + context.paths().baseDirectory());
         alert.showAndWait();
+        UiScale.restoreMaximized(owner, maximized);
     }
 
     private void showShortcuts() {
+        boolean maximized = UiScale.isMaximized(owner);
         Alert alert = new Alert(Alert.AlertType.INFORMATION);
         alert.setTitle("Keyboard shortcuts");
         alert.setHeaderText("Work faster without the mouse");
@@ -1910,6 +2101,7 @@ public final class MainWindow {
                 Del or # — Delete        R — Reply   Shift+F — Forward
                 Ctrl+Shift+R — Sync      [ — Toggle folder pane""");
         alert.showAndWait();
+        UiScale.restoreMaximized(owner, maximized);
     }
 
 }

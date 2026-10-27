@@ -90,11 +90,45 @@
         android:text="@string/message_list_empty"
         android:visibility="gone" />
 
+    <LinearLayout
+        android:id="@+id/message_loading"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:visibility="gone"
+        android:contentDescription="@string/message_list_loading">
+
+        <ProgressBar
+            android:layout_width="@dimen/touch_target_min"
+            android:layout_height="@dimen/touch_target_min"
+            android:indeterminate="true" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/space_3"
+            android:text="@string/message_list_loading" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/message_offline_notice"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="?attr/colorSurfaceVariant"
+        android:gravity="center"
+        android:padding="@dimen/space_2"
+        android:text="@string/message_list_offline_notice"
+        android:textAppearance="@style/TextAppearance.GraalMail.Snippet"
+        android:visibility="gone" />
+
     <TextView
         android:id="@+id/message_paging_status"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginBottom="@dimen/fab_offset"
         android:background="?attr/colorSurfaceContainerHigh"
         android:paddingHorizontal="@dimen/space_4"
         android:paddingVertical="@dimen/space_2"

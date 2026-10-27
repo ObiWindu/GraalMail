@@ -18,25 +18,28 @@ final class MessageBodyRenderer {
     private MessageBodyRenderer() { }
 
     static String render(Message message, boolean allowRemoteImages, boolean dark) {
+        // Palette matches styles/mail.css (:root and .dark-theme) so the reader
+        // never flashes a foreign background in either theme.
         String text = dark ? "#EFEDF7" : "#1B1340";
-        String background = dark ? "#1E1C2A" : "#ffffff";
+        String background = dark ? "#1E1830" : "#ffffff";
         String muted = dark ? "#9B96B3" : "#6E6A85";
         String accent = dark ? "#A37CFF" : "#7B3FE4";
         String rule = dark ? "#34304A" : "#E6E1F5";
         StringBuilder html = new StringBuilder();
-        html.append("<html><head><meta charset='UTF-8'><style>body{font-family:system-ui,-apple-system,'Segoe UI',sans-serif;")
+        html.append("<html><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width,initial-scale=1'>")
+                .append("<style>body{font-family:system-ui,-apple-system,'Segoe UI',sans-serif;")
                 .append("font-size:14.5px;line-height:1.7;color:").append(text)
                 .append(";background:").append(background)
-                .append(";margin:28px;max-width:880px;}h1{font-size:22px;line-height:1.35;margin:0 0 16px;letter-spacing:-0.01em}")
+                .append(";margin:0 auto;padding:20px;max-width:100%;box-sizing:border-box;}")
                 .append(".meta{color:").append(muted).append(";font-size:13px;line-height:1.6}")
                 .append("a{color:").append(accent).append("}")
-                .append("hr{border:0;border-top:1px solid ").append(rule).append(";margin:20px 0}")
+                .append("hr{border:0;border-top:1px solid ").append(rule).append(";margin:16px 0}")
                 .append("blockquote{border-left:3px solid ").append(rule)
                 .append(";margin:12px 0;padding:4px 0 4px 14px;color:").append(muted).append("}")
                 .append("pre{white-space:pre-wrap;word-wrap:break-word;font:inherit;background:")
-                .append(dark ? "#262433" : "#F6F4FC").append(";border-radius:10px;padding:14px 16px}</style></head><body>");
-        html.append("<h1>").append(escape(message.subject().isBlank() ? "(No subject)" : message.subject()))
-                .append("</h1><p class='meta'><b>From</b> ").append(escape(formatAddress(message.from())))
+                .append(dark ? "#262433" : "#F6F4FC").append(";border-radius:10px;padding:14px 16px}")
+                .append("p{margin:0 0 12px}img{max-width:100%;height:auto}</style></head><body>");
+        html.append("<p class='meta'><b>From</b> ").append(escape(formatAddress(message.from())))
                 .append("<br>");
         appendAddresses(html, "To", message.to());
         appendAddresses(html, "Cc", message.cc());
@@ -49,7 +52,17 @@ final class MessageBodyRenderer {
         String bodyHtml = message.bodyHtml() == null ? "" : message.bodyHtml();
         String bodyText = message.bodyText() == null ? "" : message.bodyText();
         if (!bodyHtml.isBlank()) html.append(HtmlSanitizer.sanitize(bodyHtml, allowRemoteImages));
-        else html.append("<pre>").append(escape(bodyText)).append("</pre>");
+        else if (bodyText.isBlank()) html.append("<p class='meta'>This message has no content.</p>");
+        else {
+            String[] paragraphs = bodyText.split("\\r?\\n\\r?\\n");
+            for (String paragraph : paragraphs) {
+                String single = paragraph.replace('\r', ' ').replace('\n', ' ').trim();
+                if (single.isEmpty()) {
+                    continue;
+                }
+                html.append("<p>").append(escape(single)).append("</p>");
+            }
+        }
         return html.append("</body></html>").toString();
     }
 

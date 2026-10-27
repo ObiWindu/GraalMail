@@ -350,6 +350,11 @@
 .reader-details-toggle { -fx-padding: 0.1538em 0.2308em; -fx-background-color: transparent; -fx-text-fill: -fx-gm-accent; }
 .reader-recipient-details { -fx-padding: 0.6154em 0.7692em; -fx-background-color: -fx-gm-subtle; -fx-background-radius: 0.6154em; -fx-text-fill: -fx-gm-secondary; }
 .reader-state { -fx-padding: 0.4615em 0.7692em; -fx-background-color: -fx-gm-warning-bg; -fx-background-radius: 0.6154em; -fx-text-fill: -fx-gm-warning-text; }
+.reader-state:empty { -fx-padding: 0; -fx-background-color: transparent; }
+.form-status { -fx-wrap-text: true; -fx-text-fill: -fx-gm-secondary; }
+.form-status-error { -fx-text-fill: -fx-gm-danger; -fx-font-weight: 700; }
+.form-status-ok { -fx-text-fill: -fx-gm-success; }
+.polymail-status, .polymail-indicator { -fx-text-fill: -fx-gm-accent; -fx-font-size: 0.9231em; }
 .reader-attachments { -fx-padding: 0.5385em 0 0; -fx-hgap: 0.6154em; -fx-vgap: 0.6154em; }
 .status-bar { -fx-background-color: transparent; -fx-border-color: transparent; -fx-alignment: center-left; -fx-padding: 0.4615em 0.6154em 0; }
 .status-bar .label { -fx-text-fill: -fx-gm-muted; }
@@ -411,6 +416,8 @@
     -fx-border-color: -fx-gm-accent;
     -fx-border-width: 0.1538em;
     -fx-border-radius: 0.6154em;
+    -fx-background-insets: 0, 0;
+    -fx-border-insets: -0.0769em;
     -fx-effect: none;
 }
 

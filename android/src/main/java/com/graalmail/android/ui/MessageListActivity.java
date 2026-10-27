@@ -181,6 +181,47 @@ public final class MessageListActivity extends AppCompatActivity {
         });
 
         findViewById(R.id.message_compose).setOnClickListener(view -> compose());
+        com.graalmail.android.work.AndroidPolyMail.refresh(this, context.store());
+        observePolyMail();
+    }
+
+    private com.graalmail.p2p.PolyMailNode.NodeListener polyMailListener;
+
+    private void observePolyMail() {
+        com.graalmail.p2p.PolyMailNode node =
+                com.graalmail.android.work.AndroidPolyMail.node();
+        if (node == null || polyMailListener != null) {
+            return;
+        }
+        polyMailListener = new com.graalmail.p2p.PolyMailNode.NodeListener() {
+            @Override
+            public void onStatus(com.graalmail.p2p.transport.NetworkStatus status) {
+                runOnUiThread(() -> pagingStatus.setText(getString(
+                        R.string.message_list_polymail_status, status.toString())));
+            }
+
+            @Override
+            public void onScan(com.graalmail.p2p.delivery.ScanReport report) {
+                runOnUiThread(() -> {
+                    if (report.delivered() > 0) {
+                        loadFiltered();
+                        Toast.makeText(MessageListActivity.this,
+                                getResources().getQuantityString(
+                                        R.plurals.message_list_polymail_new,
+                                        report.delivered(), report.delivered()),
+                                Toast.LENGTH_LONG).show();
+                    }
+                });
+            }
+
+            @Override
+            public void onError(String context, Throwable err) {
+                runOnUiThread(() -> pagingStatus.setText(getString(
+                        R.string.message_list_polymail_error,
+                        err.getMessage() == null ? context : err.getMessage())));
+            }
+        };
+        node.addListener(polyMailListener);
     }
 
     @Override
@@ -233,21 +274,71 @@ public final class MessageListActivity extends AppCompatActivity {
         SearchQuery querySpec = useSearch ? queryBuilder(limit, 0).build() : null;
         findViewById(R.id.filter_clear).setVisibility(filtered ? View.VISIBLE : View.GONE);
         pagingStatus.setVisibility(View.GONE);
+        View loading = findViewById(R.id.message_loading);
+        View offlineNotice = findViewById(R.id.message_offline_notice);
+        if (loading != null) {
+            loading.setVisibility(View.VISIBLE);
+        }
+        emptyView.setVisibility(View.GONE);
         context.io().execute(() -> {
-            List<Message> messages = !useSearch
-                    ? new ArrayList<>(context.store().listMessages(accountId, folderId, limit, 0).messages())
-                    : context.store().search(querySpec, limit);
+            List<Message> messages;
+            String failure = null;
+            try {
+                messages = !useSearch
+                        ? new ArrayList<>(context.store().listMessages(accountId, folderId, limit, 0).messages())
+                        : context.store().search(querySpec, limit);
+            } catch (RuntimeException e) {
+                messages = List.of();
+                failure = e.getMessage();
+            }
+            List<Message> loaded = messages;
+            String loadFailure = failure;
             runOnUiThread(() -> {
                 if (generation != requestGeneration) return;
-                adapter.submit(messages);
-                pageOffset = messages.size();
-                canLoadMore = messages.size() >= limit;
-                emptyView.setVisibility(messages.isEmpty() ? View.VISIBLE : View.GONE);
+                if (loading != null) {
+                    loading.setVisibility(View.GONE);
+                }
+                if (loadFailure != null) {
+                    emptyView.setVisibility(View.VISIBLE);
+                    emptyView.setText(getString(R.string.message_list_load_failed));
+                    pagingStatus.setText(getString(R.string.message_list_load_failed));
+                    pagingStatus.setOnClickListener(view -> loadFiltered());
+                    pagingStatus.setVisibility(View.VISIBLE);
+                    if (offlineNotice != null) {
+                        offlineNotice.setVisibility(View.GONE);
+                    }
+                    return;
+                }
+                adapter.submit(loaded);
+                pageOffset = loaded.size();
+                canLoadMore = loaded.size() >= limit;
+                emptyView.setVisibility(loaded.isEmpty() ? View.VISIBLE : View.GONE);
                 emptyView.setText(activeQuery.isBlank()
                         ? (filtered ? R.string.message_list_empty_filters : R.string.message_list_empty)
                         : R.string.message_list_empty_search);
+                if (offlineNotice != null) {
+                    boolean offline = !isOnline();
+                    offlineNotice.setVisibility(offline && !loaded.isEmpty() ? View.VISIBLE : View.GONE);
+                }
             });
         });
+    }
+
+    private boolean isOnline() {
+        android.net.ConnectivityManager manager =
+                (android.net.ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
+        if (manager == null) {
+            return true;
+        }
+        android.net.Network network = manager.getActiveNetwork();
+        if (network == null) {
+            return false;
+        }
+        android.net.NetworkCapabilities capabilities = manager.getNetworkCapabilities(network);
+        return capabilities != null && (capabilities.hasTransport(
+                android.net.NetworkCapabilities.TRANSPORT_WIFI)
+                || capabilities.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR)
+                || capabilities.hasTransport(android.net.NetworkCapabilities.TRANSPORT_ETHERNET));
     }
 
     private void search(String query) {
@@ -488,7 +579,7 @@ public final class MessageListActivity extends AppCompatActivity {
                 .filter(Folder::selectable).filter(folder -> !folder.id().equals(folderId)).toList();
         String[] names = folders.stream().map(Folder::name).toArray(String[]::new);
         if (names.length == 0) return;
-        new androidx.appcompat.app.AlertDialog.Builder(this).setTitle("Move selected messages to")
+        new androidx.appcompat.app.AlertDialog.Builder(this).setTitle(R.string.message_list_move_to)
                 .setItems(names, (dialog, which) -> {
                     String destination = folders.get(which).id();
                     List<Message> target = new ArrayList<>(selectedMessages);

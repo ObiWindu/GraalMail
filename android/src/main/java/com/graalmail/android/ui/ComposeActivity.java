@@ -249,9 +249,12 @@ public final class ComposeActivity extends AppCompatActivity {
         ccContainer.setVisibility(visible ? View.GONE : View.VISIBLE);
         bccContainer.setVisibility(visible ? View.GONE : View.VISIBLE);
         showCcBcc.setText(visible ? R.string.compose_show_cc_bcc : R.string.compose_hide_cc_bcc);
+        ccBccToggle.setContentDescription(getString(
+                visible ? R.string.compose_show_cc_bcc : R.string.compose_hide_cc_bcc));
         androidx.core.view.ViewCompat.setStateDescription(ccBccToggle,
                 getString(visible ? R.string.compose_show_cc_bcc : R.string.compose_hide_cc_bcc));
-        ccBccArrow.setImageResource(visible ? android.R.drawable.arrow_down_float : android.R.drawable.arrow_up_float);
+        ccBccArrow.setImageResource(visible
+                ? R.drawable.ic_arrow_down : R.drawable.ic_arrow_up);
     }
 
     private void pickAttachments() {
@@ -321,7 +324,9 @@ public final class ComposeActivity extends AppCompatActivity {
     private void updateAttachmentsVisibility() {
         boolean visible = !attachmentUris.isEmpty();
         attachmentsLayout.setVisibility(visible ? View.VISIBLE : View.GONE);
-        findViewById(R.id.compose_add_attachment).setVisibility(visible ? View.GONE : View.VISIBLE);
+        // The add-attachment button stays visible so a second file can be added
+        // without removing the first one.
+        findViewById(R.id.compose_add_attachment).setVisibility(View.VISIBLE);
     }
 
     private boolean hasUnsavedChanges() {
@@ -347,9 +352,6 @@ public final class ComposeActivity extends AppCompatActivity {
             return;
         }
         TextView status = findViewById(R.id.compose_status);
-        sendInProgress = true;
-        toolbarSendEnabled(false);
-        status.setText(R.string.compose_sending);
         MessageDraft draft = MessageDraft.builder()
                 .accountId(accountId)
                 .to(AddressParser.parseList(toText))
@@ -358,6 +360,12 @@ public final class ComposeActivity extends AppCompatActivity {
                 .subject(subjectField.getText().toString())
                 .bodyText(bodyText)
                 .build();
+        if (tryPolyMailSend(draft, status)) {
+            return;
+        }
+        sendInProgress = true;
+        toolbarSendEnabled(false);
+        status.setText(R.string.compose_sending);
         context.io().execute(() -> {
             String message;
             boolean finished = false;
@@ -394,6 +402,74 @@ public final class ComposeActivity extends AppCompatActivity {
         Toolbar toolbar = findViewById(R.id.toolbar);
         android.view.MenuItem send = toolbar.getMenu().findItem(R.id.action_send_message);
         if (send != null) send.setEnabled(enabled);
+    }
+
+    private boolean tryPolyMailSend(MessageDraft draft, TextView status) {
+        com.graalmail.p2p.PolyMailNode node =
+                com.graalmail.android.work.AndroidPolyMail.node();
+        if (node == null || !node.isStarted()) {
+            return false;
+        }
+        List<Address> all = new ArrayList<>();
+        all.addAll(draft.to());
+        all.addAll(draft.cc());
+        all.addAll(draft.bcc());
+        List<String> polyRecipients = new ArrayList<>();
+        for (Address address : all) {
+            if (com.graalmail.android.work.AndroidPolyMail.isPolyMailAddress(address.email())) {
+                polyRecipients.add(address.email());
+            }
+        }
+        if (polyRecipients.isEmpty()) {
+            return false;
+        }
+        if (polyRecipients.size() != all.size()) {
+            Toast.makeText(this, R.string.compose_polymail_mixed, Toast.LENGTH_LONG).show();
+            return true;
+        }
+        sendInProgress = true;
+        toolbarSendEnabled(false);
+        status.setText(getString(R.string.compose_polymail_sending,
+                com.graalmail.p2p.DeliveryStates.label(com.graalmail.p2p.DeliveryState.QUEUED)));
+        String sender = context.store().setting(
+                SettingsActivity.SETTING_POLYMAIL_IDENTITY, "");
+        if (sender.isBlank()) {
+            sender = account().email();
+        }
+        String body = "Subject: " + draft.subject() + "\n\n" + draft.bodyText();
+        byte[] content = body.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        List<java.util.concurrent.CompletableFuture<com.graalmail.p2p.SendResult>> futures = new ArrayList<>();
+        for (String recipient : polyRecipients) {
+            com.graalmail.p2p.SendRequest request = new com.graalmail.p2p.SendRequest(
+                    sender, recipient, content, null, null, 1,
+                    System.currentTimeMillis() + 7L * 24 * 60 * 60 * 1000);
+            futures.add(node.send(request).toCompletableFuture());
+        }
+        context.io().execute(() -> {
+            try {
+                for (java.util.concurrent.CompletableFuture<com.graalmail.p2p.SendResult> future : futures) {
+                    com.graalmail.p2p.SendResult result =
+                            future.get(5, java.util.concurrent.TimeUnit.MINUTES);
+                    String label = com.graalmail.p2p.DeliveryStates.label(result.state());
+                    runOnUiThread(() -> status.setText(
+                            getString(R.string.compose_polymail_sending, label)));
+                }
+                runOnUiThread(() -> {
+                    sendInProgress = false;
+                    Toast.makeText(this, R.string.compose_polymail_sent, Toast.LENGTH_LONG).show();
+                    finish();
+                });
+            } catch (Exception e) {
+                LOG.warn("PolyMail send failed: {}", e.getMessage());
+                runOnUiThread(() -> {
+                    sendInProgress = false;
+                    toolbarSendEnabled(true);
+                    status.setText(getString(R.string.compose_failed,
+                            e.getCause() == null ? e.getMessage() : String.valueOf(e.getCause().getMessage())));
+                });
+            }
+        });
+        return true;
     }
 
     private void saveDraft() {

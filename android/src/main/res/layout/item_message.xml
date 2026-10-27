@@ -123,8 +123,8 @@
 
         <ImageButton
             android:id="@+id/message_star"
-            android:layout_width="@dimen/touch_target_small"
-            android:layout_height="@dimen/touch_target_small"
+            android:layout_width="@dimen/touch_target_min"
+            android:layout_height="@dimen/touch_target_min"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:scaleType="centerInside"
             android:src="@drawable/ic_star_outline"

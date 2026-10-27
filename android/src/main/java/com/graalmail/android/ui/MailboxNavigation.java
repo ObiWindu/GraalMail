@@ -116,6 +116,5 @@ final class MailboxNavigation implements FolderAdapter.OnFolderSelected {
             intent.putExtra(MessageListActivity.EXTRA_FOLDER_NAME, folder.name());
         }
         activity.startActivity(intent);
-        activity.finish();
     }
 }

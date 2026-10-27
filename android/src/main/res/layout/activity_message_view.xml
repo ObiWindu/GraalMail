@@ -114,6 +114,14 @@
                 android:textColor="?attr/colorOnSurfaceVariant"
                 android:visibility="gone" />
 
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/view_load_remote_images"
+                style="@style/Widget.GraalMail.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="@dimen/touch_target_min"
+                android:text="@string/message_view_load_remote_images"
+                android:visibility="gone" />
+
             <TextView
                 android:id="@+id/view_body"
                 android:layout_width="match_parent"
@@ -132,6 +140,14 @@
                     android:id="@+id/view_attachment_count"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/view_no_attachments"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/message_view_no_attachments"
+                    android:textAppearance="@style/TextAppearance.GraalMail.Snippet"
                     android:visibility="gone" />
             </LinearLayout>
           </LinearLayout>

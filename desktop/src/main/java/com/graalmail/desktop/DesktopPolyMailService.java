@@ -5,6 +5,7 @@
 package com.graalmail.desktop;
 
 import com.graalmail.core.util.Log;
+import com.graalmail.p2p.NetworkId;
 import com.graalmail.p2p.InMemoryPeerNetworkService;
 import com.graalmail.p2p.PolyMailConfig;
 import com.graalmail.p2p.PolyMailNode;
@@ -46,6 +47,7 @@ public final class DesktopPolyMailService implements AutoCloseable {
 
     private final PolyMailNode node;
     private final NioTcpTransport transport;
+    private final com.graalmail.p2p.discovery.PersistentPeerDiscoveryService discovery;
     private final ExecutorService background = Executors.newSingleThreadExecutor(r -> {
         Thread thread = new Thread(r, "polymail-desktop");
         thread.setDaemon(true);
@@ -55,9 +57,11 @@ public final class DesktopPolyMailService implements AutoCloseable {
     private final JdbcSqlDatabase database;
 
     private DesktopPolyMailService(PolyMailNode node, NioTcpTransport transport,
+                                   com.graalmail.p2p.discovery.PersistentPeerDiscoveryService discovery,
                                    SqlPolyMailStore durableStore, JdbcSqlDatabase database) {
         this.node = node;
         this.transport = transport;
+        this.discovery = discovery;
         this.durableStore = durableStore;
         this.database = database;
     }
@@ -69,6 +73,17 @@ public final class DesktopPolyMailService implements AutoCloseable {
      * replaced by persistent peers/identity sync as those land.
      */
     public static DesktopPolyMailService create(AppPaths paths, PolyMailConfig config) throws Exception {
+        return create(paths, config, List.of());
+    }
+
+    /**
+     * Creates the service with explicit reachable mailbox peers (deployment
+     * guide section 4: operate at least {@code requiredReplicas + 1}).
+     * Unknown peers fail safe at send time with {@code PEER_UNREACHABLE};
+     * delivery is never claimed on a failed dial.
+     */
+    public static DesktopPolyMailService create(AppPaths paths, PolyMailConfig config,
+                                                List<com.graalmail.p2p.PeerAddress> mailboxPeers) throws Exception {
         java.nio.file.Files.createDirectories(paths.baseDirectory());
         JdbcSqlDatabase database = new JdbcSqlDatabase("jdbc:sqlite:" + paths.databaseFile());
         SqlSchema.migrate(database);
@@ -77,28 +92,86 @@ public final class DesktopPolyMailService implements AutoCloseable {
         NioTcpTransport transport = new NioTcpTransport(config.listenPort(),
                 config.networkId().code(), "desktop-" + java.util.UUID.randomUUID());
         InMemoryPeerNetworkService peerNetwork = new InMemoryPeerNetworkService();
+        com.graalmail.p2p.discovery.PersistentPeerDiscoveryService discovery =
+                new com.graalmail.p2p.discovery.PersistentPeerDiscoveryService(
+                        paths.baseDirectory().resolve("polymail-peers.tsv"));
         // The TCP transport carries GPMP frames; the in-memory peer registry
-        // routes content operations until DHT discovery lands.
+        // routes content operations while file-backed discovery persists
+        // bootstrap records until DHT discovery lands.
+        String rpcUrl = config.rpcUrls().isEmpty() ? "" : config.rpcUrls().getFirst();
         PolyMailNode node = PolyMailNode.builder()
                 .identities(new InMemoryIdentityService())
                 .crypto(new DefaultEncryptionService())
                 .peerNetwork(peerNetwork)
-                .polygon(new Web3jPolygonNotificationService(config.rpcUrls().get(0), config.contractAddress(), config.chainId()))
+                .polygon(rpcUrl.isBlank()
+                        ? new com.graalmail.p2p.blockchain.InMemoryPolygonNotificationService()
+                        : new Web3jPolygonNotificationService(rpcUrl, config.contractAddress(), config.chainId()))
                 .inbox(new InMemoryInboxRepository())
-                .mailboxPeers(List.of())
+                .mailboxPeers(mailboxPeers == null ? List.of() : List.copyOf(mailboxPeers))
                 .config(config)
                 .deliveryStore(durableStore)
                 .cursors(durableStore)
                 .build();
         LOG.info("PolyMail desktop service configured for network {}", config.networkId());
-        return new DesktopPolyMailService(node, transport, durableStore, database);
+        return new DesktopPolyMailService(node, transport, discovery, durableStore, database);
+    }
+
+    /**
+     * Creates the service from the user's desktop settings. Returns empty
+     * when PolyMail is disabled or unconfigured so ordinary mail sync is
+     * unaffected; callers must not fail startup when this is empty.
+     */
+    public static java.util.Optional<DesktopPolyMailService> fromSettings(
+            AppPaths paths, DesktopSettings settings) {
+        if (!settings.polyMailEnabled()) {
+            return java.util.Optional.empty();
+        }
+        String rpcRaw = settings.polyMailRpcUrls();
+        List<String> rpcUrls = rpcRaw.isBlank() ? List.of()
+                : java.util.Arrays.stream(rpcRaw.split(","))
+                        .map(String::trim).filter(s -> !s.isEmpty()).toList();
+        String contract = settings.polyMailContract();
+        if (rpcUrls.isEmpty() || contract.isBlank()) {
+            LOG.info("PolyMail is enabled but RPC endpoints or contract address are missing; node not started");
+            return java.util.Optional.empty();
+        }
+        try {
+            NetworkId network = NetworkId.fromCode(settings.polyMailNetwork());
+            PolyMailConfig config = new PolyMailConfig(rpcUrls, contract,
+                    settings.polyMailChainId(), network,
+                    settings.polyMailListenPort(), 2, 2);
+            List<com.graalmail.p2p.PeerAddress> mailboxPeers;
+            try {
+                mailboxPeers = com.graalmail.p2p.PeerAddress.parseList(settings.polyMailMailboxPeers());
+            } catch (IllegalArgumentException e) {
+                LOG.warn("Ignoring malformed mailbox peers: {}", e.getMessage());
+                mailboxPeers = List.of();
+            }
+            DesktopPolyMailService service = create(paths, config, mailboxPeers);
+            String identity = settings.polyMailIdentity();
+            if (!identity.isBlank()) {
+                service.node().localIdentity(
+                        new com.graalmail.p2p.delivery.RecipientIdentity(identity, new byte[0], new byte[0]),
+                        List.of(identity));
+            }
+            return java.util.Optional.of(service);
+        } catch (Exception e) {
+            LOG.warn("PolyMail service could not be created: {}", e.getMessage());
+            return java.util.Optional.empty();
+        }
     }
 
     public PolyMailNode node() { return node; }
     public SqlPolyMailStore durableStore() { return durableStore; }
+    public com.graalmail.p2p.discovery.PeerDiscoveryService discovery() { return discovery; }
 
     /** Application startup / wallet unlock hook. */
     public CompletionStage<Void> start() {
+        try {
+            discovery.expireStale(System.currentTimeMillis());
+        } catch (RuntimeException e) {
+            LOG.debug("Peer discovery cleanup: {}", e.getMessage());
+        }
         return CompletableFuture.runAsync(() -> node.start().toCompletableFuture().join(), background);
     }
 

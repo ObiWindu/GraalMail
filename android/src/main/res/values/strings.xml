@@ -62,6 +62,13 @@
     <string name="message_list_archive_queued">Archive queued for %1$d of %2$d messages.</string>
     <string name="message_list_star_queued">Star changes queued for %1$d of %2$d messages.</string>
     <string name="message_list_move_queued">Move queued for %1$d of %2$d messages.</string>
+    <string name="message_list_move_to">Move selected messages to</string>
+    <string name="message_list_polymail_status">PolyMail: %1$s</string>
+    <string name="message_list_polymail_error">PolyMail: %1$s</string>
+    <plurals name="message_list_polymail_new">
+        <item quantity="one">%1$d PolyMail message received</item>
+        <item quantity="other">%1$d PolyMail messages received</item>
+    </plurals>
     <string name="message_list_read_queued">Read state queued for %1$d of %2$d messages.</string>
     <string name="message_list_delete_permanent_confirm">%1$d selected messages have no Trash folder. Permanently delete them?</string>
     <string name="message_list_search_hint">Search downloaded mail</string>
@@ -72,6 +79,7 @@
     <string name="message_list_bulk_read">Mark as read</string>
     <string name="message_list_bulk_unread">Mark as unread</string>
     <string name="message_list_load_more">Load more</string>
+    <string name="message_list_loading">Loading messages…</string>
     <string name="message_list_loading_more">Loading more messages…</string>
     <string name="message_list_load_failed">Could not load messages. Tap to retry.</string>
     <string name="message_list_offline_notice">Offline. Showing the locally cached messages only.</string>
@@ -126,6 +134,13 @@
     <string name="message_view_to_value">To: %1$s</string>
     <string name="message_view_cc_value">Cc: %1$s</string>
     <string name="message_view_bcc_value">Bcc: %1$s</string>
+    <string name="message_view_no_trash">This account has no Trash folder. Delete this message permanently?</string>
+    <string name="message_view_no_folder">This account does not provide that folder</string>
+    <string name="message_view_move_to">Move to</string>
+    <plurals name="message_view_attachments_desc">
+        <item quantity="one">%1$d attachment</item>
+        <item quantity="other">%1$d attachments</item>
+    </plurals>
 
     <!-- Compose -->
     <string name="compose_title">Compose</string>
@@ -155,6 +170,9 @@
     <string name="compose_add_attachment">Add attachment</string>
     <string name="compose_attachment_picker_failed">Could not open the file picker.</string>
     <string name="compose_attachment_added">Attachment added: %1$s</string>
+    <string name="compose_polymail_mixed">PolyMail and regular recipients cannot be mixed in one message.</string>
+    <string name="compose_polymail_sending">PolyMail: %1$s</string>
+    <string name="compose_polymail_sent">PolyMail message sent</string>
     <string name="compose_remove_attachment">Remove</string>
     <string name="compose_attachment_size">%1$s · %2$s</string>
     <string name="compose_attachment_too_large">Attachment too large (max 25 MB)</string>
@@ -257,6 +275,14 @@
     <string name="settings_saved">Settings saved</string>
     <string name="settings_discard_confirm">Discard your unsaved settings changes?</string>
     <string name="settings_accounts">Accounts</string>
+    <string name="settings_polymail_title">PolyMail decentralized delivery</string>
+    <string name="settings_polymail_enabled">Enable PolyMail delivery</string>
+    <string name="settings_polymail_identity">PolyMail identity (you@graalemail)</string>
+    <string name="settings_polymail_rpc">Polygon RPC endpoints, comma separated</string>
+    <string name="settings_polymail_contract">Notification contract address</string>
+    <string name="settings_polymail_peers">Mailbox peers (host:port, comma separated)</string>
+    <string name="settings_polymail_peers_invalid">Mailbox peers must be host:port, comma separated.</string>
+    <string name="settings_polymail_saved">PolyMail settings saved</string>
     <string name="settings_remove_account">Remove account</string>
     <string name="settings_remove_account_confirm">Remove %1$s? Cached messages and stored credentials for this account are deleted.</string>
     <string name="settings_account_removed">Account removed</string>

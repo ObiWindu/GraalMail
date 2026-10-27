@@ -114,6 +114,67 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_5"
+                android:text="@string/settings_polymail_title"
+                android:textAppearance="@style/TextAppearance.GraalMail.Subject" />
+
+            <com.google.android.material.materialswitch.MaterialSwitch
+                android:id="@+id/settings_polymail_enabled"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_polymail_enabled" />
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="@string/settings_polymail_identity">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/settings_polymail_identity"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="textEmailAddress" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="@string/settings_polymail_rpc">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/settings_polymail_rpc"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="textUri" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="@string/settings_polymail_contract">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/settings_polymail_contract"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="text" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="@string/settings_polymail_peers">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/settings_polymail_peers"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="text" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
                 android:layout_marginTop="@dimen/space_4"
                 android:text="@string/settings_accounts"
                 android:textAppearance="@style/TextAppearance.GraalMail.Subject" />

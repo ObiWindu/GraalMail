@@ -69,6 +69,32 @@ final class UiScale {
         return currentScale;
     }
 
+    /** Whether the given window is currently maximized. Null-safe. */
+    static boolean isMaximized(Stage owner) {
+        return owner != null && owner.isMaximized();
+    }
+
+    /**
+     * Restores the maximized state when a window-manager interaction dropped
+     * it while an owned sub-window was open.
+     *
+     * <p>Modal dialogs block input to the owner, so a maximized flag lost
+     * across a blocking {@code showAndWait} call can only be the window
+     * manager's doing — restoring it never fights the user. Safe no-op when
+     * the owner was not maximized, already is, or is fullscreen/iconified.
+     * Null-safe for headless use.</p>
+     *
+     * @param owner the main window, may be {@code null}
+     * @param wasMaximized the state snapshotted before the dialog opened
+     */
+    static void restoreMaximized(Stage owner, boolean wasMaximized) {
+        if (!wasMaximized || owner == null || owner.isMaximized()
+                || owner.isFullScreen() || owner.isIconified()) {
+            return;
+        }
+        owner.setMaximized(true);
+    }
+
     static double px(Window window, double value) {
         return value * scale(window);
     }
@@ -105,10 +131,11 @@ final class UiScale {
                           double designWidth, double designHeight,
                           double minimumWidth, double minimumHeight) {
         boolean needsInitialSize = stage.getWidth() <= 0 || stage.getHeight() <= 0;
+        boolean managedByWm = stage.isMaximized() || stage.isFullScreen();
         stage.setResizable(true);
         MINIMUM_SIZES.put(stage, new MinimumSize(minimumWidth, minimumHeight));
         updateMinimumSize(stage, anchor);
-        if (needsInitialSize) {
+        if (needsInitialSize && !managedByWm) {
             Dimension2D size = windowSize(anchor, designWidth, designHeight);
             stage.setWidth(size.getWidth());
             stage.setHeight(size.getHeight());
@@ -194,6 +221,12 @@ final class UiScale {
     }
 
     private static void updateMinimumSize(Stage stage, Window anchor) {
+        // Never write constraints onto a maximized or fullscreen window: on
+        // Mutter/GTK a constraint change underneath a WM-managed window can
+        // make the window manager drop the maximized state (and any later
+        // owned dialog then appears to "un-maximize" the main window).
+        // Minimum sizes only matter for restored windows anyway.
+        if (stage.isMaximized() || stage.isFullScreen()) return;
         MinimumSize minimum = MINIMUM_SIZES.get(stage);
         if (minimum == null) return;
         Rectangle2D bounds = visualBounds(anchor);

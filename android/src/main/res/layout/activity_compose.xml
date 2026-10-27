@@ -14,7 +14,8 @@
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
             style="@style/Widget.GraalMail.Toolbar"
-            app:navigationIcon="@drawable/ic_close" />
+            app:navigationIcon="@drawable/ic_close"
+            app:navigationContentDescription="@string/action_close" />
     </com.google.android.material.appbar.AppBarLayout>
 
     <com.graalmail.android.ui.AdaptiveFrameLayout
@@ -114,7 +115,10 @@
                 android:orientation="horizontal"
                 android:layout_marginTop="@dimen/space_1"
                 android:minHeight="@dimen/touch_target_min"
-                android:background="?android:attr/selectableItemBackground">
+                android:background="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"
+                android:contentDescription="@string/compose_show_cc_bcc">
 
                 <TextView
                     android:id="@+id/compose_show_cc_bcc"
@@ -128,9 +132,10 @@
                     android:id="@+id/compose_cc_bcc_arrow"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:src="@android:drawable/arrow_down_float"
+                    android:src="@drawable/ic_arrow_down"
                     android:layout_gravity="center_vertical"
-                    android:layout_marginStart="8dp" />
+                    android:layout_marginStart="8dp"
+                    android:contentDescription="@string/compose_show_cc_bcc" />
             </LinearLayout>
 
             <com.google.android.material.textfield.TextInputLayout

@@ -61,27 +61,36 @@ public final class DiagnosticsDialog {
      */
     public Scene build() {
         report.setEditable(false);
+        report.setWrapText(true);
+        report.setAccessibleText("Diagnostics report");
+        report.setAccessibleHelp("Read-only diagnostics report with provider and account status");
 
         Button refresh = new Button("Run diagnostics");
-        refresh.setOnAction(event -> runDiagnostics());
+        refresh.setDefaultButton(true);
+        refresh.setOnAction(event -> runDiagnosticsAsync(refresh));
         Button copy = new Button("Copy report");
         copy.setOnAction(event -> {
             javafx.scene.input.ClipboardContent content = new javafx.scene.input.ClipboardContent();
             content.putString(report.getText());
             javafx.scene.input.Clipboard.getSystemClipboard().setContent(content);
             status("The report was copied to the clipboard.");
+            report.setAccessibleText("Diagnostics report. The report was copied to the clipboard.");
         });
         Button close = new Button("Close");
+        close.setCancelButton(true);
         close.setOnAction(event -> stage.close());
 
         HBox buttons = new HBox(UiScale.px(stage, 8), refresh, copy, close);
-        buttons.setAlignment(Pos.CENTER_LEFT);
+        buttons.setAlignment(Pos.CENTER_RIGHT);
 
         VBox root = new VBox(UiScale.px(stage, 10), report, buttons);
+        VBox.setVgrow(report, javafx.scene.layout.Priority.ALWAYS);
         root.getStyleClass().add("diagnostics-window");
         if (darkTheme) root.getStyleClass().add("dark-theme");
         root.setPadding(UiScale.insets(stage, 12));
         Scene scene = new Scene(root);
+        var stylesheet = getClass().getResource("/styles/mail.css");
+        if (stylesheet != null) scene.getStylesheets().add(stylesheet.toExternalForm());
         stage.setScene(scene);
         UiScale.configure(stage, scene, stage.getOwner(), 760, 520, 500, 340);
         return stage.getScene();
@@ -104,11 +113,35 @@ public final class DiagnosticsDialog {
                 LOG.warn("The diagnostics window cannot be attached: {}", e.getMessage());
             }
         }
-        runDiagnostics();
+        runDiagnosticsAsync(null);
         stage.show();
     }
 
+    private void runDiagnosticsAsync(Button refresh) {
+        if (refresh != null) {
+            refresh.setDisable(true);
+        }
+        report.setText("Running diagnostics…");
+        Thread worker = new Thread(() -> {
+            String text = buildReport();
+            javafx.application.Platform.runLater(() -> {
+                report.setText(text);
+                report.positionCaret(0);
+                if (refresh != null) {
+                    refresh.setDisable(false);
+                }
+            });
+        }, "graalmail-diagnostics");
+        worker.setDaemon(true);
+        worker.start();
+    }
+
     private void runDiagnostics() {
+        report.setText(buildReport());
+        report.positionCaret(0);
+    }
+
+    private String buildReport() {
         StringBuilder text = new StringBuilder();
         text.append("GraalMail diagnostics\n");
         text.append("generated: ").append(java.time.Instant.now()).append('\n');
@@ -152,9 +185,27 @@ public final class DiagnosticsDialog {
                     .append(" (").append(account.providerId()).append(")\n");
             text.append("      connection: ").append(testAccount(account)).append('\n');
         }
+        text.append('\n');
+        text.append("polymail\n");
+        text.append("  ").append(polyMailSummary()).append('\n');
 
-        report.setText(text.toString());
-        report.positionCaret(0);
+        String result = text.toString();
+        return result;
+    }
+
+    private String polyMailSummary() {
+        try {
+            DesktopSettings settings = new DesktopSettings(context.store());
+            if (!settings.polyMailEnabled()) {
+                return "disabled in Settings → PolyMail";
+            }
+            String identity = settings.polyMailIdentity();
+            return "enabled, identity=" + (identity.isBlank() ? "(not set)" : identity)
+                    + ", network=" + settings.polyMailNetwork()
+                    + ", chain=" + settings.polyMailChainId();
+        } catch (RuntimeException e) {
+            return "settings unavailable: " + e.getMessage();
+        }
     }
 
     private String testAccount(Account account) {

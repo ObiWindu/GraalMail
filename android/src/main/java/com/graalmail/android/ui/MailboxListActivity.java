@@ -74,12 +74,6 @@ public final class MailboxListActivity extends AppCompatActivity implements Fold
     @Override
     protected void onResume() {
         super.onResume();
-        List<Account> accounts = context.store().listAccounts();
-        if (!accounts.isEmpty()) {
-            startActivity(new Intent(this, UnifiedInboxActivity.class));
-            finish();
-            return;
-        }
         reload();
     }
 

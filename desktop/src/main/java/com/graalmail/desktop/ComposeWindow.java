@@ -5,12 +5,6 @@
 package com.graalmail.desktop;
 
 import com.graalmail.core.domain.Account;
-import java.util.Optional;
-import com.graalmail.core.domain.LocalDraft;
-import com.graalmail.core.domain.MessageDraft;
-import java.util.Timer;
-import java.util.TimerTask;
-import com.graalmail.core.domain.Account;
 import com.graalmail.core.domain.Address;
 import com.graalmail.core.domain.Attachment;
 import com.graalmail.core.domain.LocalDraft;
@@ -33,6 +27,8 @@ import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.UUID;
 import javafx.animation.FadeTransition;
 import javafx.geometry.Insets;
@@ -90,12 +86,25 @@ public final class ComposeWindow {
 
     private Account account;
     private Message replyTo;
+    private Stage mainOwner;
     private boolean sending;
     private boolean allowClose;
     private Timer autosaveTimer;
     private String lastAutosavedDraftJson;
     private final List<Attachment> attachments = new ArrayList<>();
     private Path tempAttachmentsDir;
+    private DesktopPolyMailService polyMail;
+    private final Label polyMailStatus = new Label("");
+
+    /**
+     * Attaches the PolyMail background service for decentralized delivery.
+     * When set and the recipients are PolyMail addresses, sending goes through
+     * {@code PolyMailNode.send} with section-15.2 delivery labels; otherwise
+     * the normal provider path is used.
+     */
+    public void polyMailService(DesktopPolyMailService service) {
+        this.polyMail = service;
+    }
 
     /**
      * Creates the compose window.
@@ -111,9 +120,14 @@ public final class ComposeWindow {
             throw new RuntimeException("Failed to create temporary directory for attachments", e);
         }
         stage.setScene(build());
-        
-        // Clean up temp directory when window is closed
-        stage.setOnHidden(event -> cleanupTempAttachments());
+
+        // Clean up per-message temp files when window is hidden; the shared
+        // temp dir is recreated on demand so a second window keeps working.
+        // The autosave timer is stopped here and restarted on open.
+        stage.setOnHidden(event -> {
+            stopAutosave();
+            cleanupTempMessageFiles();
+        });
         stage.setOnCloseRequest(event -> {
             if (sending || allowClose || !hasComposeContent()) return;
             javafx.scene.control.ButtonType saveLocal = new javafx.scene.control.ButtonType(
@@ -127,7 +141,9 @@ public final class ComposeWindow {
                     saveLocal, discard, cancel);
             alert.setTitle("Unsaved message");
             alert.setHeaderText(null);
+            boolean maximized = UiScale.isMaximized(mainOwner);
             javafx.scene.control.ButtonType choice = alert.showAndWait().orElse(cancel);
+            UiScale.restoreMaximized(mainOwner, maximized);
             if (choice == saveLocal) {
                 saveLocalDraftOnClose();
             } else if (choice == discard) {
@@ -150,6 +166,7 @@ public final class ComposeWindow {
         this.account = account;
         this.allowClose = false;
         this.replyTo = null;
+        refreshAccountButton();
         checkAndRecoverDraft(account);
         toField.clear();
         ccField.clear();
@@ -158,9 +175,14 @@ public final class ComposeWindow {
         bodyArea.clear();
         attachments.clear();
         attachmentList.getItems().clear();
+        updateAttachmentVisibility();
+        polyMailStatus.setText("");
+        polyMailStatus.setVisible(false);
+        polyMailStatus.setManaged(false);
         status.setText(" ");
         stage.setTitle("New message");
         stage.show();
+        startAutosave();
         toField.requestFocus();
         if (accountButton.isVisible()) {
             accountButton.setText("From: " + account.email());
@@ -179,11 +201,13 @@ public final class ComposeWindow {
         this.account = account;
         this.allowClose = false;
         this.replyTo = message;
+        refreshAccountButton();
         toField.clear();
         ccField.clear();
         bccField.clear();
         attachments.clear();
         attachmentList.getItems().clear();
+        updateAttachmentVisibility();
         if (message != null) {
             List<Address> targets = new java.util.ArrayList<>();
             if (message.from().hasEmail()) {
@@ -200,6 +224,7 @@ public final class ComposeWindow {
         status.setText(" ");
         stage.setTitle("Reply");
         stage.show();
+        startAutosave();
         bodyArea.requestFocus();
         if (accountButton.isVisible()) {
             accountButton.setText("From: " + account.email());
@@ -218,11 +243,13 @@ public final class ComposeWindow {
         this.account = account;
         this.allowClose = false;
         this.replyTo = message;
+        refreshAccountButton();
         toField.clear();
         ccField.clear();
         bccField.clear();
         attachments.clear();
         attachmentList.getItems().clear();
+        updateAttachmentVisibility();
         if (message != null) {
             String subject = message.subject();
             subjectField.setText(subject.toLowerCase(java.util.Locale.ROOT).startsWith("fwd:")
@@ -232,6 +259,7 @@ public final class ComposeWindow {
         status.setText(" ");
         stage.setTitle("Forward");
         stage.show();
+        startAutosave();
         bodyArea.requestFocus();
         if (accountButton.isVisible()) {
             accountButton.setText("From: " + account.email());
@@ -249,6 +277,7 @@ public final class ComposeWindow {
     }
 
     private void initAutosave() {
+        stopAutosave();
         autosaveTimer = new Timer(true);
         autosaveTimer.scheduleAtFixedRate(new TimerTask() {
             @Override
@@ -256,6 +285,19 @@ public final class ComposeWindow {
                 javafx.application.Platform.runLater(() -> autosave());
             }
         }, 30_000, 30_000); // Autosave every 30 seconds
+    }
+
+    private void startAutosave() {
+        if (autosaveTimer == null) {
+            initAutosave();
+        }
+    }
+
+    private void stopAutosave() {
+        if (autosaveTimer != null) {
+            autosaveTimer.cancel();
+            autosaveTimer = null;
+        }
     }
 
     private void autosave() {
@@ -299,6 +341,7 @@ public final class ComposeWindow {
                 alert.setHeaderText("An unsaved draft was found for " + account.email());
                 alert.setContentText("Do you want to restore the draft?");
                 alert.getButtonTypes().setAll(javafx.scene.control.ButtonType.YES, javafx.scene.control.ButtonType.NO);
+                boolean maximized = UiScale.isMaximized(mainOwner);
                 alert.showAndWait().ifPresent(response -> {
                     if (response == javafx.scene.control.ButtonType.YES) {
                         restoreDraft(localDraft);
@@ -306,6 +349,7 @@ public final class ComposeWindow {
                         context.store().deleteLocalDraft(localDraft.id());
                     }
                 });
+                UiScale.restoreMaximized(mainOwner, maximized);
             });
         }
     }
@@ -328,7 +372,8 @@ public final class ComposeWindow {
                     attachmentList.getItems().add(attachment);
                 }
             }
-            
+            updateAttachmentVisibility();
+
             status.setText("Draft recovered");
             context.store().saveLocalDraft(localDraft.withRecovered(true));
         } catch (Exception e) {
@@ -337,6 +382,7 @@ public final class ComposeWindow {
     }
 
     private void prepare(Stage owner) {
+        this.mainOwner = owner;
         var classes = stage.getScene().getRoot().getStyleClass();
         if (new DesktopSettings(context.store()).darkTheme()) {
             if (!classes.contains("dark-theme")) classes.add("dark-theme");
@@ -381,7 +427,9 @@ public final class ComposeWindow {
 
         suggestionList.getStyleClass().add("recipient-suggestions");
         suggestionList.setVisible(false);
-        suggestionList.setOnMouseClicked(event -> {
+        suggestionList.setManaged(false);
+        suggestionList.setPrefHeight(UiScale.px(stage, 148));
+        suggestionList.setOnMousePressed(event -> {
             RecipientSuggestion selected = suggestionList.getSelectionModel().getSelectedItem();
             if (selected != null) {
                 applySuggestion(selected);
@@ -389,18 +437,15 @@ public final class ComposeWindow {
         });
 
         // Account selection
-        List<Account> accounts = context.store().listAccounts();
-        if (accounts.size() > 1) {
-            accountButton.setText("From: " + (account != null ? account.email() : "Select account"));
-            accountButton.setOnAction(e -> showAccountSelection());
-        } else {
-            accountButton.setVisible(false);
-        }
+        refreshAccountButton();
 
         VBox.setVgrow(bodyArea, Priority.ALWAYS);
 
         // Attachments
         attachmentList.getStyleClass().add("attachment-list");
+        attachmentList.setVisible(false);
+        attachmentList.setManaged(false);
+        attachmentList.setPrefHeight(UiScale.px(stage, 98));
         attachmentList.setCellFactory(lv -> new javafx.scene.control.ListCell<>() {
             @Override
             protected void updateItem(Attachment item, boolean empty) {
@@ -424,11 +469,15 @@ public final class ComposeWindow {
         });
 
         status.getStyleClass().add("compose-status");
+        polyMailStatus.getStyleClass().add("polymail-status");
+        polyMailStatus.setWrapText(true);
+        polyMailStatus.setVisible(false);
+        polyMailStatus.setManaged(false);
 
         HBox buttons = new HBox(UiScale.px(stage, 8), accountButton, draftButton, attachButton, sendButton);
         buttons.setAlignment(Pos.CENTER_RIGHT);
 
-        root.getChildren().addAll(suggestionList, bodyArea, attachmentList, status, buttons);
+        root.getChildren().addAll(suggestionList, bodyArea, attachmentList, polyMailStatus, status, buttons);
 
         sendButton.setDefaultButton(true);
         sendButton.setGraphic(ThunderbirdIcons.icon("sent", "toolbar-icon"));
@@ -468,6 +517,7 @@ public final class ComposeWindow {
 
     private VBox labelled(String label, TextField field) {
         Label caption = new Label(label);
+        caption.setLabelFor(field);
         caption.getStyleClass().add("compose-caption");
         HBox row = new HBox(UiScale.px(stage, 8), caption, field);
         HBox.setHgrow(field, Priority.ALWAYS);
@@ -478,15 +528,59 @@ public final class ComposeWindow {
     private void wireSuggestions() {
         toField.focusedProperty().addListener((observable, old, focused) -> {
             if (!focused) {
-                hideSuggestions();
+                javafx.application.Platform.runLater(() -> {
+                    if (!suggestionList.isHover()) {
+                        hideSuggestions();
+                    }
+                });
+            }
+        });
+        ccField.focusedProperty().addListener((observable, old, focused) -> {
+            if (!focused) {
+                javafx.application.Platform.runLater(() -> {
+                    if (!suggestionList.isHover()) {
+                        hideSuggestions();
+                    }
+                });
+            }
+        });
+        bccField.focusedProperty().addListener((observable, old, focused) -> {
+            if (!focused) {
+                javafx.application.Platform.runLater(() -> {
+                    if (!suggestionList.isHover()) {
+                        hideSuggestions();
+                    }
+                });
             }
         });
         toField.textProperty().addListener((observable, old, value) -> updateSuggestions(value));
         ccField.textProperty().addListener((observable, old, value) -> updateSuggestions(value));
+        bccField.textProperty().addListener((observable, old, value) -> updateSuggestions(value));
     }
 
     private void wireShortcuts() {
         toField.setOnKeyPressed(event -> {
+            if (event.getCode() == KeyCode.ENTER && suggestionList.isVisible()) {
+                RecipientSuggestion selected = suggestionList.getSelectionModel().getSelectedItem();
+                if (selected != null) {
+                    applySuggestion(selected);
+                    event.consume();
+                }
+            } else if (event.getCode() == KeyCode.ESCAPE && suggestionList.isVisible()) {
+                hideSuggestions();
+                event.consume();
+            }
+        });
+        ccField.setOnKeyPressed(event -> {
+            if (event.getCode() == KeyCode.ENTER && suggestionList.isVisible()) {
+                RecipientSuggestion selected = suggestionList.getSelectionModel().getSelectedItem();
+                if (selected != null) {
+                    applySuggestion(selected);
+                    event.consume();
+                }
+            }
+        });
+        bccField.setOnKeyPressed(event -> {
             if (event.getCode() == KeyCode.ENTER && suggestionList.isVisible()) {
                 RecipientSuggestion selected = suggestionList.getSelectionModel().getSelectedItem();
                 if (selected != null) {
@@ -503,6 +597,10 @@ public final class ComposeWindow {
             return;
         }
         String term = currentTerm(value);
+        if (term.isBlank()) {
+            hideSuggestions();
+            return;
+        }
         List<RecipientSuggestion> matches = suggestions.suggest(term, SUGGESTION_LIMIT);
         if (matches.isEmpty()) {
             hideSuggestions();
@@ -511,6 +609,7 @@ public final class ComposeWindow {
         suggestionList.getItems().setAll(matches);
         suggestionList.getSelectionModel().selectFirst();
         suggestionList.setVisible(true);
+        suggestionList.setManaged(true);
         FadeTransition fade = new FadeTransition(Duration.millis(120), suggestionList);
         fade.setFromValue(0.4);
         fade.setToValue(1.0);
@@ -519,6 +618,7 @@ public final class ComposeWindow {
 
     private void hideSuggestions() {
         suggestionList.setVisible(false);
+        suggestionList.setManaged(false);
     }
 
     private String currentTerm(String value) {
@@ -527,18 +627,23 @@ public final class ComposeWindow {
     }
 
     private void applySuggestion(RecipientSuggestion suggestion) {
-        TextField field = toField.isFocused() ? toField : ccField;
+        TextField field = bccField.isFocused() ? bccField
+                : ccField.isFocused() ? ccField : toField;
         String value = field.getText();
         int comma = Math.max(value.lastIndexOf(','), value.lastIndexOf(';'));
         String prefix = comma < 0 ? "" : value.substring(0, comma + 1) + " ";
         field.setText(prefix + suggestion.format());
         field.positionCaret(field.getText().length());
         hideSuggestions();
+        field.requestFocus();
     }
 
     private void send() {
         MessageDraft draft = buildDraft();
         if (draft == null) {
+            return;
+        }
+        if (tryPolyMailSend(draft)) {
             return;
         }
         sending = true;
@@ -672,6 +777,111 @@ public final class ComposeWindow {
         worker.start();
     }
 
+    private boolean tryPolyMailSend(MessageDraft draft) {
+        if (polyMail == null || !polyMail.node().isStarted()) {
+            return false;
+        }
+        List<String> polyRecipients = new ArrayList<>();
+        for (Address address : draft.to()) {
+            if (isPolyMailAddress(address.email())) {
+                polyRecipients.add(address.email());
+            }
+        }
+        for (Address address : draft.cc()) {
+            if (isPolyMailAddress(address.email())) {
+                polyRecipients.add(address.email());
+            }
+        }
+        for (Address address : draft.bcc()) {
+            if (isPolyMailAddress(address.email())) {
+                polyRecipients.add(address.email());
+            }
+        }
+        if (polyRecipients.isEmpty()) {
+            return false;
+        }
+        if (polyRecipients.size() != draft.to().size() + draft.cc().size() + draft.bcc().size()) {
+            showWarning("PolyMail and regular recipients cannot be mixed in one message. "
+                    + "Send PolyMail addresses separately.");
+            return true;
+        }
+        sending = true;
+        sendButton.setDisable(true);
+        draftButton.setDisable(true);
+        attachButton.setDisable(true);
+        setPolyMailStatus(com.graalmail.p2p.DeliveryState.QUEUED);
+        String body = "Subject: " + draft.subject() + "\n\n" + draft.bodyText();
+        byte[] content = body.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        String sender = new DesktopSettings(context.store()).polyMailIdentity();
+        if (sender.isBlank() && account != null) {
+            sender = account.email();
+        }
+        List<java.util.concurrent.CompletableFuture<?>> futures = new ArrayList<>();
+        for (String recipient : polyRecipients) {
+            com.graalmail.p2p.SendRequest request = new com.graalmail.p2p.SendRequest(
+                    sender, recipient, content, null, null, 1,
+                    System.currentTimeMillis() + 7L * 24 * 60 * 60 * 1000);
+            futures.add(polyMail.node().send(request).toCompletableFuture());
+        }
+        Thread worker = new Thread(() -> {
+            try {
+                for (java.util.concurrent.CompletableFuture<?> future : futures) {
+                    com.graalmail.p2p.SendResult result =
+                            (com.graalmail.p2p.SendResult) future.get(5, java.util.concurrent.TimeUnit.MINUTES);
+                    String label = com.graalmail.p2p.DeliveryStates.label(result.state());
+                    javafx.application.Platform.runLater(() -> setPolyMailStatus(result.state()));
+                    LOG.info("PolyMail send {}: {}", result.messageId(), label);
+                }
+                javafx.application.Platform.runLater(() -> {
+                    sending = false;
+                    sendButton.setDisable(false);
+                    draftButton.setDisable(false);
+                    attachButton.setDisable(false);
+                    status.setText("PolyMail message sent");
+                    allowClose = true;
+                    stage.close();
+                });
+            } catch (Exception e) {
+                LOG.warn("PolyMail send failed: {}", e.getMessage());
+                javafx.application.Platform.runLater(() -> {
+                    sending = false;
+                    sendButton.setDisable(false);
+                    draftButton.setDisable(false);
+                    attachButton.setDisable(false);
+                    setPolyMailStatus(com.graalmail.p2p.DeliveryState.FAILED);
+                    status.setText("PolyMail send failed: " + rootCause(e));
+                });
+            }
+        }, "graalmail-polymail-send");
+        worker.setDaemon(true);
+        worker.start();
+        return true;
+    }
+
+    private void setPolyMailStatus(com.graalmail.p2p.DeliveryState state) {
+        polyMailStatus.setText("PolyMail: " + com.graalmail.p2p.DeliveryStates.label(state));
+        polyMailStatus.setVisible(true);
+        polyMailStatus.setManaged(true);
+        status.setText("PolyMail: " + com.graalmail.p2p.DeliveryStates.label(state));
+    }
+
+    private static boolean isPolyMailAddress(String email) {
+        if (email == null) {
+            return false;
+        }
+        String trimmed = email.trim().toLowerCase(java.util.Locale.ROOT);
+        return trimmed.endsWith("@graalemail") || trimmed.endsWith("@polymail");
+    }
+
+    private static String rootCause(Throwable e) {
+        Throwable current = e;
+        while (current.getCause() != null && current.getCause() != current) {
+            current = current.getCause();
+        }
+        String message = current.getMessage();
+        return message == null || message.isBlank() ? current.getClass().getSimpleName() : message;
+    }
+
     private boolean hasComposeContent() {
         return !toField.getText().isBlank() || !ccField.getText().isBlank()
                 || !bccField.getText().isBlank() || !subjectField.getText().isBlank()
@@ -702,7 +912,9 @@ public final class ComposeWindow {
         alert.setTitle("GraalMail");
         alert.setHeaderText(null);
         alert.setContentText(message);
+        boolean maximized = UiScale.isMaximized(mainOwner);
         alert.showAndWait();
+        UiScale.restoreMaximized(mainOwner, maximized);
     }
 
     private static List<Address> unique(List<Address> addresses) {
@@ -767,15 +979,16 @@ public final class ComposeWindow {
                 showWarning("Attachment too large (max 25 MB): " + path.getFileName());
                 return;
             }
+            ensureTempDir();
             // Copy to temp directory for safe keeping
             Path tempFile = tempAttachmentsDir.resolve(UUID.randomUUID().toString() + "_" + path.getFileName());
             Files.copy(path, tempFile, StandardCopyOption.REPLACE_EXISTING);
-            
+
             String mimeType = Files.probeContentType(path);
             if (mimeType == null) {
                 mimeType = "application/octet-stream";
             }
-            
+
             Attachment attachment = new Attachment(
                     tempFile.toString(),
                     path.getFileName().toString(),
@@ -786,56 +999,118 @@ public final class ComposeWindow {
             );
             attachments.add(attachment);
             attachmentList.getItems().add(attachment);
+            updateAttachmentVisibility();
         } catch (IOException e) {
             LOG.warn("Failed to add attachment: {}", e.getMessage());
             showWarning("Failed to add attachment: " + e.getMessage());
         }
     }
 
+    private void updateAttachmentVisibility() {
+        boolean has = !attachmentList.getItems().isEmpty();
+        attachmentList.setVisible(has);
+        attachmentList.setManaged(has);
+    }
+
+    private void ensureTempDir() throws IOException {
+        if (tempAttachmentsDir == null || !Files.isDirectory(tempAttachmentsDir)) {
+            tempAttachmentsDir = Files.createTempDirectory("graalmail-attachments-");
+        }
+    }
+
+    private void refreshAccountButton() {
+        List<Account> accounts = context.store().listAccounts();
+        if (accounts.size() > 1) {
+            accountButton.setVisible(true);
+            accountButton.setManaged(true);
+            accountButton.setText("From: " + (account != null ? account.email() : "Select account"));
+            accountButton.setOnAction(event -> showAccountSelection());
+        } else if (accounts.size() == 1) {
+            if (account == null) {
+                account = accounts.getFirst();
+            }
+            accountButton.setVisible(false);
+            accountButton.setManaged(false);
+        } else {
+            accountButton.setVisible(false);
+            accountButton.setManaged(false);
+        }
+    }
+
     private void removeAttachment(Attachment attachment) {
         attachments.remove(attachment);
         attachmentList.getItems().remove(attachment);
+        updateAttachmentVisibility();
+        String staged = attachment.contentId();
+        if (staged == null || staged.isBlank()) {
+            return;
+        }
         try {
-            Files.deleteIfExists(Path.of(attachment.contentId()));
-        } catch (IOException e) {
+            Path stagedPath = Path.of(staged);
+            if (tempAttachmentsDir != null && stagedPath.startsWith(tempAttachmentsDir)) {
+                Files.deleteIfExists(stagedPath);
+            }
+        } catch (RuntimeException | IOException e) {
             LOG.warn("Failed to delete temporary attachment file: {}", e.getMessage());
         }
     }
 
     private void showAccountSelection() {
         List<Account> accounts = context.store().listAccounts();
-        javafx.scene.control.ChoiceDialog<Account> dialog = new javafx.scene.control.ChoiceDialog<>(
-                account != null ? account : accounts.get(0), accounts);
+        if (accounts.isEmpty()) {
+            showWarning("No account is configured yet. Add an account first.");
+            return;
+        }
+        javafx.scene.control.ChoiceDialog<String> dialog = new javafx.scene.control.ChoiceDialog<>(
+                displayName(account != null ? account : accounts.get(0)), displayNames(accounts));
         dialog.setTitle("Select Account");
         dialog.setHeaderText("Choose the account to send from");
         dialog.setContentText("Account:");
+        boolean maximized = UiScale.isMaximized(mainOwner);
         dialog.showAndWait().ifPresent(selected -> {
-            this.account = selected;
-            accountButton.setText("From: " + selected.email());
-            // Update draft if it exists
-            if (account != null) {
-                checkAndRecoverDraft(account);
+            int index = displayNames(accounts).indexOf(selected);
+            if (index >= 0) {
+                this.account = accounts.get(index);
+                accountButton.setText("From: " + this.account.email());
+                checkAndRecoverDraft(this.account);
             }
         });
+        UiScale.restoreMaximized(mainOwner, maximized);
+    }
+
+    private static String displayName(Account value) {
+        if (value == null) {
+            return "";
+        }
+        return value.displayName().isBlank() || value.displayName().equals(value.email())
+                ? value.email() : value.displayName() + " <" + value.email() + ">";
+    }
+
+    private static java.util.List<String> displayNames(List<Account> accounts) {
+        List<String> names = new ArrayList<>();
+        for (Account candidate : accounts) {
+            names.add(displayName(candidate));
+        }
+        return names;
     }
 
     /**
-     * Cleans up the temporary attachments directory.
+     * Deletes only the staged temp files for the current message, keeping the
+     * shared temp directory itself so a second compose window keeps working.
      */
-    private void cleanupTempAttachments() {
-        if (tempAttachmentsDir != null) {
+    private void cleanupTempMessageFiles() {
+        for (Attachment attachment : new ArrayList<>(attachments)) {
+            String staged = attachment.contentId();
+            if (staged == null || staged.isBlank()) {
+                continue;
+            }
             try {
-                Files.walk(tempAttachmentsDir)
-                        .sorted((a, b) -> b.compareTo(a))
-                        .forEach(path -> {
-                            try {
-                                Files.deleteIfExists(path);
-                            } catch (IOException e) {
-                                LOG.warn("Failed to delete temporary file {}: {}", path, e.getMessage());
-                            }
-                        });
-            } catch (IOException e) {
-                LOG.warn("Failed to clean up temporary attachments directory: {}", e.getMessage());
+                Path stagedPath = Path.of(staged);
+                if (tempAttachmentsDir != null && stagedPath.startsWith(tempAttachmentsDir)) {
+                    Files.deleteIfExists(stagedPath);
+                }
+            } catch (RuntimeException | IOException e) {
+                LOG.warn("Failed to delete temporary file {}: {}", staged, e.getMessage());
             }
         }
     }

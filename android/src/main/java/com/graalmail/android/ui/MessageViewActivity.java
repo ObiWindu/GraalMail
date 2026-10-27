@@ -124,14 +124,14 @@ public final class MessageViewActivity extends AppCompatActivity {
             queue(PendingAction.Type.MOVE, folder.id());
         } else if (deleteIfMissing) {
             new androidx.appcompat.app.AlertDialog.Builder(this)
-                    .setMessage("This account has no Trash folder. Delete this message permanently?")
+                    .setMessage(R.string.message_view_no_trash)
                     .setNegativeButton(R.string.action_cancel, null)
                     .setPositiveButton(R.string.action_delete, (dialog, which) -> {
                         queue(PendingAction.Type.DELETE, ""); finish();
                     }).show();
             return;
         } else {
-            Toast.makeText(this, "This account does not provide that folder", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, R.string.message_view_no_folder, Toast.LENGTH_SHORT).show();
             return;
         }
         finish();
@@ -142,7 +142,7 @@ public final class MessageViewActivity extends AppCompatActivity {
                 .filter(Folder::selectable).filter(folder -> !folder.id().equals(message.folderId())).toList();
         String[] names = folders.stream().map(Folder::name).toArray(String[]::new);
         if (names.length == 0) return;
-        new androidx.appcompat.app.AlertDialog.Builder(this).setTitle("Move to")
+        new androidx.appcompat.app.AlertDialog.Builder(this).setTitle(R.string.message_view_move_to)
                 .setItems(names, (dialog, which) -> { queue(PendingAction.Type.MOVE, folders.get(which).id()); finish(); })
                 .show();
     }
@@ -209,12 +209,31 @@ public final class MessageViewActivity extends AppCompatActivity {
                 .withZone(ZoneId.systemDefault()).format(message.date()));
         boolean hasRemoteImages = message.bodyHtml() != null
                 && message.bodyHtml().matches("(?is).*<img\\b[^>]*https?://[^>]*>.*");
-        findViewById(R.id.view_remote_images_notice).setVisibility(hasRemoteImages ? View.VISIBLE : View.GONE);
+        View remoteNotice = findViewById(R.id.view_remote_images_notice);
+        remoteNotice.setVisibility(hasRemoteImages ? View.VISIBLE : View.GONE);
+        com.google.android.material.button.MaterialButton remoteButton =
+                findViewById(R.id.view_load_remote_images);
+        if (remoteButton != null) {
+            remoteButton.setVisibility(hasRemoteImages ? View.VISIBLE : View.GONE);
+            remoteButton.setOnClickListener(view -> {
+                boolean allowed = context.store().setting(
+                        SettingsActivity.SETTING_REMOTE_IMAGES, "false").equals("true");
+                if (!allowed) {
+                    context.store().putSetting(SettingsActivity.SETTING_REMOTE_IMAGES, "true");
+                }
+                render();
+                Toast.makeText(this, R.string.message_view_remote_images_loaded, Toast.LENGTH_SHORT).show();
+            });
+        }
 
         if (message.bodyHtml() != null && !message.bodyHtml().isBlank()) {
-            String safe = HtmlSanitizer.sanitize(message.bodyHtml());
+            boolean allowRemote = context.store().setting(
+                    SettingsActivity.SETTING_REMOTE_IMAGES, "false").equals("true");
+            String safe = HtmlSanitizer.sanitize(message.bodyHtml(), allowRemote);
             body.setText(Html.fromHtml(safe, Html.FROM_HTML_MODE_COMPACT, new HtmlImageGetter(), null));
             body.setMovementMethod(LinkMovementMethod.getInstance());
+        } else if (message.bodyText() == null || message.bodyText().isBlank()) {
+            body.setText(getString(R.string.message_view_body_empty));
         } else {
             body.setText(message.bodyText());
         }
@@ -239,21 +258,21 @@ public final class MessageViewActivity extends AppCompatActivity {
         if (attachments.isEmpty()) {
             findViewById(R.id.view_attachments).setVisibility(View.GONE);
             findViewById(R.id.view_attachment_count).setVisibility(View.GONE);
+            findViewById(R.id.view_no_attachments).setVisibility(View.VISIBLE);
             return;
         }
 
         findViewById(R.id.view_attachments).setVisibility(View.VISIBLE);
+        findViewById(R.id.view_no_attachments).setVisibility(View.GONE);
         TextView attachmentCount = findViewById(R.id.view_attachment_count);
         attachmentCount.setText(getString(R.string.message_view_attachments, attachments.size()));
+        attachmentCount.setContentDescription(getResources().getQuantityString(
+                R.plurals.message_view_attachments_desc, attachments.size(), attachments.size()));
         attachmentCount.setVisibility(View.VISIBLE);
 
-        // Clear existing attachment views (keep the count)
-        int childCount = attachmentsLayout.getChildCount();
-        for (int i = childCount - 1; i >= 0; i--) {
-            View child = attachmentsLayout.getChildAt(i);
-            if (child != attachmentCount) {
-                attachmentsLayout.removeView(child);
-            }
+        // Clear existing attachment views (keep the count header at index 0).
+        for (int i = attachmentsLayout.getChildCount() - 1; i >= 1; i--) {
+            attachmentsLayout.removeViewAt(i);
         }
 
         // Get account for opening session
@@ -261,11 +280,11 @@ public final class MessageViewActivity extends AppCompatActivity {
             Optional<Account> accountOpt = context.store().account(accountId);
             if (accountOpt.isEmpty()) return;
             Account account = accountOpt.get();
-            
+
             for (Attachment attachment : attachments) {
                 runOnUiThread(() -> {
                     View attachmentView = createAttachmentView(attachment, account);
-                    attachmentsLayout.addView(attachmentView, attachmentsLayout.getChildCount() - 1); // Insert before count
+                    attachmentsLayout.addView(attachmentView);
                 });
             }
         });

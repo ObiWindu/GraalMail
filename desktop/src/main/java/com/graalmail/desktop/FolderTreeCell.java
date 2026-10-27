@@ -74,6 +74,7 @@ final class FolderTreeCell extends TreeCell<Object> {
             setContextMenu(menu);
         } else if (value instanceof Folder folder) {
             getStyleClass().add("folder-row");
+            setDisclosureNode(null);
             String type = iconFor(folder.type());
             Label count = folder.unreadCount() > 0
                     ? badge(formatCount(folder.unreadCount())) : null;
@@ -82,13 +83,16 @@ final class FolderTreeCell extends TreeCell<Object> {
             setAccessibleText(folder.name() + (folder.unreadCount() > 0
                     ? ", " + folder.unreadCount() + " unread" : ""));
         } else if (value == MainWindow.UNIFIED_INBOX) {
+        } else if (value == MainWindow.UNIFIED_INBOX) {
             getStyleClass().add("unified-inbox-row");
             setText(null);
             setGraphic(row(icon("inbox", "inbox"), "Unified Inbox", "folder-name", null));
             setAccessibleText("Unified Inbox, all accounts");
         } else {
-            setText(String.valueOf(value));
+            setText(null);
             setGraphic(null);
+            setAccessibleText("No account configured. Use Add account to get started.");
+            setDisable(true);
         }
     }
 

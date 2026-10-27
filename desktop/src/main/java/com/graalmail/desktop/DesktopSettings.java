@@ -29,6 +29,16 @@ public final class DesktopSettings {
     public static final String SHOW_READER = "desktop.showReader";
     public static final String LAYOUT_MODE = "desktop.layoutMode";
     public static final String LIST_MODE = "desktop.listMode";
+    /** PolyMail identity (username@graalemail) for decentralized delivery. */
+    public static final String POLYMAIL_ENABLED = "polymail.enabled";
+    public static final String POLYMAIL_IDENTITY = "polymail.identity";
+    public static final String POLYMAIL_RPC_URLS = "polymail.rpcUrls";
+    public static final String POLYMAIL_CONTRACT = "polymail.contractAddress";
+    public static final String POLYMAIL_CHAIN_ID = "polymail.chainId";
+    public static final String POLYMAIL_NETWORK = "polymail.network";
+    public static final String POLYMAIL_LISTEN_PORT = "polymail.listenPort";
+    /** Reachable mailbox peers as {@code host:port,host:port} (deployment guide 4). */
+    public static final String POLYMAIL_MAILBOX_PEERS = "polymail.mailboxPeers";
 
     /** The default synchronisation interval in minutes. */
     public static final int DEFAULT_SYNC_INTERVAL_MINUTES = 15;
@@ -227,6 +237,77 @@ public final class DesktopSettings {
 
     public void showReader(boolean visible) {
         store.putSetting(SHOW_READER, Boolean.toString(visible));
+    }
+
+    public boolean polyMailEnabled() {
+        return Boolean.parseBoolean(store.setting(POLYMAIL_ENABLED, "false"));
+    }
+
+    public void polyMailEnabled(boolean enabled) {
+        store.putSetting(POLYMAIL_ENABLED, Boolean.toString(enabled));
+    }
+
+    public String polyMailIdentity() {
+        return store.setting(POLYMAIL_IDENTITY, "");
+    }
+
+    public void polyMailIdentity(String identity) {
+        store.putSetting(POLYMAIL_IDENTITY, identity == null ? "" : identity.trim());
+    }
+
+    public String polyMailRpcUrls() {
+        return store.setting(POLYMAIL_RPC_URLS, "");
+    }
+
+    public void polyMailRpcUrls(String urls) {
+        store.putSetting(POLYMAIL_RPC_URLS, urls == null ? "" : urls.trim());
+    }
+
+    public String polyMailContract() {
+        return store.setting(POLYMAIL_CONTRACT, "");
+    }
+
+    public void polyMailContract(String address) {
+        store.putSetting(POLYMAIL_CONTRACT, address == null ? "" : address.trim());
+    }
+
+    public String polyMailChainId() {
+        return store.setting(POLYMAIL_CHAIN_ID, "80002");
+    }
+
+    public void polyMailChainId(String chainId) {
+        store.putSetting(POLYMAIL_CHAIN_ID, chainId == null || chainId.isBlank() ? "80002" : chainId.trim());
+    }
+
+    public String polyMailNetwork() {
+        String value = store.setting(POLYMAIL_NETWORK, "test");
+        return switch (value) {
+            case "dev", "int", "prod" -> value;
+            default -> "test";
+        };
+    }
+
+    public void polyMailNetwork(String value) {
+        store.putSetting(POLYMAIL_NETWORK, switch (value == null ? "" : value) {
+            case "dev", "int", "prod" -> value;
+            default -> "test";
+        });
+    }
+
+    public int polyMailListenPort() {
+        return positive(store.setting(POLYMAIL_LISTEN_PORT, "0"), 0);
+    }
+
+    public void polyMailListenPort(int port) {
+        store.putSetting(POLYMAIL_LISTEN_PORT, Integer.toString(Math.max(0, port)));
+    }
+
+    public String polyMailMailboxPeers() {
+        return store.setting(POLYMAIL_MAILBOX_PEERS, "");
+    }
+
+    public void polyMailMailboxPeers(String peers) {
+        store.putSetting(POLYMAIL_MAILBOX_PEERS, peers == null ? "" : peers.trim());
     }
 
     private static int positive(String raw, int fallback) {

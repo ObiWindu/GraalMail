@@ -60,6 +60,7 @@ public final class AccountSetupDialog {
 
     private final DesktopContext context;
     private final Stage stage;
+    private Stage mainOwner;
 
     private final ComboBox<ProviderType> providerChoice = new ComboBox<>();
     private final Label detectedProviderLabel = new Label("Detected: Generic");
@@ -108,6 +109,11 @@ public final class AccountSetupDialog {
     public AccountSetupDialog(DesktopContext context, Stage stage) {
         this.context = context;
         this.stage = stage;
+        imapSecurityField.setValue("ssl");
+        smtpSecurityField.setValue("starttls");
+        status.setWrapText(true);
+        status.getStyleClass().add("form-status");
+        status.setAccessibleText("Form status");
     }
 
     /**
@@ -120,6 +126,7 @@ public final class AccountSetupDialog {
      * @param owner the owning window, may be {@code null}
      */
     public void showAndWait(Stage owner) {
+        this.mainOwner = owner;
         providerChoice.getItems().setAll(ProviderType.values());
         providerChoice.setValue(ProviderType.GENERIC);
         providerChoice.valueProperty().addListener((observable, old, value) -> {
@@ -138,6 +145,13 @@ public final class AccountSetupDialog {
             grid.setHgap(UiScale.px(stage, 10));
             grid.setVgap(UiScale.px(stage, 8));
             grid.setPadding(UiScale.insets(stage, 12));
+            javafx.scene.layout.ColumnConstraints labelCol = new javafx.scene.layout.ColumnConstraints();
+            labelCol.setMinWidth(UiScale.px(stage, 150));
+            labelCol.setHgrow(javafx.scene.layout.Priority.NEVER);
+            javafx.scene.layout.ColumnConstraints fieldCol = new javafx.scene.layout.ColumnConstraints();
+            fieldCol.setHgrow(javafx.scene.layout.Priority.ALWAYS);
+            fieldCol.setMinWidth(UiScale.px(stage, 220));
+            grid.getColumnConstraints().setAll(labelCol, fieldCol);
         }
         addRow(identity, 0, "Provider", providerCell());
         addRow(identity, 1, "Email", emailField);
@@ -168,8 +182,9 @@ public final class AccountSetupDialog {
         row = addRow(connection, row, "OAuth client id", clientIdField);
         row = addRow(connection, row, "OAuth redirect URI", redirectUriField);
         row = addRow(connection, row, "Redirect result URL", redirectResultField);
-        clientIdField.textProperty().addListener((observable, old, value) ->
-                updateVisibility(providerChoice.getValue()));
+        emailField.textProperty().addListener((observable, old, value) ->
+                updateVisibility(providerChoice.getValue() == null
+                        ? ProviderType.GENERIC : providerChoice.getValue()));
 
         Button openBrowser = new Button("Open sign in page");
         openBrowser.setOnAction(event -> openAuthorizationPage());
@@ -201,11 +216,14 @@ public final class AccountSetupDialog {
         VBox content = new VBox(UiScale.px(stage, 12), heading, helpLabel,
                 accountSection, identity, signinSectionLabel, connection, status, buttons);
         content.getStyleClass().add("account-setup");
-        if (new DesktopSettings(context.store()).darkTheme()) content.getStyleClass().add("dark-theme");
+        boolean dark = new DesktopSettings(context.store()).darkTheme();
+        if (dark) content.getStyleClass().add("dark-theme");
         content.setPadding(UiScale.insets(stage, 16));
         javafx.scene.control.ScrollPane scroll = new javafx.scene.control.ScrollPane(content);
         scroll.setFitToWidth(true);
         scroll.setHbarPolicy(javafx.scene.control.ScrollPane.ScrollBarPolicy.NEVER);
+        if (dark) scroll.getStyleClass().add("dark-theme");
+        scroll.setStyle(dark ? "-fx-background: #1e1830; -fx-background-color: #1e1830;" : "");
         javafx.scene.Scene scene = new javafx.scene.Scene(scroll);
         var stylesheet = getClass().getResource("/styles/mail.css");
         if (stylesheet != null) scene.getStylesheets().add(stylesheet.toExternalForm());
@@ -259,9 +277,18 @@ public final class AccountSetupDialog {
 
     private int addRow(GridPane grid, int row, String label, javafx.scene.Node node) {
         Label caption = new Label(label);
+        caption.setLabelFor(node);
         rowLabels.put(node, caption);
         grid.add(caption, 0, row);
         grid.add(node, 1, row);
+        javafx.scene.layout.GridPane.setHgrow(node, javafx.scene.layout.Priority.ALWAYS);
+        if (node instanceof javafx.scene.control.TextInputControl input) {
+            input.setMaxWidth(Double.MAX_VALUE);
+        } else if (node instanceof ComboBox<?> combo) {
+            combo.setMaxWidth(Double.MAX_VALUE);
+        } else if (node instanceof VBox box) {
+            box.setMaxWidth(Double.MAX_VALUE);
+        }
         return row + 1;
     }
 
@@ -430,9 +457,12 @@ public final class AccountSetupDialog {
         var cancel = new javafx.scene.control.ButtonType("Cancel",
                 javafx.scene.control.ButtonBar.ButtonData.CANCEL_CLOSE);
         confirm.getButtonTypes().setAll(download, cancel);
+        boolean maximized = UiScale.isMaximized(mainOwner);
         if (confirm.showAndWait().filter(button -> button == download).isEmpty()) {
+            UiScale.restoreMaximized(mainOwner, maximized);
             return;
         }
+        UiScale.restoreMaximized(mainOwner, maximized);
         openVerificationWindow();
     }
 
@@ -516,6 +546,10 @@ public final class AccountSetupDialog {
             status.setText("Select a provider first.");
             return;
         }
+        if (type == ProviderType.PROTON) {
+            saveProtonAsync();
+            return;
+        }
         AccountProvider provider = ProviderRegistry.find(type).orElse(null);
         if (provider == null) {
             status.setText("The provider implementation is not available in this build.");
@@ -523,24 +557,137 @@ public final class AccountSetupDialog {
         }
         try {
             AccountSetup setup = buildSetup(type, provider);
-            Account account = Account.builder(Ids.uuid(), type.id())
-                    .email(setup.email())
-                    .displayName(setup.displayName())
-                    .settings(setup.settings())
-                    .credentialRef(Ids.shortId())
-                    .build();
-            context.store().saveAccount(account);
-            AccountSessionFactory sessions = context.sessions();
-            sessions.saveCredential(account, setup.credential());
-            status.setText("The account was saved.");
-            closeVerificationBrowser();
-            stage.close();
+            persistAccount(setup);
         } catch (ProviderException e) {
             status.setText(e.userMessage());
+            status.getStyleClass().remove("form-status-ok");
+            if (!status.getStyleClass().contains("form-status-error")) {
+                status.getStyleClass().add("form-status-error");
+            }
         } catch (RuntimeException e) {
             LOG.warn("The account could not be saved: {}", e.getMessage());
             status.setText("The account could not be saved: " + e.getMessage());
         }
+    }
+
+    private void persistAccount(AccountSetup setup) {
+        Account account = Account.builder(Ids.uuid(), providerChoice.getValue().id())
+                .email(setup.email())
+                .displayName(setup.displayName())
+                .settings(setup.settings())
+                .credentialRef(Ids.shortId())
+                .build();
+        context.store().saveAccount(account);
+        AccountSessionFactory sessions = context.sessions();
+        sessions.saveCredential(account, setup.credential());
+        status.setText("The account was saved.");
+        status.getStyleClass().remove("form-status-error");
+        if (!status.getStyleClass().contains("form-status-ok")) {
+            status.getStyleClass().add("form-status-ok");
+        }
+        closeVerificationBrowser();
+        stage.close();
+    }
+
+    private void saveProtonAsync() {
+        String email = emailField.getText() == null ? "" : emailField.getText().trim();
+        String displayName = displayNameField.getText() == null ? "" : displayNameField.getText().trim();
+        if (email.isBlank()) {
+            status.setText("Enter the email address for this account first.");
+            return;
+        }
+        String loginPassword = passwordField.getText() == null ? "" : passwordField.getText();
+        if (loginPassword.isEmpty()) {
+            status.setText("Enter the Proton password.");
+            return;
+        }
+        saveButton.setDisable(true);
+        status.setText("Signing in to Proton…");
+        status.getStyleClass().removeAll("form-status-error", "form-status-ok");
+        String mailboxPassword = mailboxPasswordField.getText() == null
+                || mailboxPasswordField.getText().isEmpty()
+                ? loginPassword : mailboxPasswordField.getText();
+        String twoFactorCode = pendingTwoFactor && twoFactorField.getText() != null
+                ? twoFactorField.getText().trim() : null;
+        Thread worker = new Thread(() -> {
+            try {
+                AccountSetup setup = buildProtonSetupBlocking(email, displayName,
+                        loginPassword, mailboxPassword, twoFactorCode);
+                Platform.runLater(() -> {
+                    saveButton.setDisable(false);
+                    try {
+                        persistAccount(setup);
+                    } catch (RuntimeException e) {
+                        LOG.warn("The account could not be saved: {}", e.getMessage());
+                        status.setText("The account could not be saved: " + e.getMessage());
+                    }
+                });
+            } catch (ProtonAuth.TwoFactorRequired e) {
+                Platform.runLater(() -> {
+                    saveButton.setDisable(false);
+                    pendingTwoFactor = true;
+                    updateVisibility(ProviderType.PROTON);
+                    status.setText("Enter the two-factor code from the authenticator app and press Save again.");
+                });
+            } catch (ProtonApiException.CaptchaRequired e) {
+                Platform.runLater(() -> {
+                    saveButton.setDisable(false);
+                    pendingCaptcha = true;
+                    updateVisibility(ProviderType.PROTON);
+                    status.setText(e.userMessage() == null ? e.getMessage() : e.userMessage());
+                });
+            } catch (ProviderException e) {
+                Platform.runLater(() -> {
+                    saveButton.setDisable(false);
+                    if (e.code() == ErrorCode.CONSENT_REQUIRED
+                            && e.getMessage() != null && e.getMessage().contains("two-factor")) {
+                        pendingTwoFactor = true;
+                        updateVisibility(ProviderType.PROTON);
+                    }
+                    status.setText(e.userMessage());
+                });
+            } catch (RuntimeException e) {
+                LOG.warn("Proton sign in failed: {}", e.getMessage());
+                Platform.runLater(() -> {
+                    saveButton.setDisable(false);
+                    status.setText("Proton could not be reached. Check the connection and retry.");
+                });
+            }
+        }, "graalmail-proton-login");
+        worker.setDaemon(true);
+        worker.start();
+    }
+
+    private AccountSetup buildProtonSetupBlocking(String email, String displayName,
+            String loginPassword, String mailboxPassword, String twoFactorCode) {
+        ProtonAuth auth = new ProtonAuth(new DefaultProtonHttpTransport());
+        ProtonAuth.Tokens tokens = auth.login(email, loginPassword, twoFactorCode);
+        pendingTwoFactor = false;
+        pendingCaptcha = false;
+        java.util.Map<String, String> settings = new java.util.LinkedHashMap<>();
+        settings.put(ProtonTransportMode.SETTING, ProtonTransportMode.API.settingValue());
+        settings.put(ProtonProvider.SETTING_UID, tokens.uid());
+        TokenSet tokenSet = new TokenSet(tokens.accessToken(),
+                tokens.refreshToken(), tokens.expiresAt(), tokens.scope(), "", java.util.Map.of());
+        Credential credential =
+                new Credential(email, loginPassword, tokenSet, mailboxPassword);
+        try (com.graalmail.provider.api.ProviderSession verify =
+                     new ProtonApiSession(email,
+                             new ProtonApiClient(new DefaultProtonHttpTransport(), auth, tokens),
+                             mailboxPassword.getBytes(java.nio.charset.StandardCharsets.UTF_8), email)) {
+            ((ProtonApiSession) verify).unlock();
+        } catch (RuntimeException e) {
+            LOG.warn("Proton mailbox verification failed: {}", e.getMessage());
+            throw new ProviderException(ErrorCode.AUTHENTICATION_FAILED,
+                    "The Proton mailbox could not be opened. "
+                            + "With two-password mode, enter the mailbox password too.", false, e);
+        }
+        return AccountSetup.builder(AuthMethod.PASSWORD)
+                .email(email)
+                .displayName(displayName)
+                .credential(credential)
+                .settings(settings)
+                .build();
     }
 
     private AccountSetup buildSetup(ProviderType type, AccountProvider provider) {
@@ -568,16 +715,23 @@ public final class AccountSetupDialog {
                     extractState(redirect), pendingAuthorization.codeVerifier());
         }
         if (type == ProviderType.PROTON) {
-            return buildProtonSetup(email, displayName);
+            String loginPassword = passwordField.getText() == null ? "" : passwordField.getText();
+            String mailboxPassword = mailboxPasswordField.getText() == null
+                    || mailboxPasswordField.getText().isEmpty()
+                    ? loginPassword : mailboxPasswordField.getText();
+            String twoFactorCode = pendingTwoFactor && twoFactorField.getText() != null
+                    ? twoFactorField.getText().trim() : null;
+            return buildProtonSetupBlocking(email, displayName,
+                    loginPassword, mailboxPassword, twoFactorCode);
         }
         if (type == ProviderType.GENERIC) {
             Map<String, String> settings = new LinkedHashMap<>();
-            settings.put(ImapSettings.IMAP_HOST, imapHostField.getText());
-            settings.put(ImapSettings.IMAP_PORT, imapPortField.getText());
-            settings.put(ImapSettings.IMAP_SECURITY, imapSecurityField.getValue());
-            settings.put(ImapSettings.SMTP_HOST, smtpHostField.getText());
-            settings.put(ImapSettings.SMTP_PORT, smtpPortField.getText());
-            settings.put(ImapSettings.SMTP_SECURITY, smtpSecurityField.getValue());
+            settings.put(ImapSettings.IMAP_HOST, orDefault(imapHostField.getText(), "imap.example.com"));
+            settings.put(ImapSettings.IMAP_PORT, orDefault(imapPortField.getText(), "993"));
+            settings.put(ImapSettings.IMAP_SECURITY, orDefault(imapSecurityField.getValue(), "ssl"));
+            settings.put(ImapSettings.SMTP_HOST, orDefault(smtpHostField.getText(), "smtp.example.com"));
+            settings.put(ImapSettings.SMTP_PORT, orDefault(smtpPortField.getText(), "587"));
+            settings.put(ImapSettings.SMTP_SECURITY, orDefault(smtpSecurityField.getValue(), "starttls"));
             settings.put(ImapSettings.USERNAME, email);
             return AccountSetup.builder(AuthMethod.PASSWORD)
                     .email(email)
@@ -595,75 +749,8 @@ public final class AccountSetupDialog {
                 .build();
     }
 
-    /**
-     * Builds a Proton setup from the Proton username and password. Signs in
-     * against the Proton API right away (asking for a two-factor code when the
-     * account needs one) and verifies that the mailbox keys unlock, so a wrong
-     * password is reported before the account is saved.
-     */
-    private AccountSetup buildProtonSetup(String email, String displayName) {
-        String loginPassword = passwordField.getText() == null ? "" : passwordField.getText();
-        if (loginPassword.isEmpty()) {
-            throw new ProviderException(ErrorCode.CONFIGURATION_ERROR,
-                    "Enter the Proton password.", false);
-        }
-        String mailboxPassword = mailboxPasswordField.getText() == null
-                || mailboxPasswordField.getText().isEmpty()
-                ? loginPassword : mailboxPasswordField.getText();
-        String twoFactorCode = pendingTwoFactor && twoFactorField.getText() != null
-                ? twoFactorField.getText().trim() : null;
-        status.setText("Signing in to Proton…");
-        ProtonAuth auth = new ProtonAuth(new DefaultProtonHttpTransport());
-        ProtonAuth.Tokens tokens;
-        try {
-            tokens = auth.login(email, loginPassword, twoFactorCode);
-            pendingTwoFactor = false;
-            pendingCaptcha = false;
-        } catch (ProtonAuth.TwoFactorRequired e) {
-            pendingTwoFactor = true;
-            updateVisibility(ProviderType.PROTON);
-            throw new ProviderException(ErrorCode.CONSENT_REQUIRED,
-                    "Enter the two-factor code from the authenticator app and press Save again.",
-                    false, e);
-        } catch (ProtonApiException.CaptchaRequired e) {
-            pendingCaptcha = true;
-            updateVisibility(ProviderType.PROTON);
-            throw e;
-        } catch (ProviderException e) {
-            throw e;
-        } catch (RuntimeException e) {
-            LOG.warn("Proton sign in failed: {}", e.getMessage());
-            throw new ProviderException(ErrorCode.CONNECTION_REFUSED,
-                    "Proton could not be reached. Check the connection and retry.", true, e);
-        }
-        java.util.Map<String, String> settings = new java.util.LinkedHashMap<>();
-        settings.put(ProtonTransportMode.SETTING, ProtonTransportMode.API.settingValue());
-        settings.put(ProtonProvider.SETTING_UID, tokens.uid());
-        TokenSet tokenSet = new TokenSet(tokens.accessToken(),
-                tokens.refreshToken(), tokens.expiresAt(), tokens.scope(), "", java.util.Map.of());
-        Credential credential =
-                new Credential(email, loginPassword, tokenSet, mailboxPassword);
-        // Verify the mailbox keys unlock before saving anything.
-        try (com.graalmail.provider.api.ProviderSession verify =
-                     new ProtonApiSession(email,
-                             new ProtonApiClient(new DefaultProtonHttpTransport(), auth, tokens),
-                             mailboxPassword.getBytes(java.nio.charset.StandardCharsets.UTF_8), email)) {
-            ((ProtonApiSession) verify).unlock();
-        } catch (ProviderException e) {
-            throw e;
-        } catch (RuntimeException e) {
-            LOG.warn("Proton mailbox verification failed: {}", e.getMessage());
-            throw new ProviderException(ErrorCode.AUTHENTICATION_FAILED,
-                    "The Proton mailbox could not be opened. "
-                            + "With two-password mode, enter the mailbox password too.", false, e);
-        }
-        status.setText("Signed in to Proton; the account can be saved.");
-        return AccountSetup.builder(AuthMethod.PASSWORD)
-                .email(email)
-                .displayName(displayName)
-                .credential(credential)
-                .settings(settings)
-                .build();
+    private static String orDefault(String value, String fallback) {
+        return value == null || value.isBlank() ? fallback : value;
     }
 
     private static String extractCode(String redirect) {
@@ -702,6 +789,14 @@ public final class AccountSetupDialog {
      * @return the mode, {@link SecurityMode#SSL_TLS} by default
      */
     public SecurityMode imapSecurityMode() {
-        return SecurityMode.parse(imapSecurityField.getValue());
+        String value = imapSecurityField.getValue();
+        if (value == null || value.isBlank()) {
+            return SecurityMode.SSL_TLS;
+        }
+        try {
+            return SecurityMode.parse(value);
+        } catch (RuntimeException e) {
+            return SecurityMode.SSL_TLS;
+        }
     }
 }

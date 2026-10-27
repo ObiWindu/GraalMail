@@ -37,14 +37,30 @@ public final class SettingsActivity extends AppCompatActivity {
     public static final String SETTING_NOTIFICATIONS = "android.notifications";
     /** The key of the remote image setting. */
     public static final String SETTING_REMOTE_IMAGES = "android.loadRemoteImages";
+    public static final String SETTING_POLYMAIL_ENABLED = "polymail.enabled";
+    public static final String SETTING_POLYMAIL_IDENTITY = "polymail.identity";
+    public static final String SETTING_POLYMAIL_RPC = "polymail.rpcUrls";
+    public static final String SETTING_POLYMAIL_CONTRACT = "polymail.contractAddress";
+    public static final String SETTING_POLYMAIL_CHAIN = "polymail.chainId";
+    public static final String SETTING_POLYMAIL_PEERS = "polymail.mailboxPeers";
 
     private AppContext context;
     private RadioGroup syncGroup;
     private RadioGroup themeGroup;
     private com.google.android.material.materialswitch.MaterialSwitch notificationsSwitch;
+    private com.google.android.material.materialswitch.MaterialSwitch polyMailSwitch;
+    private com.google.android.material.textfield.TextInputEditText polyMailIdentity;
+    private com.google.android.material.textfield.TextInputEditText polyMailRpc;
+    private com.google.android.material.textfield.TextInputEditText polyMailContract;
+    private com.google.android.material.textfield.TextInputEditText polyMailPeers;
     private int originalInterval;
     private String originalTheme;
     private boolean originalNotifications;
+    private boolean originalPolyMail;
+    private String originalPolyMailIdentity;
+    private String originalPolyMailRpc;
+    private String originalPolyMailContract;
+    private String originalPolyMailPeers;
     private View saveButton;
 
     @Override
@@ -71,11 +87,56 @@ public final class SettingsActivity extends AppCompatActivity {
         notificationsSwitch = findViewById(R.id.settings_notifications_enabled);
         originalNotifications = Boolean.parseBoolean(context.store().setting(SETTING_NOTIFICATIONS, "true"));
         notificationsSwitch.setChecked(originalNotifications);
+        polyMailSwitch = findViewById(R.id.settings_polymail_enabled);
+        polyMailIdentity = findViewById(R.id.settings_polymail_identity);
+        polyMailRpc = findViewById(R.id.settings_polymail_rpc);
+        polyMailContract = findViewById(R.id.settings_polymail_contract);
+        polyMailPeers = findViewById(R.id.settings_polymail_peers);
+        originalPolyMail = Boolean.parseBoolean(
+                context.store().setting(SETTING_POLYMAIL_ENABLED, "false"));
+        originalPolyMailIdentity = context.store().setting(SETTING_POLYMAIL_IDENTITY, "");
+        originalPolyMailRpc = context.store().setting(SETTING_POLYMAIL_RPC, "");
+        originalPolyMailContract = context.store().setting(SETTING_POLYMAIL_CONTRACT, "");
+        originalPolyMailPeers = context.store().setting(SETTING_POLYMAIL_PEERS, "");
+        polyMailSwitch.setChecked(originalPolyMail);
+        polyMailIdentity.setText(originalPolyMailIdentity);
+        polyMailRpc.setText(originalPolyMailRpc);
+        polyMailContract.setText(originalPolyMailContract);
+        polyMailPeers.setText(originalPolyMailPeers);
         saveButton = findViewById(R.id.settings_save);
         saveButton.setEnabled(false);
         syncGroup.setOnCheckedChangeListener((group, checkedId) -> updateSaveState());
         themeGroup.setOnCheckedChangeListener((group, checkedId) -> updateSaveState());
         notificationsSwitch.setOnCheckedChangeListener((button, checked) -> updateSaveState());
+        polyMailSwitch.setOnCheckedChangeListener((button, checked) -> updateSaveState());
+        polyMailIdentity.addTextChangedListener(new android.text.TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) { }
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
+                updateSaveState();
+            }
+            @Override public void afterTextChanged(android.text.Editable s) { }
+        });
+        polyMailRpc.addTextChangedListener(new android.text.TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) { }
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
+                updateSaveState();
+            }
+            @Override public void afterTextChanged(android.text.Editable s) { }
+        });
+        polyMailContract.addTextChangedListener(new android.text.TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) { }
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
+                updateSaveState();
+            }
+            @Override public void afterTextChanged(android.text.Editable s) { }
+        });
+        polyMailPeers.addTextChangedListener(new android.text.TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) { }
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
+                updateSaveState();
+            }
+            @Override public void afterTextChanged(android.text.Editable s) { }
+        });
         getOnBackPressedDispatcher().addCallback(this, new androidx.activity.OnBackPressedCallback(true) {
             @Override public void handleOnBackPressed() { closeSettings(); }
         });
@@ -88,7 +149,16 @@ public final class SettingsActivity extends AppCompatActivity {
     private boolean isDirty() {
         return intervalFor(syncGroup.getCheckedRadioButtonId()) != originalInterval
                 || !currentTheme().equals(originalTheme)
-                || notificationsSwitch.isChecked() != originalNotifications;
+                || notificationsSwitch.isChecked() != originalNotifications
+                || polyMailSwitch.isChecked() != originalPolyMail
+                || !textOf(polyMailIdentity).equals(originalPolyMailIdentity)
+                || !textOf(polyMailRpc).equals(originalPolyMailRpc)
+                || !textOf(polyMailContract).equals(originalPolyMailContract)
+                || !textOf(polyMailPeers).equals(originalPolyMailPeers);
+    }
+
+    private static String textOf(android.widget.EditText field) {
+        return field.getText() == null ? "" : field.getText().toString().trim();
     }
 
     private int intervalFor(int checked) {
@@ -144,18 +214,37 @@ public final class SettingsActivity extends AppCompatActivity {
 
     private void save() {
         int minutes = intervalFor(syncGroup.getCheckedRadioButtonId());
+        try {
+            com.graalmail.p2p.PeerAddress.parseList(textOf(polyMailPeers));
+        } catch (IllegalArgumentException e) {
+            Toast.makeText(this, R.string.settings_polymail_peers_invalid, Toast.LENGTH_LONG).show();
+            polyMailPeers.requestFocus();
+            return;
+        }
         context.store().putSetting(SETTING_SYNC_INTERVAL, Integer.toString(minutes));
         String theme = currentTheme();
         context.store().putSetting("android.theme", theme);
         context.store().putSetting(SETTING_NOTIFICATIONS, Boolean.toString(notificationsSwitch.isChecked()));
+        context.store().putSetting(SETTING_POLYMAIL_ENABLED,
+                Boolean.toString(polyMailSwitch.isChecked()));
+        context.store().putSetting(SETTING_POLYMAIL_IDENTITY, textOf(polyMailIdentity));
+        context.store().putSetting(SETTING_POLYMAIL_RPC, textOf(polyMailRpc));
+        context.store().putSetting(SETTING_POLYMAIL_CONTRACT, textOf(polyMailContract));
+        context.store().putSetting(SETTING_POLYMAIL_PEERS, textOf(polyMailPeers));
         androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode("light".equals(theme)
                 ? androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_NO
                 : "dark".equals(theme) ? androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES
                 : androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM);
         SyncScheduler.schedule(this, context);
+        com.graalmail.android.work.AndroidPolyMail.refresh(this, context.store());
         originalInterval = minutes;
         originalTheme = theme;
         originalNotifications = notificationsSwitch.isChecked();
+        originalPolyMail = polyMailSwitch.isChecked();
+        originalPolyMailIdentity = textOf(polyMailIdentity);
+        originalPolyMailRpc = textOf(polyMailRpc);
+        originalPolyMailContract = textOf(polyMailContract);
+        originalPolyMailPeers = textOf(polyMailPeers);
         updateSaveState();
         Toast.makeText(this, R.string.settings_saved, Toast.LENGTH_SHORT).show();
     }
