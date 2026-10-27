@@ -23,8 +23,15 @@ jobs:
           cache: 'gradle'
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
+      - name: Install Android SDK packages
+        run: |
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses > /dev/null || true
+          "$SDKMANAGER" "platform-tools" "platforms;android-35" "build-tools;35.0.0"
       - name: Build and test JVM modules
         run: ./gradlew :core:test :security:test :provider-api:test :storage:test :sync:test :provider-imap:test :provider-gmail:test :provider-microsoft:test :provider-yahoo:test :provider-proton:test :testing:test :desktop:test --no-daemon
+      - name: Test Android module
+        run: ./gradlew :android:testDebugUnitTest --no-daemon
       - name: Build Android module
         run: ./gradlew :android:assembleDebug --no-daemon
       - name: Build desktop distribution

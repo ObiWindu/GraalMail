@@ -7,13 +7,12 @@ package com.graalmail.provider.proton;
 import java.util.List;
 
 /**
- * Platform availability of the Proton Mail integration.
+ * Platform availability of the Proton Mail Bridge integration.
  *
- * <p>Proton Mail does not publish IMAP or SMTP endpoints for third party
- * clients. The supported integration is Proton Mail Bridge, a desktop
- * application that exposes local IMAP and SMTP endpoints. Bridge does not run
- * on Android, therefore the Proton integration is available on desktop Linux
- * only.</p>
+ * <p>Direct API login works on every platform. Only the legacy Bridge
+ * transport is desktop-bound: Proton Mail Bridge is a desktop application
+ * that does not run on Android, therefore Bridge mode is available on Linux
+ * desktops only.</p>
  */
 public final class ProtonPlatformSupport {
 

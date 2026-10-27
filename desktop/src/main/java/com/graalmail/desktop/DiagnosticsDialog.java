@@ -21,7 +21,9 @@ import javafx.scene.control.Label;
 import javafx.scene.control.TextArea;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
+import javafx.stage.Modality;
 import javafx.stage.Stage;
+import javafx.stage.Window;
 import org.slf4j.Logger;
 
 /**
@@ -87,10 +89,20 @@ public final class DiagnosticsDialog {
 
     /**
      * Shows the window and runs the diagnostics once.
+     *
+     * @param owner the owning window, may be {@code null}
      */
-    public void show() {
+    public void show(Window owner) {
         if (stage.getScene() == null) {
             build();
+        }
+        if (owner != null) {
+            try {
+                stage.initOwner(owner);
+                stage.initModality(Modality.WINDOW_MODAL);
+            } catch (IllegalStateException e) {
+                LOG.warn("The diagnostics window cannot be attached: {}", e.getMessage());
+            }
         }
         runDiagnostics();
         stage.show();

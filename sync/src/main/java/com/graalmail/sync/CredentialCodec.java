@@ -25,6 +25,7 @@ public final class CredentialCodec {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("username", credential.username());
         map.put("secret", credential.secret());
+        map.put("keySecret", credential.keySecret());
         TokenSet tokens = credential.tokens();
         map.put("accessToken", tokens.accessToken());
         map.put("refreshToken", tokens.refreshToken());
@@ -45,7 +46,9 @@ public final class CredentialCodec {
                     map.get("expiresAt") == null || map.get("expiresAt").isBlank()
                             ? null : Instant.ofEpochMilli(Long.parseLong(map.get("expiresAt"))),
                     map.get("scope"), map.get("idToken"), Map.of());
-            return new Credential(map.get("username"), map.get("secret"), tokens);
+            String keySecret = map.get("keySecret");
+            return new Credential(map.get("username"), map.get("secret"), tokens,
+                    keySecret == null ? "" : keySecret);
         } catch (Exception e) {
             throw new IllegalStateException("Unable to decode credential", e);
         }

@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-class YahooProviderTest {
+class YahooProviderCompatibilityTest {
 
     private YahooProvider yahooProvider;
 

@@ -55,6 +55,7 @@ final class UiScale {
     private static final WeakHashMap<Stage, Double> APPLIED_SCALES = new WeakHashMap<>();
     private static final WeakHashMap<Stage, List<Runnable>> SCALE_LISTENERS = new WeakHashMap<>();
     private static final WeakHashMap<Stage, PauseTransition> RESCALE_DEBOUNCERS = new WeakHashMap<>();
+    private static final WeakHashMap<Stage, Boolean> CLAMP_REQUESTED = new WeakHashMap<>();
     private static volatile double currentScale = 1;
 
     private UiScale() { }
@@ -122,17 +123,23 @@ final class UiScale {
             PauseTransition debouncer = new PauseTransition(Duration.millis(120));
             debouncer.setOnFinished(event -> rescale(stage));
             RESCALE_DEBOUNCERS.put(stage, debouncer);
-            Runnable schedule = () -> {
+            Runnable scheduleResize = () -> {
                 PauseTransition pending;
                 synchronized (UiScale.class) {
                     pending = RESCALE_DEBOUNCERS.get(stage);
                 }
                 if (pending != null) pending.playFromStart();
             };
-            stage.xProperty().addListener((observable, oldValue, newValue) -> schedule.run());
-            stage.yProperty().addListener((observable, oldValue, newValue) -> schedule.run());
-            stage.widthProperty().addListener((observable, oldValue, newValue) -> schedule.run());
-            stage.heightProperty().addListener((observable, oldValue, newValue) -> schedule.run());
+            Runnable scheduleMove = () -> {
+                synchronized (UiScale.class) {
+                    CLAMP_REQUESTED.put(stage, Boolean.TRUE);
+                }
+                scheduleResize.run();
+            };
+            stage.xProperty().addListener((observable, oldValue, newValue) -> scheduleMove.run());
+            stage.yProperty().addListener((observable, oldValue, newValue) -> scheduleMove.run());
+            stage.widthProperty().addListener((observable, oldValue, newValue) -> scheduleResize.run());
+            stage.heightProperty().addListener((observable, oldValue, newValue) -> scheduleResize.run());
         }
     }
 
@@ -141,13 +148,24 @@ final class UiScale {
             Platform.runLater(() -> rescale(stage));
             return;
         }
+        boolean clamp;
+        synchronized (UiScale.class) {
+            clamp = Boolean.TRUE.equals(CLAMP_REQUESTED.remove(stage));
+        }
+        if (clamp) {
+            // Screen moves only: keep the window inside the new screen. Pure
+            // resizes are never clamped — clamping those fights the window
+            // manager during maximize and causes flicker.
+            clampToScreen(stage);
+        }
+        updateMinimumSize(stage, stage);
         double before;
         synchronized (UiScale.class) {
             before = APPLIED_SCALES.getOrDefault(stage, Double.NaN);
         }
-        applyCurrentScene(stage);
-        double after = currentScale;
-        if (!Double.isNaN(before) && Math.abs(after - before) < RESCALE_EPSILON) return;
+        double now = scale(stage);
+        if (!Double.isNaN(before) && Math.abs(now - before) < RESCALE_EPSILON) return;
+        applyFontScale(stage.getScene() == null ? null : stage.getScene().getRoot(), stage);
         List<Runnable> listeners;
         synchronized (UiScale.class) {
             listeners = new ArrayList<>(SCALE_LISTENERS.getOrDefault(stage, List.of()));
@@ -161,14 +179,18 @@ final class UiScale {
         }
     }
 
-    private static void applyCurrentScene(Stage stage) {
-        updateMinimumSize(stage, stage);
+    /**
+     * Keeps a restored window inside its screen. Maximized and fullscreen
+     * windows are owned by the window manager and are never touched: resizing
+     * those programmatically un-maximizes them and produces flicker.
+     */
+    private static void clampToScreen(Stage stage) {
+        if (stage.isMaximized() || stage.isFullScreen()) return;
         Rectangle2D bounds = visualBounds(stage);
         double maxWidth = bounds.getWidth() * 0.98;
         double maxHeight = bounds.getHeight() * 0.96;
         if (stage.getWidth() > maxWidth) stage.setWidth(maxWidth);
         if (stage.getHeight() > maxHeight) stage.setHeight(maxHeight);
-        applyFontScale(stage.getScene() == null ? null : stage.getScene().getRoot(), stage);
     }
 
     private static void updateMinimumSize(Stage stage, Window anchor) {

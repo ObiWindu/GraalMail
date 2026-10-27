@@ -11,8 +11,8 @@ Supported providers:
 | Gmail / Google Workspace | OAuth 2.0 (authorization code + PKCE) | IMAP + SMTP with XOAUTH2 | implemented, protocol path covered by tests |
 | Outlook.com / Hotmail / Microsoft 365 | OAuth 2.0 (authorization code + PKCE) | Microsoft Graph (default) or IMAP + SMTP with XOAUTH2 | implemented, Graph path covered by unit tests |
 | Yahoo Mail | App password (OAuth 2.0 optional, requires Yahoo approval) | IMAP + SMTP over TLS | implemented, protocol path covered by tests |
-| Proton Mail (Linux) | Proton Mail Bridge | local IMAP + SMTP | implemented, documented parity limits |
-| Proton Mail (Android) | – | – | no mailbox sync (no supported client integration exists); the setup screen links to the official Proton Mail app and web client |
+| Proton Mail (Linux) | Proton username + password (SRP) | Proton API, PGP decrypted locally | implemented, documented parity limits (sending not yet supported; Bridge mode still available) |
+| Proton Mail (Android) | Proton username + password (SRP) | Proton API, PGP decrypted locally | implemented, same parity limits as desktop |
 | Any other provider | password or app password | IMAP + SMTP over TLS/STARTTLS | implemented, covered by a GreenMail integration test |
 
 Nothing in this repository is a mock: the IMAP and SMTP code paths are
@@ -129,15 +129,17 @@ and is larger than a linked image, but the packaging works on every machine.
 ## Add an account
 
 1. `File ▸ Add account`.
-2. Choose the provider.
+2. Enter the email address. The provider is detected from its domain
+   (Gmail, Outlook/Hotmail, Yahoo, Proton Mail, or generic IMAP); use
+   Change for a custom domain hosted elsewhere.
 3. For Gmail, Microsoft and Yahoo OAuth: enter the OAuth client id and the
    redirect URI, press **Open sign in page**, sign in in the browser and paste
    the full redirect URL into the dialog.
 4. For Yahoo and generic IMAP providers: enter the app password or the account
    password and the server settings.
-5. For Proton Mail (Linux): start Proton Mail Bridge on this machine, then
-   enter the Proton login and the Bridge password. Ports, TLS mode and the
-   Bridge certificate are detected automatically.
+5. For Proton Mail: enter the Proton username and password (plus the mailbox
+   password with two-password mode, and a two-factor code when asked). No
+   Bridge is needed; mail is decrypted locally.
 
 The OAuth client registration is described in
 [PROVIDER_SUPPORT.md](PROVIDER_SUPPORT.md).
@@ -159,10 +161,10 @@ The OAuth client registration is described in
 * The Android application was built and packaged in this environment
   (`android-debug.apk`), but it was never started: no emulator or device was
   available, so the screens were only compiled and linted.
-* Proton Mail on Android cannot be implemented: Proton Mail offers no
-  officially supported way for a third party Android client to access a
-  mailbox. GraalMail reports this clearly and offers to open the official
-  Proton Mail application instead. It does not scrape the web interface and
-  it does not ask for Proton credentials.
+* Proton Mail uses the same endpoints as Proton's own mail clients. Sending
+  mail and saving drafts with a Proton account are not supported yet, and the
+  account was never exercised against a live Proton mailbox in the build
+  environment: the SRP handshake, key unlock and message decryption are
+  covered by offline tests with generated keys instead.
 * A message that was accepted by a submission server is reported as
   *accepted for delivery*, never as *delivered*.

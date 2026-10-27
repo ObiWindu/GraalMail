@@ -169,6 +169,9 @@
     <string name="setup_provider_gmail">Gmail / Google Workspace</string>
     <string name="setup_provider_microsoft">Outlook / Hotmail / Microsoft 365</string>
     <string name="setup_provider_proton">Proton Mail</string>
+    <string name="setup_provider_detected">Detected: %1$s</string>
+    <string name="setup_provider_manual">Provider: %1$s (manual)</string>
+    <string name="setup_provider_change">Change</string>
     <string name="setup_provider_yahoo">Yahoo Mail</string>
     <string name="setup_provider_generic">Other IMAP/SMTP provider</string>
     <string name="setup_email">Email address</string>
@@ -207,6 +210,12 @@
     <string name="setup_invalid_port">Enter a port between 1 and 65535.</string>
 
     <!-- Proton -->
+    <string name="setup_proton_title">Proton Mail</string>
+    <string name="setup_proton_auth_hint">Sign in with the Proton username and password; no Bridge is needed. Mail is decrypted on this device. With two-password mode, also enter the mailbox password.</string>
+    <string name="setup_proton_mailbox_password">Mailbox password (two-password mode only)</string>
+    <string name="setup_proton_two_factor">Two-factor code</string>
+    <string name="setup_proton_two_factor_asked">Enter the two-factor code from the authenticator app and press Connect again.</string>
+    <string name="setup_proton_open_login">Open Proton login in browser</string>
     <string name="proton_unavailable_title">Proton Mail is not available in GraalMail on Android</string>
     <string name="proton_unavailable_reason">Proton Mail does not publish IMAP or SMTP endpoints for third-party Android clients, and Proton Mail Bridge does not run on Android. GraalMail never asks for your Proton password and never uses an unofficial Proton API, so this client cannot open a Proton mailbox on Android.</string>
     <string name="proton_open_app">Open the Proton Mail Android app</string>

@@ -5,6 +5,7 @@
 package com.graalmail.desktop;
 
 import javafx.application.Application;
+import javafx.application.Platform;
 import javafx.scene.Scene;
 import javafx.stage.Stage;
 
@@ -31,7 +32,15 @@ public final class GraalMailApplication extends Application {
         Scene scene = window.build(stage);
         stage.setScene(scene);
         UiScale.configure(stage, scene, stage, 1520, 980, 700, 480);
-        stage.setOnCloseRequest(event -> context.close());
+        stage.setOnCloseRequest(event -> {
+            if (window != null) {
+                window.close();
+            }
+            if (context != null) {
+                context.close();
+            }
+            Platform.exit();
+        });
         stage.show();
     }
 

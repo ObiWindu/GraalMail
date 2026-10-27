@@ -12,15 +12,22 @@ import com.graalmail.provider.api.AuthMethod;
 import com.graalmail.provider.api.ProviderCapabilities;
 import com.graalmail.provider.api.ProviderSession;
 import com.graalmail.provider.api.ProviderType;
+import com.graalmail.provider.proton.api.DefaultProtonHttpTransport;
+import com.graalmail.provider.proton.api.ProtonApiClient;
+import com.graalmail.provider.proton.api.ProtonAuth;
+import com.graalmail.provider.proton.api.ProtonHttpRequest;
+import com.graalmail.security.model.Credential;
+import com.graalmail.security.model.TokenSet;
+import java.nio.charset.StandardCharsets;
+import java.util.Map;
 
 /**
- * Proton Mail provider based on the local Proton Mail Bridge.
+ * Proton Mail provider with direct API login.
  *
- * <p>Proton Mail publishes no IMAP or SMTP endpoints for third party clients.
- * The only supported integration is Proton Mail Bridge, a desktop application
- * that exposes local IMAP and SMTP endpoints with its own credentials. Bridge
- * runs on desktop systems only, so this provider reports itself as unavailable
- * on Android.</p>
+ * <p>The default transport talks to the Proton API with the Proton username
+ * and password (SRP authentication, PGP bodies decrypted locally with the
+ * mailbox password). The legacy Bridge transport is still available on desktop
+ * Linux via the {@code proton.transport} setting.</p>
  */
 public final class ProtonProvider implements AccountProvider {
 
@@ -38,20 +45,23 @@ public final class ProtonProvider implements AccountProvider {
     public static final String SETTING_FINGERPRINT = "bridge.certificateFingerprint";
     /** Setting key for the TLS mode, {@code STARTTLS} or {@code SSL}. */
     public static final String SETTING_TLS_MODE = "bridge.tlsMode";
+    /** Setting key for the Proton API base URL. */
+    public static final String SETTING_API_BASE_URL = "proton.apiBaseUrl";
+    /** Setting key for the client version sent to the Proton API. */
+    public static final String SETTING_APP_VERSION = "proton.appVersion";
+    /** Setting key for the Proton session UID. */
+    public static final String SETTING_UID = "proton.uid";
 
-    /** Message shown when the provider is used on Android. */
+    /** Message shown when Bridge mode is used on Android. */
     public static final String ANDROID_UNAVAILABLE_MESSAGE =
-            "Proton Mail integration on Android is not available; use the Proton Mail app or web client";
-
-    /** Message shown when no certificate fingerprint has been confirmed. */
-    public static final String MISSING_FINGERPRINT_MESSAGE =
-            "Confirm the Proton Mail Bridge certificate fingerprint before connecting";
+            "Proton Mail Bridge does not run on Android; sign in with the Proton "
+                    + "username and password instead, which needs no Bridge";
 
     /** Message shown when the stored certificate no longer matches the bridge. */
     public static final String CERTIFICATE_CHANGED_MESSAGE =
             "The Proton Mail Bridge certificate changed. " + ProtonTrustDecision.CHANGE_EXPLANATION
                     + " If Proton Mail Bridge was reinstalled, remove the Proton account "
-                    + "in GraalMail and add it again with the login and the Bridge password.";
+                    + "in GraalMail and add it again.";
 
     private final String platform;
 
@@ -72,50 +82,82 @@ public final class ProtonProvider implements AccountProvider {
 
     @Override
     public String displayName() {
-        return "Proton Mail (via Proton Mail Bridge)";
+        return "Proton Mail";
     }
 
     @Override
     public ProviderCapabilities capabilities() {
         return ProviderCapabilities.builder(ProviderType.PROTON)
-                .authMethods(AuthMethod.BRIDGE)
+                .authMethods(AuthMethod.PASSWORD, AuthMethod.BRIDGE)
                 .platform(ProtonPlatformSupport.LINUX, true)
-                .platform(ProtonPlatformSupport.ANDROID, false)
-                .labels(false)
+                .platform(ProtonPlatformSupport.ANDROID, true)
+                .labels(true)
                 .flags(true)
-                .idleSupport(true)
+                .idleSupport(false)
                 .serverSideSearch(true)
                 .serverSideFlags(true)
-                .draftSync(true)
+                .draftSync(false)
                 .attachments(true)
-                .sendCapable(true)
+                .sendCapable(false)
                 .unifiedInbox(false)
                 .offlineActions(false)
                 .pushNotifications(false)
-                .restriction("Requires a paid Proton Mail plan and Proton Mail Bridge running on "
-                        + "the same machine")
-                .restriction("Bridge-exposed mail is decrypted by Bridge; GraalMail does not "
-                        + "provide end-to-end encryption")
-                .restriction("Not available on Android")
-                .note("Proton Mail Bridge exposes a plain IMAP view; Proton labels, contacts and "
-                        + "encrypted search are not available")
-                .documentationUrl("https://proton.me/support/comprehensive-guide-to-bridge-settings")
+                .restriction("Sending mail and saving drafts with a Proton account are not "
+                        + "supported yet; reading, flagging and moving mail works")
+                .restriction("Accounts with two-password mode need the mailbox password in "
+                        + "addition to the login password")
+                .restriction("Proton Mail Bridge mode needs a paid Proton Mail plan and Bridge "
+                        + "running on the same machine, and is unavailable on Android")
+                .note("Sign in uses the Proton username and password directly; no Bridge is needed")
+                .note("Message bodies are PGP-encrypted on the server and are decrypted locally "
+                        + "with the mailbox password")
+                .note("Proton labels appear as folders; contacts are not available")
+                .documentationUrl("https://proton.me/support/proton-mail-bridge")
                 .build();
     }
 
     @Override
     public ProviderSession openSession(AccountSetup setup) {
-        if (!ProtonPlatformSupport.isAvailable(platform)) {
-            throw new ProviderException(ErrorCode.FEATURE_UNSUPPORTED, ANDROID_UNAVAILABLE_MESSAGE,
-                    false);
+        ProtonTransportMode mode = ProtonTransportMode.fromSetting(
+                setup.setting(ProtonTransportMode.SETTING));
+        if (mode == ProtonTransportMode.BRIDGE) {
+            if (!ProtonPlatformSupport.isAvailable(platform)) {
+                throw new ProviderException(ErrorCode.FEATURE_UNSUPPORTED,
+                        ANDROID_UNAVAILABLE_MESSAGE, false);
+            }
+            ProtonBridgeConfig config = toBridgeConfig(setup);
+            return new ProtonProviderSession(setup, config);
         }
-        ProtonBridgeConfig config = toConfig(setup);
-        return new ProtonProviderSession(setup, config);
+        return openApiSession(setup);
     }
 
     /** True when the provider can be used on the given platform. */
     public boolean supportsPlatform(String candidate) {
-        return ProtonPlatformSupport.isAvailable(candidate);
+        return true;
+    }
+
+    @Override
+    public void revoke(AccountSetup setup) {
+        if (ProtonTransportMode.fromSetting(setup.setting(ProtonTransportMode.SETTING))
+                != ProtonTransportMode.API) {
+            return;
+        }
+        Credential credential = setup.credential();
+        String accessToken = credential == null ? "" : credential.tokens().accessToken();
+        String uid = setup.setting(SETTING_UID, "");
+        if (accessToken.isBlank() || uid.isBlank()) {
+            return;
+        }
+        try {
+            String baseUrl = setup.setting(SETTING_API_BASE_URL,
+                    DefaultProtonHttpTransport.DEFAULT_BASE_URL);
+            String appVersion = setup.setting(SETTING_APP_VERSION, ProtonApiClient.DEFAULT_APP_VERSION);
+            new DefaultProtonHttpTransport(baseUrl, appVersion, 10_000, 10_000).execute(
+                    ProtonHttpRequest.delete("/auth").withHeaders(Map.of(
+                            "X-Pm-Uid", uid, "Authorization", "Bearer " + accessToken)));
+        } catch (RuntimeException | java.io.IOException ignored) {
+            // Best effort: local deletion proceeds regardless.
+        }
     }
 
     /** The platform this provider instance was created for. */
@@ -123,7 +165,69 @@ public final class ProtonProvider implements AccountProvider {
         return platform;
     }
 
-    private ProtonBridgeConfig toConfig(AccountSetup setup) {
+    private ProviderSession openApiSession(AccountSetup setup) {
+        String username = setup.email();
+        if (username == null || username.isBlank()) {
+            username = setup.setting(SETTING_USERNAME, "");
+        }
+        if (username.isBlank()) {
+            throw new ProviderException(ErrorCode.CONFIGURATION_ERROR,
+                    "Enter the Proton username.", false);
+        }
+        Credential credential = setup.credential();
+        String loginPassword = credential == null ? "" : credential.secret();
+        if (loginPassword.isEmpty()) {
+            throw new ProviderException(ErrorCode.CONFIGURATION_ERROR,
+                    "Enter the Proton password.", false);
+        }
+        String mailboxPassword = credential.keySecret();
+        if (mailboxPassword.isEmpty()) {
+            mailboxPassword = loginPassword;
+        }
+        String baseUrl = setup.setting(SETTING_API_BASE_URL,
+                DefaultProtonHttpTransport.DEFAULT_BASE_URL);
+        String appVersion = setup.setting(SETTING_APP_VERSION, ProtonApiClient.DEFAULT_APP_VERSION);
+        DefaultProtonHttpTransport transport =
+                new DefaultProtonHttpTransport(baseUrl, appVersion, 15_000, 30_000);
+        ProtonAuth auth = new ProtonAuth(transport);
+        ProtonAuth.Tokens tokens = storedTokens(setup, credential);
+        if (tokens == null) {
+            tokens = loginWithPassword(auth, username, loginPassword);
+        }
+        ProtonApiClient client = new ProtonApiClient(transport, auth, tokens);
+        ProtonApiSession session = new ProtonApiSession(username, client,
+                mailboxPassword.getBytes(StandardCharsets.UTF_8), username);
+        session.unlock();
+        return session;
+    }
+
+    private static ProtonAuth.Tokens storedTokens(AccountSetup setup, Credential credential) {
+        if (credential == null) {
+            return null;
+        }
+        TokenSet tokens = credential.tokens();
+        if (tokens.accessToken().isBlank() && !tokens.hasRefreshToken()) {
+            return null;
+        }
+        String uid = setup.setting(SETTING_UID, "");
+        if (uid.isBlank()) {
+            return null;
+        }
+        return new ProtonAuth.Tokens(uid, tokens.accessToken(), tokens.refreshToken(),
+                tokens.expiresAt(), tokens.scope(), 1);
+    }
+
+    private static ProtonAuth.Tokens loginWithPassword(ProtonAuth auth, String username, String password) {
+        try {
+            return auth.login(username, password);
+        } catch (ProtonAuth.TwoFactorRequired e) {
+            throw new ProviderException(ErrorCode.CONSENT_REQUIRED,
+                    "This Proton account uses two-factor authentication. Remove the account and "
+                            + "add it again, entering the two-factor code when asked.", false, e);
+        }
+    }
+
+    private ProtonBridgeConfig toBridgeConfig(AccountSetup setup) {
         String username = setup.setting(SETTING_USERNAME);
         if (username == null || username.isBlank()) {
             username = setup.email();

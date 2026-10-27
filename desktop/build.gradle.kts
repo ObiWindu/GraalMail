@@ -46,6 +46,7 @@ dependencies {
         implementation("org.openjfx:javafx-$module:$javafxVersion:$javafxClassifier")
     }
     implementation(libs.jackson.databind)
+    implementation(libs.playwright)
     runtimeOnly(libs.logback.classic)
     testImplementation(libs.junit.jupiter)
 }

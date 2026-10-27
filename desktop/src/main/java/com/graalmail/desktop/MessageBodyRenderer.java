@@ -21,7 +21,7 @@ final class MessageBodyRenderer {
         String text = dark ? "#EFEDF7" : "#1B1340";
         String background = dark ? "#1E1C2A" : "#ffffff";
         String muted = dark ? "#9B96B3" : "#6E6A85";
-        String accent = dark ? "#9B7CFF" : "#6D4AFF";
+        String accent = dark ? "#A37CFF" : "#7B3FE4";
         String rule = dark ? "#34304A" : "#E6E1F5";
         StringBuilder html = new StringBuilder();
         html.append("<html><head><meta charset='UTF-8'><style>body{font-family:system-ui,-apple-system,'Segoe UI',sans-serif;")

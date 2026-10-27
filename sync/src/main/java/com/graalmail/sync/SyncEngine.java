@@ -37,6 +37,13 @@ public final class SyncEngine {
     private final AccountSessionFactory sessions;
     private final RetryPolicy retryPolicy;
 
+    /**
+     * How long background sync backs off after a provider reports a limited
+     * account. Hammering a locked account extends the lock, so sync stays
+     * away until the cooldown lapses or a manual sync succeeds first.
+     */
+    static final java.time.Duration ACCOUNT_LIMIT_COOLDOWN = java.time.Duration.ofHours(24);
+
     public SyncEngine(MailStore store, AccountSessionFactory sessions) {
         this(store, sessions, RetryPolicy.defaultPolicy());
     }
@@ -72,7 +79,15 @@ public final class SyncEngine {
         int newMessages = 0;
         int applied = 0;
         int failed = 0;
+        Instant limitedUntil = cooldownUntil(account.id());
+        if (limitedUntil != null && Instant.now().isBefore(limitedUntil)) {
+            return new SyncReport(accountId, 0, 0, 0, 0,
+                    List.of("Sync paused until " + limitedUntil
+                            + " because the account is limited; it resumes automatically."),
+                    Instant.now(), 0);
+        }
         try (ProviderSession session = sessions.open(account)) {
+            clearCooldown(account.id());
             applied = applyPendingActions(account, session);
             failed = countFailed(account);
             List<Folder> folders = session.mailboxes().listFolders();
@@ -112,8 +127,15 @@ public final class SyncEngine {
             }
             store.putSetting("sync.lastSuccess." + accountId, Instant.now().toString());
         } catch (ProviderException e) {
-            errors.add(e.userMessage());
-            LOG.warn("Synchronization failed for account {}: {}", accountId, e.code());
+            if (e.code() == ErrorCode.ACCOUNT_LIMITED) {
+                Instant until = Instant.now().plus(ACCOUNT_LIMIT_COOLDOWN);
+                store.putSetting(cooldownKey(account.id()), until.toString());
+                errors.add(e.userMessage() + " Sync resumes automatically after " + until + ".");
+                LOG.warn("Synchronization paused for limited account {} until {}", accountId, until);
+            } else {
+                errors.add(e.userMessage());
+                LOG.warn("Synchronization failed for account {}: {}", accountId, e.code());
+            }
         } catch (RuntimeException e) {
             errors.add("Unexpected synchronization error: " + e.getMessage());
             LOG.warn("Unexpected synchronization error for account {}", accountId);
@@ -164,6 +186,26 @@ public final class SyncEngine {
         } catch (Exception e) {
             // Log but don't fail the entire sync
         }
+    }
+
+    private Instant cooldownUntil(String accountId) {
+        String raw = store.setting(cooldownKey(accountId), "");
+        if (raw.isBlank()) {
+            return null;
+        }
+        try {
+            return Instant.parse(raw);
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
+    private void clearCooldown(String accountId) {
+        store.putSetting(cooldownKey(accountId), "");
+    }
+
+    private static String cooldownKey(String accountId) {
+        return "sync.cooldownUntil." + accountId;
     }
 
     /** Copies the most recent headers of every folder into the local cache. */

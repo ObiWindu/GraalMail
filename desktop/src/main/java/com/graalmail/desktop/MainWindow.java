@@ -479,7 +479,7 @@ public final class MainWindow {
 
     private BorderPane buildCenter() {
         folderTree.setShowRoot(false);
-        folderTree.setCellFactory(view -> new FolderTreeCell());
+        folderTree.setCellFactory(view -> new FolderTreeCell(this::removeAccount));
         Label navSection = new Label("Mailboxes");
         navSection.getStyleClass().add("nav-section-label");
         HBox folderToolbar = new HBox(UiScale.px(owner, 3), navSection);
@@ -1721,6 +1721,7 @@ public final class MainWindow {
     public void close() {
         searchDelay.stop();
         dividerSaveDelay.stop();
+        notifier.dispose();
         io.shutdownNow();
     }
 
@@ -1818,7 +1819,7 @@ public final class MainWindow {
     }
 
     private void showDiagnostics() {
-        new DiagnosticsDialog(context, isDarkTheme()).show();
+        new DiagnosticsDialog(context, isDarkTheme()).show(owner);
     }
 
     private void showInfo(String message) {
@@ -1833,8 +1834,59 @@ public final class MainWindow {
         Stage stage = new Stage();
         stage.setTitle("Add account");
         AccountSetupDialog dialog = new AccountSetupDialog(context, stage);
-        dialog.showAndWait();
+        dialog.showAndWait(owner);
         refreshFolders();
+    }
+
+    /** Revokes remote tokens best-effort before local deletion. Runs on a worker thread. */
+    private void revokeRemotely(Account account) {
+        try {
+            var provider = context.sessions().provider(account);
+            var setup = context.sessions().setup(account, provider);
+            provider.revoke(setup);
+        } catch (RuntimeException e) {
+            LOG.warn("Remote revocation for {} failed: {}", account.id(), e.getMessage());
+        }
+    }
+
+    private void removeAccount(Account account) {
+        if (account == null) {
+            return;
+        }
+        String name = account.displayName().isBlank() ? account.email() : account.displayName();
+        Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
+        confirm.setTitle("Remove account");
+        confirm.setHeaderText("Remove " + name + "?");
+        confirm.setContentText("The account, its cached messages and its stored credentials "
+                + "are deleted from this machine. Mail on the server is not touched.");
+        if (confirm.showAndWait().filter(button -> button == javafx.scene.control.ButtonType.OK)
+                .isEmpty()) {
+            return;
+        }
+        status.setText("Removing " + name + "…");
+        io.submit(() -> {
+            revokeRemotely(account);
+            try {
+                context.sessions().deleteCredential(account);
+            } catch (RuntimeException e) {
+                LOG.warn("The credential of {} could not be deleted: {}", account.id(), e.getMessage());
+            }
+            try {
+                context.store().deleteAccount(account.id());
+            } catch (RuntimeException e) {
+                Platform.runLater(() -> status.setText(
+                        "The account could not be removed: " + e.getMessage()));
+                return;
+            }
+            Platform.runLater(() -> {
+                if (account.id().equals(settings.lastAccountId())) {
+                    settings.lastAccountId("");
+                    settings.lastFolderId("");
+                }
+                status.setText("Removed " + name + ".");
+                refreshFolders();
+            });
+        });
     }
 
     private void showAbout() {

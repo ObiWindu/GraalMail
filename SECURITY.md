@@ -80,16 +80,22 @@ the Android Keystore. The key material never leaves the keystore.
 
 ## Proton Mail
 
-* On Linux the client authenticates against the local Proton Mail Bridge. The
-  Bridge password is the account credential and is stored like every other
-  credential.
-* The Bridge certificate is shown to the user with its fingerprint before it
-  is trusted. The trust applies to that certificate only.
-* **GraalMail does not provide end to end encryption.** With the Bridge the
-  messages are decrypted by the Bridge before the client sees them. GraalMail
-  never claims otherwise.
-* On Android no Proton credential is collected, because there is no supported
-  integration that would need one.
+* The client signs in with the Proton username and password using SRP; the
+  server also proves its identity with an SRP server proof that the client
+  verifies, so a wrong password and an intercepted connection are reported
+  differently.
+* The SRP modulus is PGP-signed by Proton. Its signature is verified against
+  Proton's hardcoded modulus key before use, so a rogue endpoint cannot
+  downgrade the SRP group.
+* Message bodies and subjects are PGP-encrypted on the server and are
+  decrypted locally with the mailbox password. Passwords and keys never leave
+  the credential store and are never logged.
+* **GraalMail does not provide end to end encryption of its own.** It decrypts
+  received mail locally like Proton's own clients do. GraalMail never claims
+  otherwise.
+* In legacy Bridge mode (Linux only) the client authenticates against the
+  local Proton Mail Bridge instead. The Bridge password is the account
+  credential and the Bridge certificate fingerprint is pinned on first use.
 
 ## Logging
 

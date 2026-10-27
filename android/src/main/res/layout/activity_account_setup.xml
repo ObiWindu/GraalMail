@@ -32,11 +32,33 @@
               android:orientation="vertical"
               android:padding="@dimen/screen_inset_phone">
 
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:id="@+id/setup_provider_detected"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:textAppearance="@style/TextAppearance.GraalMail.Folder" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/setup_provider_change"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/setup_provider_change" />
+            </LinearLayout>
+
             <Spinner
                 android:id="@+id/setup_provider"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:minHeight="48dp" />
+                android:minHeight="48dp"
+                android:visibility="gone" />
 
             <TextView
                 android:id="@+id/setup_auth_explanation"
@@ -99,7 +121,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:paddingTop="4dp"
-                    android:text="@string/proton_unavailable_title"
+                    android:text="@string/setup_proton_title"
                     android:textAppearance="@style/TextAppearance.GraalMail.Subject" />
 
                 <TextView
@@ -107,8 +129,46 @@
                     android:layout_height="wrap_content"
                     android:paddingTop="4dp"
                     android:paddingBottom="8dp"
-                    android:text="@string/proton_unavailable_reason"
+                    android:text="@string/setup_proton_auth_hint"
                     android:textAppearance="@style/TextAppearance.GraalMail.Snippet" />
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/setup_proton_mailbox_container"
+                    style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content">
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/setup_proton_mailbox"
+                        style="@style/Widget.Material3.TextInputEditText.OutlinedBox"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:hint="@string/setup_proton_mailbox_password"
+                        android:inputType="textPassword" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/setup_proton_two_factor_container"
+                    style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:visibility="gone">
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/setup_proton_two_factor"
+                        style="@style/Widget.Material3.TextInputEditText.OutlinedBox"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:hint="@string/setup_proton_two_factor"
+                        android:inputType="number" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/setup_proton_open_login"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    style="@style/Widget.GraalMail.Button"
+                    android:layout_marginTop="@dimen/space_2"
+                    android:text="@string/setup_proton_open_login"
+                    android:visibility="gone" />
 
                 <TextView
                     android:layout_width="match_parent"

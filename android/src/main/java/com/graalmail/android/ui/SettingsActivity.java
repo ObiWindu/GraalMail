@@ -20,6 +20,7 @@ import com.graalmail.android.AppContext;
 import com.graalmail.android.R;
 import com.graalmail.android.work.SyncScheduler;
 import com.graalmail.core.domain.Account;
+import com.graalmail.core.util.Log;
 
 import java.util.List;
 
@@ -27,6 +28,8 @@ import java.util.List;
  * The settings screen of the Android client.
  */
 public final class SettingsActivity extends AppCompatActivity {
+
+    private static final org.slf4j.Logger LOG = Log.of(SettingsActivity.class);
 
     /** The key of the sync frequency setting. */
     public static final String SETTING_SYNC_INTERVAL = "android.syncIntervalMinutes";
@@ -203,6 +206,12 @@ public final class SettingsActivity extends AppCompatActivity {
                 .setPositiveButton(R.string.action_ok, (dialog, which) -> {
                     // Report success only after the account and credential have been removed.
                     context.io().execute(() -> {
+                        try {
+                            var provider = context.sessions().provider(account);
+                            provider.revoke(context.sessions().setup(account, provider));
+                        } catch (RuntimeException e) {
+                            LOG.warn("Remote revocation for {} failed: {}", account.id(), e.getMessage());
+                        }
                         context.sessions().deleteCredential(account);
                         context.store().deleteAccount(account.id());
                         runOnUiThread(() -> {

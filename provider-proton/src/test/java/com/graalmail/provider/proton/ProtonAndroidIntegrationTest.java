@@ -11,9 +11,9 @@ import static org.junit.jupiter.api.Assertions.*;
 class ProtonAndroidIntegrationTest {
 
     @Test
-    void statusReportsUnsupportedWithAlternatives() {
+    void statusReportsAvailabilityWithAlternatives() {
         ProtonAndroidIntegration.AndroidStatus status = ProtonAndroidIntegration.status();
-        assertFalse(status.supported());
+        assertTrue(status.supported());
         assertFalse(status.reason().isBlank());
         assertFalse(status.officialAlternatives().isEmpty());
         assertEquals(ProtonAndroidIntegration.WEB_URL, status.webUrl());

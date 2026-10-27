@@ -5,6 +5,7 @@ plugins {
 android {
     namespace = "com.graalmail.android"
     compileSdk = libs.versions.androidCompileSdk.get().toInt()
+    buildToolsVersion = "35.0.0"
 
     defaultConfig {
         applicationId = "com.graalmail.android"

@@ -6,9 +6,9 @@ target/
 PROGRESS.md
 
 # Gradle
-.gradle/
 gradle-app.setting
 !gradle-wrapper.jar
+*.class
 
 # Local machine configuration
 local.properties
@@ -17,12 +17,42 @@ local.properties
 .vscode/
 *.swp
 *.swo
+*~
 
-# Runtime data
+# AI assistant working files (may contain pasted snippets and credentials)
+.kateai/
+.opencode/
+
+# Runtime data: local mail cache, credentials, logs.
+# The desktop app keeps these in $XDG_DATA_HOME/GraalMail; they must never
+# be committed wherever they appear.
 *.db
 *.db-journal
-*.log
 *.sqlite
+*.sqlite3
+credentials.bin
+credentials.salt
+master.passphrase
+*.log
+*.hprof
+
+# Secrets and keys
+.env
+*.env
+.env.*
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.pem
+*.key
+*.p8
+secring.*
+google-services.json
+key.properties
+signing.properties
+*.mobileprovision
+*.provisionprofile
 
 # Android
 *.apk
@@ -30,10 +60,13 @@ local.properties
 *.aab
 *.dex
 android/local.properties
+.externalNativeBuild/
+captures/
 
 # OS
 .DS_Store
 Thumbs.db
+desktop.ini
 
 # Native build
 *.o
@@ -46,3 +79,7 @@ native-image.properties
 # Generated packages
 packaging/dist/
 docs/
+
+# Merge leftovers
+*.orig
+*.rej

@@ -115,5 +115,10 @@ public final class DesktopContext implements AutoCloseable {
         } catch (RuntimeException e) {
             LOG.warn("The local database could not be closed cleanly: {}", e.getMessage());
         }
+        try {
+            credentialStore.close();
+        } catch (Exception e) {
+            LOG.warn("The credential store could not be closed cleanly: {}", e.getMessage());
+        }
     }
 }

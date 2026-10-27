@@ -11,6 +11,7 @@ import javafx.geometry.Pos;
 import javafx.scene.Group;
 import javafx.scene.Node;
 import javafx.scene.control.Label;
+import javafx.scene.control.MenuItem;
 import javafx.scene.control.TreeCell;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
@@ -19,9 +20,26 @@ import javafx.scene.layout.VBox;
 /** Renders Proton-style navigation rows: rounded pills with count badges. */
 final class FolderTreeCell extends TreeCell<Object> {
 
+    private final java.util.function.Consumer<Account> onRemoveAccount;
+
+    /** Creates cells without account actions. */
+    FolderTreeCell() {
+        this(account -> { });
+    }
+
+    /**
+     * Creates cells that offer account actions.
+     *
+     * @param onRemoveAccount called when "Remove account…" is chosen
+     */
+    FolderTreeCell(java.util.function.Consumer<Account> onRemoveAccount) {
+        this.onRemoveAccount = onRemoveAccount == null ? account -> { } : onRemoveAccount;
+    }
+
     @Override
     protected void updateItem(Object value, boolean empty) {
         super.updateItem(value, empty);
+        setContextMenu(null);
         getStyleClass().removeAll("account-row", "folder-row", "unified-inbox-row");
         if (empty || value == null) {
             setText(null);
@@ -49,6 +67,11 @@ final class FolderTreeCell extends TreeCell<Object> {
             setText(null);
             setGraphic(row);
             setAccessibleText(title + ", account " + account.email());
+            MenuItem remove = new MenuItem("Remove account…");
+            remove.setOnAction(event -> onRemoveAccount.accept(account));
+            javafx.scene.control.ContextMenu menu =
+                    new javafx.scene.control.ContextMenu(remove);
+            setContextMenu(menu);
         } else if (value instanceof Folder folder) {
             getStyleClass().add("folder-row");
             String type = iconFor(folder.type());

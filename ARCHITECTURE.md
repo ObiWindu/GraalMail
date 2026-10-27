@@ -101,13 +101,29 @@ replaced without touching the providers.
 
 Proton Mail is deliberately not implemented as a normal IMAP provider:
 
-* On Linux the client talks to a locally running Proton Mail Bridge over its
-  IMAP and SMTP endpoints. The Bridge certificate is inspected and the user
-  decides whether it is trusted; the trust decision is scoped to that
-  certificate and never disables the platform trust store.
-* On Android there is no supported integration. `ProtonPlatformSupport` and
-  `ProtonAndroidIntegration` describe the limitation and offer to open the
-  official application. No Proton credential is collected on Android.
+* The client signs in directly with the Proton username and password using
+  SRP, on desktop and on Android. Subjects and bodies are PGP-encrypted on
+  the server and are decrypted locally with the mailbox password; sending is
+  not supported yet.
+* The legacy Bridge mode (`proton.transport=bridge`, Linux only) talks to a
+  locally running Proton Mail Bridge over its IMAP and SMTP endpoints. The
+  Bridge certificate is pinned on first use; the trust decision is scoped to
+  that certificate and never disables the platform trust store.
+* The official Proton Mail application links remain available from the
+  Android setup screen as alternatives.
+* Human-verification (CAPTCHA) checks are completed in a real browser
+  window (Playwright-managed Firefox, or the system browser), never in an
+  embedded view: the embedded JavaFX WebView is rejected by Proton with an
+  explicit “Unsupported browser” page (verified end to end in our own stack
+  on 2026-10-27, including a Chrome-UA spoof attempt that never settles),
+  and typing passwords into embedded views would normalize a
+  phishing-shaped habit. Embedding a third-party engine was evaluated and
+  rejected — JCEF/JxBrowser are Chromium-only with per-platform native
+  bundles and a painful JavaFX bridge, GeckoView is Android-only, XULRunner
+  embedding is dead, and the JavaFX-specific CEFFX wrapper (checked
+  2026-10-27) ships no releases (snapshot-only from a third-party repo),
+  has no clear license, and provides no linux-arm64 natives, which this
+  project supports.
 
 `ProtonFeatureParity` lists the differences between Proton Mail and a
 normal IMAP mailbox (no drafts, no server side search, no contacts, labels

@@ -8,19 +8,20 @@ live service in the build environment.
 
 | Feature | Gmail | Microsoft | Yahoo | Proton (Linux) | Proton (Android) | Generic IMAP |
 |---|---|---|---|---|---|---|
-| OAuth sign in | yes | yes | partial (needs Yahoo approval) | no (Bridge) | no | no |
+| OAuth sign in | yes | yes | partial (needs Yahoo approval) | no | no | no |
+| Password sign in | no | no | no | yes (Proton API) | yes (Proton API) | yes |
 | App password | no | no | yes | no | no | yes |
-| IMAP read | yes | yes | yes | yes (Bridge) | no | yes |
-| SMTP send | yes | yes | yes | yes (Bridge) | no | yes |
-| Server side search | yes | yes | yes | partial (text only) | no | yes |
-| Local search over the cache | yes | yes | yes | yes | no | yes |
-| Flags (read, starred) | yes | yes | yes | yes | no | yes |
-| Attachments | yes | yes | yes | yes | no | yes |
+| Read mail | yes (IMAP) | yes (Graph) | yes (IMAP) | yes (API) | yes (API) | yes |
+| Send mail | yes | yes | yes | no (not yet) | no (not yet) | yes |
+| Server side search | yes | yes | yes | partial (metadata) | partial (metadata) | yes |
+| Local search over the cache | yes | yes | yes | yes | yes | yes |
+| Flags (read, starred) | yes | yes | yes | yes | yes | yes |
+| Attachments | yes | yes | yes | partial (embedded) | partial (embedded) | yes |
 | Drafts on the server | yes | yes | yes | no | no | partial |
-| Labels as folders | yes | no | no | yes | no | no |
-| IMAP IDLE | yes | yes | yes | yes (Bridge) | no | depends on the server |
-| Offline actions | yes | yes | yes | yes | no | yes |
-| Unified inbox | yes | yes | yes | yes | no | yes |
+| Labels as folders | yes | no | no | yes | yes | no |
+| IMAP IDLE | yes | yes | yes | no | no | depends on the server |
+| Offline actions | yes | yes | yes | yes | yes | yes |
+| Unified inbox | yes | yes | yes | yes | yes | yes |
 | Contacts | local only | local only | local only | local only | local only | local only |
 | Push notifications | no | no | no | no | no | no |
 
@@ -97,10 +98,39 @@ configuration, error mapping) is covered by unit tests.
 
 ## Proton Mail
 
-### Linux desktop
+Proton accounts sign in directly with the Proton username and password; no
+Bridge is needed on any platform:
 
-Proton Mail is supported through **Proton Mail Bridge**, the official local
-bridge application:
+1. In GraalMail, add a Proton account with the Proton username and password.
+2. With two-password mode, also enter the mailbox password. With two-factor
+   authentication, enter the authenticator code when asked.
+3. GraalMail authenticates with SRP, unlocks the mailbox keys locally and
+   decrypts subjects and bodies on this machine; the server only ever sees
+   ciphertext.
+4. If Proton answers with a CAPTCHA check, either open
+   https://account.proton.me/login in a browser, sign in once to complete
+   the check, then try again — or use “Verify in private window” right in
+   the setup dialog, which opens Proton's login page in a private Firefox
+   window (one-time ~90 MB download, kept for reuse). Closing that window
+   retries the sign-in automatically. No CAPTCHA can be solved inside the
+   app itself, and retrying blindly can lock the account.
+5. If Proton reports temporarily limited access after detecting unusual
+   activity, stop signing in — further attempts extend the lock, which
+   typically lifts within a day. Background sync pauses automatically for
+   24 hours and resumes on its own; use Proton's official apps meanwhile.
+
+**Parity limits** (`ProtonFeatureParity`): sending mail and saving drafts are
+not supported yet. Proton labels appear as folders, contacts are not
+available, and server-side search matches metadata while subjects and senders
+are filtered locally after decryption. Separately stored attachments are
+reported as unavailable; attachments embedded in messages work. GraalMail
+does **not** provide end to end encryption of its own and never claims it
+does; it decrypts received mail locally with the mailbox password.
+
+### Legacy Bridge mode (Linux desktop only)
+
+The previous integration through **Proton Mail Bridge** is still available by
+setting `proton.transport` to `bridge`:
 
 1. Install Proton Mail Bridge for Linux and log in with the Proton account.
 2. Enable the IMAP and SMTP server in the Bridge settings.
@@ -124,23 +154,12 @@ end encryption and never claims it does.
 
 ### Android
 
-There is no officially supported way for a third party Android application to
-access a Proton Mail mailbox: Proton Mail Bridge does not run on Android and
-Proton Mail offers no public API for third party mail clients.
+Proton accounts work on Android through the same direct login: the setup
+screen asks for the Proton username and password (plus the mailbox password
+for two-password mode, and a two-factor code when needed).
 
-GraalMail therefore:
-
-* lists Proton Mail in the Android account setup with an explanation instead
-  of hiding it, and offers one-tap buttons for the official Proton Mail
-  application and the web client,
-* offers no Proton sign in on Android and asks for no Proton credential,
-* shows the reason in the account setup,
-* offers to open the official Proton Mail application or the web interface,
-* keeps the Proton provider behind its own adapter so that a future official
-  integration can be added without touching the rest of the application.
-
-No scraping of the Proton web interface and no reverse engineering of private
-APIs is performed.
+The screen still offers the official Proton Mail application and the web
+client as alternatives below the sign-in fields.
 
 ## Generic IMAP and SMTP
 

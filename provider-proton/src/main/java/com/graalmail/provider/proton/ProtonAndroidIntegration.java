@@ -9,9 +9,9 @@ import java.util.List;
 /**
  * Structured status for the Proton integration on Android.
  *
- * <p>This client never asks for Proton credentials on Android, never talks to a
- * private Proton API and never claims feature parity with the official
- * application.</p>
+ * <p>Proton accounts sign in directly with the Proton username and password;
+ * no Bridge is needed on Android. The official app links remain as
+ * alternatives, and this client never claims feature parity with it.</p>
  */
 public final class ProtonAndroidIntegration {
 
@@ -35,9 +35,9 @@ public final class ProtonAndroidIntegration {
 
     /** Returns the Android availability status. */
     public static AndroidStatus status() {
-        return new AndroidStatus(false,
-                "Proton Mail integration on Android is not available; use the Proton Mail app or "
-                        + "web client",
+        return new AndroidStatus(true,
+                "Proton Mail signs in directly with the Proton username and password. "
+                        + "Sending mail is not supported yet.",
                 OFFICIAL_ALTERNATIVES, appLink(), WEB_URL);
     }
 

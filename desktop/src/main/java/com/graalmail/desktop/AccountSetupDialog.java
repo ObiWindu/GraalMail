@@ -15,10 +15,18 @@ import com.graalmail.provider.api.AuthMethod;
 import com.graalmail.provider.api.OAuthCapableProvider;
 import com.graalmail.provider.api.ProviderRegistry;
 import com.graalmail.provider.api.ProviderType;
+import com.graalmail.provider.api.ProviderDeduction;
 import com.graalmail.provider.imap.ImapSettings;
 import com.graalmail.provider.imap.SecurityMode;
-import com.graalmail.provider.proton.ProtonBridgeAutoConfig;
+import com.graalmail.provider.proton.ProtonApiSession;
+import com.graalmail.provider.proton.ProtonProvider;
+import com.graalmail.provider.proton.ProtonTransportMode;
+import com.graalmail.provider.proton.api.DefaultProtonHttpTransport;
+import com.graalmail.provider.proton.api.ProtonApiClient;
+import com.graalmail.provider.proton.api.ProtonApiException;
+import com.graalmail.provider.proton.api.ProtonAuth;
 import com.graalmail.security.model.Credential;
+import com.graalmail.security.model.TokenSet;
 import com.graalmail.security.oauth.AuthorizationRequest;
 import com.graalmail.sync.AccountSessionFactory;
 import java.awt.Desktop;
@@ -26,6 +34,7 @@ import java.net.URI;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import javafx.geometry.Insets;
+import javafx.application.Platform;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
@@ -53,6 +62,9 @@ public final class AccountSetupDialog {
     private final Stage stage;
 
     private final ComboBox<ProviderType> providerChoice = new ComboBox<>();
+    private final Label detectedProviderLabel = new Label("Detected: Generic");
+    private boolean providerManuallyChosen;
+    private boolean adjustingProviderChoice;
     private final TextField emailField = new TextField();
     private final TextField displayNameField = new TextField();
     private final TextField imapHostField = new TextField("imap.example.com");
@@ -64,16 +76,25 @@ public final class AccountSetupDialog {
     private final ComboBox<String> smtpSecurityField = new ComboBox<>(
             javafx.collections.FXCollections.observableArrayList("starttls", "ssl", "none"));
     private final PasswordField passwordField = new PasswordField();
+    private final PasswordField mailboxPasswordField = new PasswordField();
+    private final TextField twoFactorField = new TextField();
+    private boolean pendingTwoFactor;
+    private boolean pendingCaptcha;
+    private Button openBrowserButton;
+    private Button protonBrowserButton;
+    private Button protonVerifyButton;
+    private ProtonVerificationBrowser verificationBrowser;
+    private final java.util.concurrent.atomic.AtomicBoolean verificationRetryArmed =
+            new java.util.concurrent.atomic.AtomicBoolean();
     private final TextField clientIdField = new TextField();
     private final TextField redirectUriField = new TextField("http://localhost:8080/oauth/callback");
     private final TextField redirectResultField = new TextField();
     private final Label status = new Label("");
     private final Label helpLabel = new Label(
             "Choose your provider and follow the sign-in steps. Your mail stays in GraalMail's local cache.");
+    private final Label signinSectionLabel = new Label("Sign-in details");
     private final Button saveButton = new Button("Save account");
     private final Map<Node, Label> rowLabels = new java.util.HashMap<>();
-    private final VBox stepContent = new VBox();
-    private int currentStep;
 
     private AuthorizationRequest pendingAuthorization;
     private AccountSetup pendingSetup;
@@ -87,28 +108,53 @@ public final class AccountSetupDialog {
     public AccountSetupDialog(DesktopContext context, Stage stage) {
         this.context = context;
         this.stage = stage;
-        this.stepContent.setSpacing(UiScale.px(stage, 12));
     }
 
     /**
      * Shows the dialog and blocks until it is closed.
+     *
+     * <p>Everything lives on one screen: the account block, then the
+     * sign-in block whose rows appear or hide with the email domain. The
+     * window is sized to its content.</p>
+     *
+     * @param owner the owning window, may be {@code null}
      */
-    public void showAndWait() {
+    public void showAndWait(Stage owner) {
         providerChoice.getItems().setAll(ProviderType.values());
         providerChoice.setValue(ProviderType.GENERIC);
-        providerChoice.valueProperty().addListener((observable, old, value) -> updateVisibility(value));
+        providerChoice.valueProperty().addListener((observable, old, value) -> {
+            if (!adjustingProviderChoice) {
+                providerManuallyChosen = true;
+            }
+            refreshDetectedLabel();
+            updateVisibility(value);
+        });
+        providerManuallyChosen = false;
+        refreshDetectedLabel();
 
         GridPane identity = new GridPane();
         GridPane connection = new GridPane();
-        GridPane authorization = new GridPane();
-        for (GridPane grid : new GridPane[]{identity, connection, authorization}) {
+        for (GridPane grid : new GridPane[]{identity, connection}) {
             grid.setHgap(UiScale.px(stage, 10));
             grid.setVgap(UiScale.px(stage, 8));
             grid.setPadding(UiScale.insets(stage, 12));
         }
-        addRow(identity, 0, "Provider", providerChoice);
+        addRow(identity, 0, "Provider", providerCell());
         addRow(identity, 1, "Email", emailField);
         addRow(identity, 2, "Display name", displayNameField);
+        emailField.textProperty().addListener((observable, old, value) -> {
+            providerManuallyChosen = false;
+            ProviderType deduced = ProviderDeduction.deduceProvider(value);
+            if (deduced != providerChoice.getValue()) {
+                adjustingProviderChoice = true;
+                try {
+                    providerChoice.setValue(deduced);
+                } finally {
+                    adjustingProviderChoice = false;
+                }
+            }
+            refreshDetectedLabel();
+        });
         int row = 0;
         row = addRow(connection, row, "IMAP server", imapHostField);
         row = addRow(connection, row, "IMAP port", imapPortField);
@@ -117,43 +163,43 @@ public final class AccountSetupDialog {
         row = addRow(connection, row, "SMTP port", smtpPortField);
         row = addRow(connection, row, "SMTP security", smtpSecurityField);
         row = addRow(connection, row, "Password or app password", passwordField);
+        row = addRow(connection, row, "Mailbox password (two-password mode only)", mailboxPasswordField);
+        row = addRow(connection, row, "Two-factor code (if asked)", twoFactorField);
         row = addRow(connection, row, "OAuth client id", clientIdField);
         row = addRow(connection, row, "OAuth redirect URI", redirectUriField);
-        addRow(authorization, 0, "Redirect result URL", redirectResultField);
+        row = addRow(connection, row, "Redirect result URL", redirectResultField);
+        clientIdField.textProperty().addListener((observable, old, value) ->
+                updateVisibility(providerChoice.getValue()));
 
         Button openBrowser = new Button("Open sign in page");
         openBrowser.setOnAction(event -> openAuthorizationPage());
+        openBrowserButton = openBrowser;
+        protonBrowserButton = new Button("Open Proton login in browser");
+        protonBrowserButton.setOnAction(event -> openProtonLoginPage());
+        protonBrowserButton.setVisible(false);
+        protonBrowserButton.setManaged(false);
+        protonVerifyButton = new Button("Verify in private window");
+        protonVerifyButton.setOnAction(event -> confirmVerificationWindow());
+        protonVerifyButton.setVisible(false);
+        protonVerifyButton.setManaged(false);
         Button cancel = new Button("Cancel");
         cancel.setOnAction(event -> stage.close());
-        Button continueButton = new Button("Continue");
-        continueButton.setDefaultButton(true);
-        Button back = new Button("Back");
-        back.setOnAction(event -> { currentStep = Math.max(0, currentStep - 1); updateStep(identity, connection, authorization, openBrowser, back, continueButton); });
-        continueButton.setOnAction(event -> {
-            if (currentStep == 0) {
-                if (emailField.getText() == null || emailField.getText().isBlank()) {
-                    status.setText("Enter the email address for this account first.");
-                    emailField.requestFocus();
-                    return;
-                }
-                currentStep = 1;
-                updateStep(identity, connection, authorization, openBrowser, back, continueButton);
-            } else if (requiresOAuth()) {
-                currentStep = 2;
-                updateStep(identity, connection, authorization, openBrowser, back, continueButton);
-            } else save();
-        });
+        saveButton.setDefaultButton(true);
         saveButton.setOnAction(event -> save());
 
         javafx.scene.layout.FlowPane buttons = new javafx.scene.layout.FlowPane(
                 UiScale.px(stage, 8), UiScale.px(stage, 6),
-                back, continueButton, openBrowser, saveButton, cancel);
+                openBrowser, protonVerifyButton, protonBrowserButton, saveButton, cancel);
         buttons.setAlignment(javafx.geometry.Pos.CENTER_RIGHT);
 
         Label heading = new Label("Add an account");
         heading.getStyleClass().add("compose-heading");
         helpLabel.setWrapText(true);
-        VBox content = new VBox(UiScale.px(stage, 12), heading, helpLabel, stepContent, status, buttons);
+        Label accountSection = new Label("Account");
+        accountSection.getStyleClass().add("pane-heading");
+        signinSectionLabel.getStyleClass().add("pane-heading");
+        VBox content = new VBox(UiScale.px(stage, 12), heading, helpLabel,
+                accountSection, identity, signinSectionLabel, connection, status, buttons);
         content.getStyleClass().add("account-setup");
         if (new DesktopSettings(context.store()).darkTheme()) content.getStyleClass().add("dark-theme");
         content.setPadding(UiScale.insets(stage, 16));
@@ -164,38 +210,44 @@ public final class AccountSetupDialog {
         var stylesheet = getClass().getResource("/styles/mail.css");
         if (stylesheet != null) scene.getStylesheets().add(stylesheet.toExternalForm());
         stage.setScene(scene);
-        UiScale.install(scene, stage);
-        updateVisibility(ProviderType.GENERIC);
-        currentStep = 0;
-        updateStep(identity, connection, authorization, openBrowser, back, continueButton);
+        if (owner != null) {
+            stage.initOwner(owner);
+            stage.initModality(javafx.stage.Modality.WINDOW_MODAL);
+        }
+        stage.setOnHiding(event -> closeVerificationBrowser());
+        UiScale.configure(stage, scene, owner != null ? owner : stage, 680, 780, 520, 460);
+        updateVisibility(providerChoice.getValue() == null
+                ? ProviderType.GENERIC : providerChoice.getValue());
+        Platform.runLater(emailField::requestFocus);
         stage.showAndWait();
     }
 
-    private void updateStep(GridPane identity, GridPane connection, GridPane authorization,
-                            Button openBrowser, Button back, Button continueButton) {
-        stepContent.getChildren().clear();
-        if (currentStep == 0) {
-            stepContent.getChildren().addAll(new Label("1. Choose provider and account"), identity);
-        } else if (currentStep == 1) {
-            stepContent.getChildren().addAll(new Label("2. Configure sign-in"), connection);
-        } else {
-            stepContent.getChildren().addAll(new Label("3. Complete browser sign-in"),
-                    new Label("Open the provider page, finish signing in, then paste the full redirect URL below."),
-                    authorization);
-        }
-        back.setVisible(currentStep > 0);
-        back.setManaged(currentStep > 0);
-        boolean oauthStep = currentStep == 2 && requiresOAuth();
-        openBrowser.setVisible(oauthStep);
-        openBrowser.setManaged(oauthStep);
-        saveButton.setVisible(oauthStep);
-        saveButton.setManaged(oauthStep);
-        saveButton.setDefaultButton(oauthStep);
-        continueButton.setVisible(currentStep < 2);
-        continueButton.setManaged(currentStep < 2);
-        continueButton.setDefaultButton(currentStep < 2);
-        continueButton.setText(currentStep == 1 && !requiresOAuth() ? "Save account" : "Continue");
-        setRowVisible(redirectResultField, oauthStep);
+    /**
+     * The provider cell: the deduced provider with a manual override that
+     * stays hidden unless the deduction is wrong (for example a custom
+     * domain hosted by Gmail, Microsoft 365 or Proton).
+     */
+    private VBox providerCell() {
+        javafx.scene.control.Hyperlink change =
+                new javafx.scene.control.Hyperlink("Change");
+        change.setOnAction(event -> {
+            providerChoice.setVisible(true);
+            providerChoice.setManaged(true);
+            providerChoice.requestFocus();
+        });
+        HBox detected = new HBox(UiScale.px(stage, 8), detectedProviderLabel, change);
+        detected.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
+        providerChoice.setVisible(false);
+        providerChoice.setManaged(false);
+        providerChoice.setMaxWidth(Double.MAX_VALUE);
+        return new VBox(UiScale.px(stage, 4), detected, providerChoice);
+    }
+
+    private void refreshDetectedLabel() {
+        ProviderType type = providerChoice.getValue();
+        String name = type == null ? "Generic" : type.displayName();
+        detectedProviderLabel.setText(providerManuallyChosen
+                ? "Provider: " + name + " (manual)" : "Detected: " + name);
     }
 
     private boolean requiresOAuth() {
@@ -216,6 +268,22 @@ public final class AccountSetupDialog {
     private void updateVisibility(ProviderType type) {
         boolean generic = type == ProviderType.GENERIC;
         boolean proton = type == ProviderType.PROTON;
+        if (!proton) {
+            pendingTwoFactor = false;
+            pendingCaptcha = false;
+            closeVerificationBrowser();
+        }
+        if (protonBrowserButton != null) {
+            boolean showBrowser = proton && pendingCaptcha;
+            protonBrowserButton.setVisible(showBrowser);
+            protonBrowserButton.setManaged(showBrowser);
+        }
+        if (protonVerifyButton != null) {
+            boolean showVerify = proton && pendingCaptcha;
+            protonVerifyButton.setVisible(showVerify);
+            protonVerifyButton.setManaged(showVerify);
+        }
+        boolean oauth = requiresOAuth();
         imapHostField.setDisable(!generic);
         imapPortField.setDisable(!generic);
         imapSecurityField.setDisable(!generic);
@@ -233,25 +301,67 @@ public final class AccountSetupDialog {
         setRowVisible(smtpPortField, generic);
         setRowVisible(smtpSecurityField, generic);
         setRowVisible(passwordField, type != ProviderType.GMAIL && type != ProviderType.MICROSOFT);
+        setRowVisible(mailboxPasswordField, proton);
+        setRowVisible(twoFactorField, proton && pendingTwoFactor);
         setRowVisible(clientIdField, type != ProviderType.GENERIC && !proton);
         setRowVisible(redirectUriField, type != ProviderType.GENERIC && !proton);
-        setRowVisible(redirectResultField, type != ProviderType.GENERIC && !proton);
+        setRowVisible(redirectResultField, oauth);
+        if (openBrowserButton != null) {
+            openBrowserButton.setVisible(oauth);
+            openBrowserButton.setManaged(oauth);
+        }
+        signinSectionLabel.setText(proton ? "Proton sign-in"
+                : generic ? "Server settings" : "Provider sign-in");
         Label passwordCaption = rowLabels.get(passwordField);
         if (passwordCaption != null) {
-            passwordCaption.setText(proton ? "Bridge password" : "Password or app password");
+            passwordCaption.setText(proton ? "Proton password" : "Password or app password");
         }
         if (proton) {
-            helpLabel.setText("Only the Proton login and the Bridge password are needed. "
-                    + "Start Proton Mail Bridge on this machine first; GraalMail finds its "
-                    + "ports and verifies its certificate automatically.");
-        } else {
-            helpLabel.setText("Choose your provider and follow the sign-in steps. "
+            helpLabel.setText("Sign in with the Proton username and password; no Bridge is needed. "
+                    + "With two-password mode, also enter the mailbox password. "
+                    + "Mail is decrypted locally on this machine.");
+        } else if (oauth) {
+            helpLabel.setText("Press “Open sign in page”, finish signing in in the browser, "
+                    + "paste the redirect URL below, then press Save. "
                     + "Your mail stays in GraalMail's local cache.");
+        } else {
+            helpLabel.setText("Enter the email address and follow the sign-in steps. "
+                    + "Your mail stays in GraalMail's local cache.");
+        }
+        refitDialog();
+    }
+
+    /**
+     * Resizes the window to its content, clamped to the screen, so the
+     * single screen always covers exactly its visible elements. Skipped
+     * while hidden so headless use stays safe.
+     */
+    private void refitDialog() {
+        if (!stage.isShowing()) {
+            return;
+        }
+        stage.sizeToScene();
+        javafx.stage.Window anchor = stage.getOwner() != null ? stage.getOwner() : stage;
+        javafx.stage.Screen screen = javafx.stage.Screen.getPrimary();
+        if (anchor.getWidth() > 0 && anchor.getHeight() > 0) {
+            double centerX = anchor.getX() + anchor.getWidth() / 2;
+            double centerY = anchor.getY() + anchor.getHeight() / 2;
+            var screens = javafx.stage.Screen.getScreensForRectangle(centerX, centerY, 1, 1);
+            if (!screens.isEmpty()) {
+                screen = screens.getFirst();
+            }
+        }
+        double maxWidth = screen.getVisualBounds().getWidth() * 0.92;
+        double maxHeight = screen.getVisualBounds().getHeight() * 0.90;
+        if (stage.getWidth() > maxWidth) {
+            stage.setWidth(maxWidth);
+        }
+        if (stage.getHeight() > maxHeight) {
+            stage.setHeight(maxHeight);
         }
     }
 
-    private void setRowVisible(Node field, boolean visible) {
-        field.setVisible(visible);
+    private void setRowVisible(Node field, boolean visible) {        field.setVisible(visible);
         field.setManaged(visible);
         Label label = rowLabels.get(field);
         if (label != null) {
@@ -278,13 +388,126 @@ public final class AccountSetupDialog {
                     .setting("oauth.redirectUri", redirectUriField.getText() == null ? "" : redirectUriField.getText().trim())
                     .build();
             pendingAuthorization = oauth.beginAuthorization(pendingSetup);
-            Desktop.getDesktop().browse(URI.create(pendingAuthorization.authorizationUrl()));
-            status.setText("A browser window was opened. Paste the full redirect URL into the "
-                    + "redirect field and press Save.");
+            browseInBackground(URI.create(pendingAuthorization.authorizationUrl()),
+                    "A browser window was opened. Paste the full redirect URL into the "
+                            + "redirect field and press Save.",
+                    "The sign in page could not be opened: ");
         } catch (Exception e) {
             LOG.warn("The authorization page could not be opened: {}", e.getMessage());
             status.setText("The sign in page could not be opened: " + e.getMessage());
         }
+    }
+
+    private void openProtonLoginPage() {
+        if (!Desktop.isDesktopSupported()
+                || !Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
+            status.setText("No browser is available. Open "
+                    + ProtonApiException.HUMAN_VERIFICATION_LOGIN_URL + " manually, "
+                    + "sign in once, then press Save again.");
+            return;
+        }
+        browseInBackground(URI.create(ProtonApiException.HUMAN_VERIFICATION_LOGIN_URL),
+                "A browser window was opened. Complete the check there, "
+                        + "then press Save again.",
+                "The Proton login page could not be opened: ");
+    }
+
+    /**
+     * Opens Proton's login page in a managed private Firefox window so the
+     * human-verification check can be completed. Asks for explicit consent
+     * first: the first run downloads Firefox (~90&nbsp;MB, kept for reuse).
+     * Runs off the JavaFX thread: startup and a possible download block.
+     */
+    private void confirmVerificationWindow() {
+        javafx.scene.control.Alert confirm = new javafx.scene.control.Alert(
+                javafx.scene.control.Alert.AlertType.CONFIRMATION);
+        confirm.setTitle("Verify in private window");
+        confirm.setHeaderText("Open Proton's login page in a private browser window?");
+        confirm.setContentText("This downloads a private Firefox (~90 MB, one time, kept for "
+                + "reuse) if none is cached yet. Complete the check there, then press Save again.");
+        var download = new javafx.scene.control.ButtonType("Download & open",
+                javafx.scene.control.ButtonBar.ButtonData.OK_DONE);
+        var cancel = new javafx.scene.control.ButtonType("Cancel",
+                javafx.scene.control.ButtonBar.ButtonData.CANCEL_CLOSE);
+        confirm.getButtonTypes().setAll(download, cancel);
+        if (confirm.showAndWait().filter(button -> button == download).isEmpty()) {
+            return;
+        }
+        openVerificationWindow();
+    }
+
+    private void openVerificationWindow() {
+        status.setText("Opening verification window…");
+        Thread worker = new Thread(() -> {
+            try {
+                if (verificationBrowser == null) {
+                    verificationBrowser = new ProtonVerificationBrowser();
+                }
+                verificationBrowser.setDisconnectHandler(closed ->
+                        autoRetryAfterVerification());
+                verificationBrowser.open(ProtonApiException.HUMAN_VERIFICATION_LOGIN_URL);
+                verificationRetryArmed.set(true);
+                Platform.runLater(() -> status.setText(
+                        "Complete the check in the opened window, then press Save again — "
+                                + "or just close the window and the sign-in retries by itself."));
+            } catch (Exception e) {
+                LOG.warn("The verification window could not be opened: {}", e.getMessage());
+                Platform.runLater(() -> status.setText(
+                        "Could not open a verification window. Use “Open Proton login "
+                                + "in browser” instead."));
+            }
+        }, "graalmail-verify");
+        worker.setDaemon(true);
+        worker.start();
+    }
+
+    /**
+     * Retries the sign-in once when the verification window is closed by the
+     * user. Exactly-once via the armed flag: programmatic closes disarm
+     * first, so only a user-initiated close retries. A retry is a single
+     * login attempt; if the check is still pending the guidance reappears.
+     */
+    private void autoRetryAfterVerification() {
+        if (!verificationRetryArmed.compareAndSet(true, false)) {
+            return;
+        }
+        Platform.runLater(() -> {
+            status.setText("Verification window closed — retrying sign-in…");
+            save();
+        });
+    }
+
+    /** Closes the managed verification window, if any, without blocking. */
+    private void closeVerificationBrowser() {
+        verificationRetryArmed.set(false);
+        ProtonVerificationBrowser browser = verificationBrowser;
+        verificationBrowser = null;
+        if (browser == null) {
+            return;
+        }
+        Thread worker = new Thread(browser::close, "graalmail-verify-close");
+        worker.setDaemon(true);
+        worker.start();
+    }
+
+    /**
+     * Opens a URI in the system browser without freezing the setup window.
+     * {@code Desktop.browse} can block for a long time on some Linux
+     * desktops, so it must never run on the JavaFX thread.
+     */
+    private void browseInBackground(URI uri, String openedText, String failurePrefix) {
+        status.setText("Opening browser…");
+        Thread worker = new Thread(() -> {
+            try {
+                Desktop.getDesktop().browse(uri);
+                Platform.runLater(() -> status.setText(openedText));
+            } catch (Exception e) {
+                LOG.warn("The browser could not be opened: {}", e.getMessage());
+                Platform.runLater(() -> status.setText(failurePrefix + e.getMessage()));
+            }
+        }, "graalmail-browse");
+        worker.setDaemon(true);
+        worker.start();
     }
 
     private void save() {
@@ -310,6 +533,7 @@ public final class AccountSetupDialog {
             AccountSessionFactory sessions = context.sessions();
             sessions.saveCredential(account, setup.credential());
             status.setText("The account was saved.");
+            closeVerificationBrowser();
             stage.close();
         } catch (ProviderException e) {
             status.setText(e.userMessage());
@@ -372,34 +596,73 @@ public final class AccountSetupDialog {
     }
 
     /**
-     * Builds a Proton setup from the login and the Bridge password only. The
-     * Bridge endpoint (ports, TLS mode, certificate) is detected automatically
-     * and the login is verified before the account is saved.
+     * Builds a Proton setup from the Proton username and password. Signs in
+     * against the Proton API right away (asking for a two-factor code when the
+     * account needs one) and verifies that the mailbox keys unlock, so a wrong
+     * password is reported before the account is saved.
      */
     private AccountSetup buildProtonSetup(String email, String displayName) {
-        String bridgePassword = passwordField.getText() == null ? "" : passwordField.getText();
-        if (bridgePassword.isEmpty()) {
+        String loginPassword = passwordField.getText() == null ? "" : passwordField.getText();
+        if (loginPassword.isEmpty()) {
             throw new ProviderException(ErrorCode.CONFIGURATION_ERROR,
-                    "Enter the Bridge password shown in Proton Mail Bridge.", false);
+                    "Enter the Proton password.", false);
         }
-        status.setText("Detecting Proton Mail Bridge on this machine…");
-        ProtonBridgeAutoConfig.Endpoint endpoint;
+        String mailboxPassword = mailboxPasswordField.getText() == null
+                || mailboxPasswordField.getText().isEmpty()
+                ? loginPassword : mailboxPasswordField.getText();
+        String twoFactorCode = pendingTwoFactor && twoFactorField.getText() != null
+                ? twoFactorField.getText().trim() : null;
+        status.setText("Signing in to Proton…");
+        ProtonAuth auth = new ProtonAuth(new DefaultProtonHttpTransport());
+        ProtonAuth.Tokens tokens;
         try {
-            endpoint = new ProtonBridgeAutoConfig().resolveAndVerify(
-                    "", null, null, null, email, bridgePassword);
+            tokens = auth.login(email, loginPassword, twoFactorCode);
+            pendingTwoFactor = false;
+            pendingCaptcha = false;
+        } catch (ProtonAuth.TwoFactorRequired e) {
+            pendingTwoFactor = true;
+            updateVisibility(ProviderType.PROTON);
+            throw new ProviderException(ErrorCode.CONSENT_REQUIRED,
+                    "Enter the two-factor code from the authenticator app and press Save again.",
+                    false, e);
+        } catch (ProtonApiException.CaptchaRequired e) {
+            pendingCaptcha = true;
+            updateVisibility(ProviderType.PROTON);
+            throw e;
         } catch (ProviderException e) {
             throw e;
         } catch (RuntimeException e) {
-            LOG.warn("Proton Mail Bridge detection failed: {}", e.getMessage());
+            LOG.warn("Proton sign in failed: {}", e.getMessage());
             throw new ProviderException(ErrorCode.CONNECTION_REFUSED,
-                    "Proton Mail Bridge could not be reached. Start it and retry.", true, e);
+                    "Proton could not be reached. Check the connection and retry.", true, e);
         }
-        status.setText("Proton Mail Bridge found; the account can be saved.");
-        return AccountSetup.builder(AuthMethod.BRIDGE)
+        java.util.Map<String, String> settings = new java.util.LinkedHashMap<>();
+        settings.put(ProtonTransportMode.SETTING, ProtonTransportMode.API.settingValue());
+        settings.put(ProtonProvider.SETTING_UID, tokens.uid());
+        TokenSet tokenSet = new TokenSet(tokens.accessToken(),
+                tokens.refreshToken(), tokens.expiresAt(), tokens.scope(), "", java.util.Map.of());
+        Credential credential =
+                new Credential(email, loginPassword, tokenSet, mailboxPassword);
+        // Verify the mailbox keys unlock before saving anything.
+        try (com.graalmail.provider.api.ProviderSession verify =
+                     new ProtonApiSession(email,
+                             new ProtonApiClient(new DefaultProtonHttpTransport(), auth, tokens),
+                             mailboxPassword.getBytes(java.nio.charset.StandardCharsets.UTF_8), email)) {
+            ((ProtonApiSession) verify).unlock();
+        } catch (ProviderException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            LOG.warn("Proton mailbox verification failed: {}", e.getMessage());
+            throw new ProviderException(ErrorCode.AUTHENTICATION_FAILED,
+                    "The Proton mailbox could not be opened. "
+                            + "With two-password mode, enter the mailbox password too.", false, e);
+        }
+        status.setText("Signed in to Proton; the account can be saved.");
+        return AccountSetup.builder(AuthMethod.PASSWORD)
                 .email(email)
                 .displayName(displayName)
-                .password(email, bridgePassword)
-                .settings(endpoint.settings(email))
+                .credential(credential)
+                .settings(settings)
                 .build();
     }
 
