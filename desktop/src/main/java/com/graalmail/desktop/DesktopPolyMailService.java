@@ -6,23 +6,30 @@ package com.graalmail.desktop;
 
 import com.graalmail.core.util.Log;
 import com.graalmail.p2p.NetworkId;
-import com.graalmail.p2p.InMemoryPeerNetworkService;
 import com.graalmail.p2p.PolyMailConfig;
 import com.graalmail.p2p.PolyMailNode;
-import com.graalmail.p2p.blockchain.InMemoryCursorStore;
 import com.graalmail.p2p.blockchain.Web3jPolygonNotificationService;
 import com.graalmail.p2p.crypto.DefaultEncryptionService;
-import com.graalmail.p2p.delivery.InMemoryDeliveryStore;
 import com.graalmail.p2p.identity.InMemoryIdentityService;
 import com.graalmail.p2p.mailbox.InMemoryContentStore;
 import com.graalmail.p2p.mailbox.InMemoryInboxRepository;
 import com.graalmail.p2p.mailbox.MailboxPeer;
 import com.graalmail.p2p.transport.NioTcpTransport;
+import com.graalmail.p2p.transport.TcpPeerNetworkService;
 import com.graalmail.storage.JdbcSqlDatabase;
-import com.graalmail.storage.SqlMailStore;
 import com.graalmail.storage.SqlPolyMailStore;
 import com.graalmail.storage.SqlSchema;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.security.KeyFactory;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.PrivateKey;
+import java.security.PublicKey;
+import java.security.spec.PKCS8EncodedKeySpec;
+import java.security.spec.X509EncodedKeySpec;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutorService;
@@ -84,20 +91,24 @@ public final class DesktopPolyMailService implements AutoCloseable {
      */
     public static DesktopPolyMailService create(AppPaths paths, PolyMailConfig config,
                                                 List<com.graalmail.p2p.PeerAddress> mailboxPeers) throws Exception {
-        java.nio.file.Files.createDirectories(paths.baseDirectory());
+        Files.createDirectories(paths.baseDirectory());
         JdbcSqlDatabase database = new JdbcSqlDatabase("jdbc:sqlite:" + paths.databaseFile());
         SqlSchema.migrate(database);
         SqlPolyMailStore durableStore = new SqlPolyMailStore(database);
 
+        String peerId = "desktop-" + java.util.UUID.randomUUID();
         NioTcpTransport transport = new NioTcpTransport(config.listenPort(),
-                config.networkId().code(), "desktop-" + java.util.UUID.randomUUID());
-        InMemoryPeerNetworkService peerNetwork = new InMemoryPeerNetworkService();
+                config.networkId().code(), peerId);
+        TcpPeerNetworkService peerNetwork = new TcpPeerNetworkService(transport,
+                config.networkId().code(), mailboxPeers == null ? List.of() : mailboxPeers);
+        // This node also serves its mailbox (spec 6.2: one process may serve
+        // several roles). The signing key is persisted so receipts stay
+        // verifiable across restarts; content itself is memory-resident.
+        peerNetwork.serveLocal(new MailboxPeer(peerId, new InMemoryContentStore(),
+                mailboxSigningKey(paths.baseDirectory())));
         com.graalmail.p2p.discovery.PersistentPeerDiscoveryService discovery =
                 new com.graalmail.p2p.discovery.PersistentPeerDiscoveryService(
                         paths.baseDirectory().resolve("polymail-peers.tsv"));
-        // The TCP transport carries GPMP frames; the in-memory peer registry
-        // routes content operations while file-backed discovery persists
-        // bootstrap records until DHT discovery lands.
         String rpcUrl = config.rpcUrls().isEmpty() ? "" : config.rpcUrls().getFirst();
         PolyMailNode node = PolyMailNode.builder()
                 .identities(new InMemoryIdentityService())
@@ -184,14 +195,11 @@ public final class DesktopPolyMailService implements AutoCloseable {
     @Override
     public void close() {
         try {
+            // node.stop() delegates to the peer network, which stops the TCP
+            // transport; NioTcpTransport.stop is idempotent regardless.
             node.stop().toCompletableFuture().get(10, java.util.concurrent.TimeUnit.SECONDS);
         } catch (Exception e) {
             LOG.warn("PolyMail node did not stop cleanly: {}", e.getMessage());
-        }
-        try {
-            transport.stop().toCompletableFuture().get(5, java.util.concurrent.TimeUnit.SECONDS);
-        } catch (Exception e) {
-            LOG.debug("Transport stop: {}", e.getMessage());
         }
         background.shutdown();
         try {
@@ -199,5 +207,59 @@ public final class DesktopPolyMailService implements AutoCloseable {
         } catch (Exception e) {
             LOG.warn("PolyMail database could not be closed cleanly: {}", e.getMessage());
         }
+    }
+
+    /**
+     * Loads the mailbox signing key, generating and persisting it on first
+     * use. The key identifies this mailbox peer to senders verifying storage
+     * receipts, so it must survive restarts — unlike the peer id, which is
+     * per-boot. Stored owner-only, next to the other key material.
+     */
+    static KeyPair mailboxSigningKey(Path baseDirectory) throws Exception {
+        Path file = baseDirectory.resolve("polymail-mailbox-signing.key");
+        if (Files.isRegularFile(file)) {
+            try {
+                return readSigningKey(Files.readAllBytes(file));
+            } catch (RuntimeException | java.security.GeneralSecurityException | java.io.IOException e) {
+                LOG.warn("The mailbox signing key could not be read; generating a fresh one");
+            }
+        }
+        KeyPairGenerator generator = KeyPairGenerator.getInstance("Ed25519");
+        KeyPair fresh = generator.generateKeyPair();
+        byte[] privateBytes = fresh.getPrivate().getEncoded();
+        byte[] publicBytes = fresh.getPublic().getEncoded();
+        java.nio.ByteBuffer framed = java.nio.ByteBuffer.allocate(4 + privateBytes.length + publicBytes.length);
+        framed.putInt(privateBytes.length);
+        framed.put(privateBytes);
+        framed.put(publicBytes);
+        Files.write(file, framed.array(),
+                java.nio.file.StandardOpenOption.CREATE,
+                java.nio.file.StandardOpenOption.WRITE,
+                java.nio.file.StandardOpenOption.TRUNCATE_EXISTING);
+        try {
+            Files.setPosixFilePermissions(file, Set.of(
+                    java.nio.file.attribute.PosixFilePermission.OWNER_READ,
+                    java.nio.file.attribute.PosixFilePermission.OWNER_WRITE));
+        } catch (UnsupportedOperationException ignored) {
+            // Non-POSIX file systems (Windows) have no owner-only mode.
+        }
+        return fresh;
+    }
+
+    private static KeyPair readSigningKey(byte[] framed)
+            throws java.security.GeneralSecurityException, java.io.IOException {
+        java.nio.ByteBuffer buffer = java.nio.ByteBuffer.wrap(framed);
+        int privateLength = buffer.getInt();
+        if (privateLength <= 0 || privateLength > framed.length) {
+            throw new java.io.IOException("corrupt mailbox signing key");
+        }
+        byte[] privateBytes = new byte[privateLength];
+        buffer.get(privateBytes);
+        byte[] publicBytes = new byte[buffer.remaining()];
+        buffer.get(publicBytes);
+        KeyFactory factory = KeyFactory.getInstance("Ed25519");
+        PrivateKey privateKey = factory.generatePrivate(new PKCS8EncodedKeySpec(privateBytes));
+        PublicKey publicKey = factory.generatePublic(new X509EncodedKeySpec(publicBytes));
+        return new KeyPair(publicKey, privateKey);
     }
 }

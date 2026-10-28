@@ -56,6 +56,7 @@ public class NioTcpTransport implements ServingTransport {
     private volatile ServingTransport.InboundHandler inboundHandler;
     private volatile ServerSocketChannel server;
     private volatile boolean running;
+    private final java.util.concurrent.atomic.AtomicBoolean stopped = new java.util.concurrent.atomic.AtomicBoolean(false);
 
     public NioTcpTransport(int listenPort, String networkId, String peerId) {
         this(listenPort, networkId, peerId, 10_000, 10_000);
@@ -93,6 +94,11 @@ public class NioTcpTransport implements ServingTransport {
 
     @Override
     public CompletionStage<Void> stop() {
+        // Idempotent: node shutdown and service shutdown both stop the
+        // transport, and a second stop must not fail on the shut-down pool.
+        if (!stopped.compareAndSet(false, true)) {
+            return CompletableFuture.completedFuture(null);
+        }
         return CompletableFuture.runAsync(() -> {
             running = false;
             for (NioConnection c : open) {
@@ -124,6 +130,13 @@ public class NioTcpTransport implements ServingTransport {
         } catch (IOException e) {
             return -1;
         }
+    }
+
+    @Override
+    public java.util.Optional<PeerAddress> localAddress() {
+        int port = boundPort();
+        if (port <= 0) return java.util.Optional.empty();
+        return java.util.Optional.of(new PeerAddress("127.0.0.1", port, new PeerId(peerId)));
     }
 
     @Override

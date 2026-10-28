@@ -16,4 +16,12 @@ public interface ServingTransport extends P2PTransport {
     interface InboundHandler {
         void onMessage(PeerAddress remote, PeerConnection connection, byte[] frame);
     }
+
+    /**
+     * The address this node serves on, if it listens. Empty for dial-out-only
+     * nodes (Android) and before a server socket is bound.
+     */
+    default java.util.Optional<PeerAddress> localAddress() {
+        return java.util.Optional.empty();
+    }
 }

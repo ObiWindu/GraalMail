@@ -377,9 +377,12 @@ Do not claim anonymity merely because the body is encrypted.
 
 ## Roadmap
 
-Done: shared protocol core, NIO transport with handshake, durable
-delivery + resume, Polygon scanner with reorg recovery, replication repair,
-key backup/enrollment, desktop + Android UI bindings, settings on both
+Done: shared protocol core, NIO transport with handshake, live GPMP peer
+protocol over TCP (store/fetch with verified receipts, TOFU-pinned peer
+keys, per-connection request channels), serving mailbox on desktop with a
+persisted signing key, dial-out-only Android, durable delivery + resume,
+Polygon scanner with reorg recovery, replication repair, key
+backup/enrollment, desktop + Android UI bindings, settings on both
 platforms, file-backed peer discovery, golden vectors, schema migrations.
 
 Next: full Kademlia DHT discovery, libp2p transport re-evaluation, and the

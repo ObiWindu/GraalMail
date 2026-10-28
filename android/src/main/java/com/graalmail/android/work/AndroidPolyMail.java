@@ -8,21 +8,23 @@ import android.content.Context;
 
 import com.graalmail.android.ui.SettingsActivity;
 import com.graalmail.p2p.NetworkId;
+import com.graalmail.p2p.PeerAddress;
 import com.graalmail.p2p.PolyMailConfig;
 import com.graalmail.p2p.PolyMailNode;
-import com.graalmail.p2p.InMemoryPeerNetworkService;
 import com.graalmail.p2p.blockchain.InMemoryCursorStore;
-import com.graalmail.p2p.blockchain.InMemoryPolygonNotificationService;
 import com.graalmail.p2p.blockchain.Web3jPolygonNotificationService;
 import com.graalmail.p2p.crypto.DefaultEncryptionService;
 import com.graalmail.p2p.delivery.InMemoryDeliveryStore;
 import com.graalmail.p2p.delivery.RecipientIdentity;
 import com.graalmail.p2p.identity.InMemoryIdentityService;
 import com.graalmail.p2p.mailbox.InMemoryInboxRepository;
+import com.graalmail.p2p.transport.NioTcpTransport;
+import com.graalmail.p2p.transport.TcpPeerNetworkService;
 import com.graalmail.storage.MailStore;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Builds the shared {@link PolyMailNode} from Android settings (spec section 16).
@@ -65,14 +67,20 @@ public final class AndroidPolyMail {
         try {
             PolyMailConfig config = new PolyMailConfig(rpcUrls, contract, chainId,
                     NetworkId.TESTNET, 0, 2, 2);
-            InMemoryPeerNetworkService peerNetwork = new InMemoryPeerNetworkService();
-            List<com.graalmail.p2p.PeerAddress> mailboxPeers;
+            List<PeerAddress> mailboxPeers;
             try {
-                mailboxPeers = com.graalmail.p2p.PeerAddress.parseList(
+                mailboxPeers = PeerAddress.parseList(
                         store.setting(SettingsActivity.SETTING_POLYMAIL_PEERS, ""));
             } catch (RuntimeException e) {
                 mailboxPeers = List.of();
             }
+            // Dial-out only (deployment guide 4): negative port means no server
+            // socket. Serving inbound connections on a phone is out of scope;
+            // reachable mailbox nodes carry the storage.
+            NioTcpTransport transport = new NioTcpTransport(-1, config.networkId().code(),
+                    "android-" + UUID.randomUUID());
+            TcpPeerNetworkService peerNetwork = new TcpPeerNetworkService(transport,
+                    config.networkId().code(), mailboxPeers);
             PolyMailNode node = PolyMailNode.builder()
                     .identities(new InMemoryIdentityService())
                     .crypto(new DefaultEncryptionService())
