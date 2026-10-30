@@ -27,6 +27,8 @@ public record GpmpMessage(
         } catch (Exception e) { throw new RuntimeException(e); }
     }
     public static GpmpMessage fromBytes(byte[] bytes) {
+        if (bytes == null || bytes.length == 0) throw new com.graalmail.p2p.PolyMailException(
+                com.graalmail.core.error.ErrorCode.INVALID_MESSAGE, "message bytes missing");
         try (DataInputStream in = new DataInputStream(new ByteArrayInputStream(bytes))) {
             String pv = readString(in);
             String nid = readString(in);
@@ -34,6 +36,7 @@ public record GpmpMessage(
             String rid = readString(in);
             byte[] payload = readBytes(in);
             long ts = in.readLong();
+            if (in.available() != 0) throw new IOException("trailing bytes");
             return new GpmpMessage(pv, nid, op, rid, payload, ts);
         } catch (com.graalmail.p2p.PolyMailException e) {
             throw e;

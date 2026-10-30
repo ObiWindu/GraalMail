@@ -31,7 +31,7 @@ public final class JdbcSqlDatabase implements SqlDatabase {
     }
 
     @Override
-    public void execute(String sql, Object... params) {
+    public synchronized void execute(String sql, Object... params) {
         try (PreparedStatement ps = connection.prepareStatement(sql)) {
             bind(ps, params);
             ps.execute();
@@ -41,7 +41,7 @@ public final class JdbcSqlDatabase implements SqlDatabase {
     }
 
     @Override
-    public int update(String sql, Object... params) {
+    public synchronized int update(String sql, Object... params) {
         try (PreparedStatement ps = connection.prepareStatement(sql)) {
             bind(ps, params);
             return ps.executeUpdate();
@@ -51,7 +51,7 @@ public final class JdbcSqlDatabase implements SqlDatabase {
     }
 
     @Override
-    public List<Map<String, Object>> query(String sql, Object... params) {
+    public synchronized List<Map<String, Object>> query(String sql, Object... params) {
         try (PreparedStatement ps = connection.prepareStatement(sql)) {
             bind(ps, params);
             try (ResultSet rs = ps.executeQuery()) {
@@ -95,7 +95,7 @@ public final class JdbcSqlDatabase implements SqlDatabase {
     }
 
     @Override
-    public void close() {
+    public synchronized void close() {
         try {
             if (!connection.isClosed()) {
                 connection.close();

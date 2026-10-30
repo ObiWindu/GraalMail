@@ -217,11 +217,26 @@ public final class DesktopPolyMailService implements AutoCloseable {
      */
     static KeyPair mailboxSigningKey(Path baseDirectory) throws Exception {
         Path file = baseDirectory.resolve("polymail-mailbox-signing.key");
+        com.graalmail.desktop.AppPaths paths = com.graalmail.desktop.AppPaths.of(baseDirectory);
+        com.graalmail.security.store.SecretProtector protector =
+                new com.graalmail.security.store.AesGcmProtector(
+                        com.graalmail.desktop.DesktopSecretStore.resolvePassphrase(paths),
+                        com.graalmail.desktop.DesktopSecretStore.readOrCreateSalt(paths.saltFile()));
+        char[] passphrase = null;
+        // resolvePassphrase returns char[]; keep a reference? It's already consumed by protector (copied internally? AesGcmProtector may store). We'll trust protector holds its own copy.
         if (Files.isRegularFile(file)) {
+            byte[] stored = Files.readAllBytes(file);
+            // Try sealed format first, then legacy plaintext for migration.
             try {
-                return readSigningKey(Files.readAllBytes(file));
-            } catch (RuntimeException | java.security.GeneralSecurityException | java.io.IOException e) {
-                LOG.warn("The mailbox signing key could not be read; generating a fresh one");
+                return readSigningKey(protector.decrypt(stored));
+            } catch (Exception sealedFailed) {
+                try {
+                    KeyPair legacy = readSigningKey(stored);
+                    resealMailboxKey(file, legacy, protector);
+                    return legacy;
+                } catch (Exception ignored) {
+                    LOG.warn("The mailbox signing key could not be read; generating a fresh one");
+                }
             }
         }
         KeyPairGenerator generator = KeyPairGenerator.getInstance("Ed25519");
@@ -232,7 +247,8 @@ public final class DesktopPolyMailService implements AutoCloseable {
         framed.putInt(privateBytes.length);
         framed.put(privateBytes);
         framed.put(publicBytes);
-        Files.write(file, framed.array(),
+        byte[] sealed = protector.encrypt(framed.array());
+        Files.write(file, sealed,
                 java.nio.file.StandardOpenOption.CREATE,
                 java.nio.file.StandardOpenOption.WRITE,
                 java.nio.file.StandardOpenOption.TRUNCATE_EXISTING);
@@ -244,6 +260,20 @@ public final class DesktopPolyMailService implements AutoCloseable {
             // Non-POSIX file systems (Windows) have no owner-only mode.
         }
         return fresh;
+    }
+
+    private static void resealMailboxKey(Path file, KeyPair key, com.graalmail.security.store.SecretProtector protector) throws Exception {
+        byte[] privateBytes = key.getPrivate().getEncoded();
+        byte[] publicBytes = key.getPublic().getEncoded();
+        java.nio.ByteBuffer framed = java.nio.ByteBuffer.allocate(4 + privateBytes.length + publicBytes.length);
+        framed.putInt(privateBytes.length);
+        framed.put(privateBytes);
+        framed.put(publicBytes);
+        byte[] sealed = protector.encrypt(framed.array());
+        Files.write(file, sealed,
+                java.nio.file.StandardOpenOption.CREATE,
+                java.nio.file.StandardOpenOption.WRITE,
+                java.nio.file.StandardOpenOption.TRUNCATE_EXISTING);
     }
 
     private static KeyPair readSigningKey(byte[] framed)

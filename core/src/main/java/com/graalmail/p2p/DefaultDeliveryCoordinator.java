@@ -157,7 +157,7 @@ public class DefaultDeliveryCoordinator implements DeliveryCoordinator {
             List<CompletableFuture<Boolean>> futures = new ArrayList<>();
             for (PeerAddress pa : mailboxPeers) {
                 futures.add(peerNetwork.storeMessage(pa, finalEnv)
-                        .thenCompose(receipt -> verifiedReceipt(pa, receipt).thenApply(ok -> {
+                        .thenCompose(receipt -> verifiedReceipt(pa, receipt, finalEnv).thenApply(ok -> {
                             if (deliveryStore != null) deliveryStore.saveReceiptRecord(receipt, ok);
                             return ok;
                         }))
@@ -255,7 +255,7 @@ public class DefaultDeliveryCoordinator implements DeliveryCoordinator {
         List<CompletableFuture<Boolean>> futures = new ArrayList<>();
         for (PeerAddress pa : mailboxPeers) {
             futures.add(peerNetwork.storeMessage(pa, env)
-                    .thenCompose(receipt -> verifiedReceipt(pa, receipt))
+                    .thenCompose(receipt -> verifiedReceipt(pa, receipt, env))
                     .handle((ok, err) -> ok != null && ok)
                     .toCompletableFuture());
         }
@@ -352,7 +352,31 @@ public class DefaultDeliveryCoordinator implements DeliveryCoordinator {
 
     /** Verifies a storage receipt against the storing peer's key; false if unknown or invalid. */
     private CompletionStage<Boolean> verifiedReceipt(PeerAddress peer, StorageReceipt receipt) {
-        if (receipt == null || receipt.signature() == null) return CompletableFuture.completedFuture(false);
+        return verifiedReceipt(peer, receipt, null);
+    }
+
+    /** Verifies a storage receipt against the storing peer's key and the expected envelope. */
+    private CompletionStage<Boolean> verifiedReceipt(PeerAddress peer, StorageReceipt receipt, Envelope expected) {
+        if (receipt == null || receipt.signature() == null || receipt.signature().length == 0) {
+            return CompletableFuture.completedFuture(false);
+        }
+        if (receipt.contentId() == null || receipt.contentId().isBlank()
+                || receipt.messageId() == null || receipt.messageId().isBlank()
+                || receipt.peerId() == null || receipt.peerId().isBlank()) {
+            return CompletableFuture.completedFuture(false);
+        }
+        if (expected != null) {
+            String expectedContentId = hex(expected.contentHash());
+            if (!expectedContentId.equals(receipt.contentId())) {
+                return CompletableFuture.completedFuture(false);
+            }
+            if (!expected.messageId().equals(receipt.messageId())) {
+                return CompletableFuture.completedFuture(false);
+            }
+        }
+        if (receipt.acceptedAt() <= 0 || receipt.retentionUntil() < receipt.acceptedAt()) {
+            return CompletableFuture.completedFuture(false);
+        }
         return peerNetwork.peerSigningKey(peer).thenApply(key -> {
             if (key.isEmpty()) return false;
             if (!ProtocolConstants.PROTOCOL_VERSION.equals(receipt.protocolVersion())) return false;

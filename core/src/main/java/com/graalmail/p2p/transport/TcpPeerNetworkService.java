@@ -193,7 +193,11 @@ public class TcpPeerNetworkService implements PeerNetworkService {
                 || peer.signingKey() == null || peer.signingKey().getPublic() == null) {
             return;
         }
-        pinKey(address, peer.signingKey().getPublic().getEncoded());
+        try {
+            pinKey(address, peer.signingKey().getPublic().getEncoded());
+        } catch (RuntimeException ignored) {
+            // Never replace an already-pinned key; keep the first-seen pin.
+        }
     }
 
     @Override
@@ -214,7 +218,13 @@ public class TcpPeerNetworkService implements PeerNetworkService {
 
     private void pinKey(PeerAddress peer, byte[] key) {
         validateKey(key);
-        keyPins.put(endpoint(peer), key.clone());
+        String ep = endpoint(peer);
+        byte[] existing = keyPins.get(ep);
+        if (existing != null && !java.util.Arrays.equals(existing, key)) {
+            throw new PolyMailException(com.graalmail.core.error.ErrorCode.KEY_UNTRUSTED,
+                    "peer signing key changed for " + ep, false, false, false);
+        }
+        keyPins.putIfAbsent(ep, key.clone());
     }
 
     private static void validateKey(byte[] key) {

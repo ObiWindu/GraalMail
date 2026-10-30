@@ -15,6 +15,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.Map;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.BiFunction;
@@ -79,12 +80,13 @@ public class GpmpChannel implements AutoCloseable {
                 operation, requestId, payload == null ? new byte[0] : payload, System.currentTimeMillis());
         CompletableFuture<byte[]> future = new CompletableFuture<>();
         pending.put(requestId, future);
-        timers.schedule(() -> {
+        ScheduledFuture<?> timer = timers.schedule(() -> {
             if (pending.remove(requestId) != null) {
                 future.completeExceptionally(new PolyMailException(ErrorCode.RETRIEVAL_TIMEOUT,
                         "request " + operation + " timed out", true, false, true));
             }
         }, timeoutMillis, TimeUnit.MILLISECONDS);
+        future.whenComplete((r, e) -> timer.cancel(false));
         connection.send(message.toBytes()).exceptionally(err -> {
             if (pending.remove(requestId) != null) future.completeExceptionally(wrap(err));
             return null;

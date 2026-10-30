@@ -96,9 +96,13 @@ public class SqlPolyMailStore implements PolyMailStore, com.graalmail.p2p.blockc
         List<Map<String, Object>> rows = db.query("SELECT * FROM polymail_storage_receipts WHERE message_id = ?", messageId);
         List<StorageReceipt> out = new ArrayList<>();
         for (Map<String, Object> r : rows) {
+            byte[] sig = blob(r.get("receipt_signature"));
+            if (sig == null) sig = new byte[0];
+            String protocolVersion = str(r.get("protocol_version"));
+            if (protocolVersion.isBlank()) protocolVersion = "GPMP/1";
             out.add(new StorageReceipt(str(r.get("content_hash")), str(r.get("message_id")), str(r.get("peer_id")),
                     ((Number) r.get("accepted_at")).longValue(), ((Number) r.get("retention_until")).longValue(),
-                    "GPMP/1", new byte[0]));
+                    protocolVersion, sig));
         }
         return out;
     }
@@ -113,7 +117,10 @@ public class SqlPolyMailStore implements PolyMailStore, com.graalmail.p2p.blockc
 
     @Override
     public void saveCursor(BlockchainCursor cursor) {
-        if (loadCursor(cursor.chainId(), cursor.contractAddress()).lastBlock() == 0) {
+        List<Map<String, Object>> rows = db.query(
+                "SELECT 1 FROM polymail_blockchain_cursor WHERE chain_id = ? AND contract_address = ?",
+                cursor.chainId(), cursor.contractAddress());
+        if (rows.isEmpty()) {
             db.update("INSERT INTO polymail_blockchain_cursor (chain_id, contract_address, last_block, block_hash) VALUES (?,?,?,?)",
                     cursor.chainId(), cursor.contractAddress(), cursor.lastBlock(), cursor.blockHash());
         } else {
@@ -232,7 +239,11 @@ public class SqlPolyMailStore implements PolyMailStore, com.graalmail.p2p.blockc
         String s = h.startsWith("0x") ? h.substring(2) : h;
         if (s.length() % 2 != 0) s = "0" + s;
         byte[] out = new byte[s.length() / 2];
-        for (int i = 0; i < out.length; i++) out[i] = (byte) Integer.parseInt(s.substring(i * 2, i * 2 + 2), 16);
+        try {
+            for (int i = 0; i < out.length; i++) out[i] = (byte) Integer.parseInt(s.substring(i * 2, i * 2 + 2), 16);
+        } catch (NumberFormatException e) {
+            return new byte[0];
+        }
         return out;
     }
 }

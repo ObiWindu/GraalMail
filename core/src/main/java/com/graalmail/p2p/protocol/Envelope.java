@@ -90,20 +90,26 @@ public record Envelope(
     }
 
     public static Envelope fromCbor(byte[] bytes) {
+        if (bytes == null || bytes.length == 0 || bytes.length > com.graalmail.p2p.ProtocolConstants.MAX_MESSAGE_BYTES + 1024) {
+            throw new com.graalmail.p2p.PolyMailException(com.graalmail.core.error.ErrorCode.INVALID_MESSAGE, "envelope size invalid");
+        }
         try {
             com.upokecenter.cbor.CBORObject obj = com.upokecenter.cbor.CBORObject.DecodeFromBytes(bytes, com.upokecenter.cbor.CBOREncodeOptions.DefaultCtap2Canonical);
+            if (obj == null) {
+                throw new com.graalmail.p2p.PolyMailException(com.graalmail.core.error.ErrorCode.INVALID_MESSAGE, "envelope not a map");
+            }
             return new Envelope(
-                    obj.get("protocolVersion").AsString(),
-                    obj.get("networkId").AsString(),
-                    obj.get("messageId").AsString(),
-                    obj.get("contentHash").GetByteString(),
-                    obj.get("ciphertext").GetByteString(),
-                    obj.get("encryptionMetadata").GetByteString(),
-                    obj.get("senderKeyVersion").AsInt32Value(),
-                    obj.get("recipientKeyVersion").AsInt32Value(),
-                    obj.get("createdAt").AsInt64Value(),
-                    obj.get("expiresAt").AsInt64Value(),
-                    obj.get("signature").GetByteString());
+                    obj.get("protocolVersion") == null ? null : obj.get("protocolVersion").AsString(),
+                    obj.get("networkId") == null ? null : obj.get("networkId").AsString(),
+                    obj.get("messageId") == null ? null : obj.get("messageId").AsString(),
+                    obj.get("contentHash") == null ? null : obj.get("contentHash").GetByteString(),
+                    obj.get("ciphertext") == null ? null : obj.get("ciphertext").GetByteString(),
+                    obj.get("encryptionMetadata") == null ? null : obj.get("encryptionMetadata").GetByteString(),
+                    obj.get("senderKeyVersion") == null ? 0 : obj.get("senderKeyVersion").AsInt32Value(),
+                    obj.get("recipientKeyVersion") == null ? 0 : obj.get("recipientKeyVersion").AsInt32Value(),
+                    obj.get("createdAt") == null ? 0 : obj.get("createdAt").AsInt64Value(),
+                    obj.get("expiresAt") == null ? 0 : obj.get("expiresAt").AsInt64Value(),
+                    obj.get("signature") == null ? null : obj.get("signature").GetByteString());
         } catch (Exception e) {
             throw new PolyMailException(ErrorCode.INVALID_MESSAGE, "cbor deserialization failed", e);
         }

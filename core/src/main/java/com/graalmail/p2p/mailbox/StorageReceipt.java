@@ -132,6 +132,7 @@ public record StorageReceipt(
 
     @Override
     public int hashCode() {
-        return java.util.Objects.hash(contentId, messageId, peerId, acceptedAt, retentionUntil, protocolVersion);
+        return java.util.Objects.hash(contentId, messageId, peerId, acceptedAt, retentionUntil, protocolVersion,
+                java.util.Arrays.hashCode(signature));
     }
 }

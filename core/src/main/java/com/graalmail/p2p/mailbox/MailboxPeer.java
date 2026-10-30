@@ -31,6 +31,11 @@ public class MailboxPeer {
     }
 
     public CompletionStage<StorageReceipt> store(Envelope envelope) {
+        if (envelope == null || envelope.messageId() == null || envelope.messageId().isBlank()
+                || envelope.contentHash() == null || envelope.contentHash().length == 0) {
+            return CompletableFuture.failedFuture(new PolyMailException(com.graalmail.core.error.ErrorCode.INVALID_MESSAGE,
+                    "invalid envelope", false, false, true));
+        }
         byte[] wire;
         try {
             wire = envelope.toBytes();
