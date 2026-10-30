@@ -126,12 +126,18 @@ public final class MailboxListActivity extends AppCompatActivity implements Fold
         context.io().execute(() -> {
             int newMessages = 0;
             String failure = null;
+            String twoFactorAccountId = null;
             try {
                 List<SyncReport> reports = context.syncEngine().syncAll();
                 for (SyncReport report : reports) {
                     newMessages += report.newMessages();
                     if (!report.successful() && failure == null) {
                         failure = report.errors().isEmpty() ? "" : report.errors().get(0);
+                    }
+                    if (twoFactorAccountId == null && report.errors().stream()
+                            .anyMatch(error -> error.toLowerCase(java.util.Locale.ROOT)
+                                    .contains("two-factor code"))) {
+                        twoFactorAccountId = report.accountId();
                     }
                 }
             } catch (RuntimeException e) {
@@ -140,6 +146,7 @@ public final class MailboxListActivity extends AppCompatActivity implements Fold
             }
             int count = newMessages;
             String message = failure;
+            String tfaAccount = twoFactorAccountId;
             runOnUiThread(() -> {
                 syncInProgress = false;
                 refresh.setRefreshing(false);
@@ -153,8 +160,53 @@ public final class MailboxListActivity extends AppCompatActivity implements Fold
                             com.google.android.material.snackbar.Snackbar.LENGTH_INDEFINITE)
                             .setAction(R.string.action_retry, view -> synchronise()).show();
                 }
+                if (tfaAccount != null) {
+                    promptTwoFactorCode(tfaAccount);
+                }
             });
         });
+    }
+
+    /** Asks for a fresh TOTP code and refreshes the stored Proton session. */
+    private void promptTwoFactorCode(String accountId) {
+        Account account = context.store().account(accountId).orElse(null);
+        if (account == null) {
+            return;
+        }
+        android.widget.EditText input = new android.widget.EditText(this);
+        input.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        input.setHint(getString(R.string.setup_proton_two_factor));
+        new androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle(getString(R.string.setup_proton_two_factor))
+                .setMessage(account.email())
+                .setView(input)
+                .setPositiveButton(android.R.string.ok, (dialog, which) -> {
+                    String code = input.getText().toString().trim();
+                    if (code.isEmpty()) {
+                        return;
+                    }
+                    context.io().execute(() -> {
+                        try {
+                            var fresh = context.sessions()
+                                    .reauthenticateWithTwoFactor(account, code);
+                            Account updated = Account.builder(account.id(), account.providerId())
+                                    .email(account.email())
+                                    .displayName(account.displayName())
+                                    .settings(fresh.settings())
+                                    .credentialRef(account.credentialRef())
+                                    .createdAt(account.createdAt())
+                                    .enabled(account.enabled())
+                                    .build();
+                            context.store().saveAccount(updated);
+                            runOnUiThread(this::synchronise);
+                        } catch (RuntimeException e) {
+                            LOG.warn("Two-factor re-authentication failed: {}", e.getMessage());
+                            runOnUiThread(this::synchronise);
+                        }
+                    });
+                })
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
     }
 
     @Override

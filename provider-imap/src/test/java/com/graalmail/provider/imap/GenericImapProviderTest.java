@@ -167,6 +167,38 @@ class GenericImapProviderTest {
     }
 
     @Test
+    void firstSyncFetchesAllMessages() throws Exception {
+        String email = "user@example.com";
+        server.setUser(email, PASSWORD);
+        seedMessage(email, "First", "Body one");
+
+        var setup = com.graalmail.provider.api.AccountSetup
+                .builder(com.graalmail.provider.api.AuthMethod.PASSWORD)
+                .email(email)
+                .password(email, PASSWORD)
+                .setting(ImapSettings.IMAP_HOST, "127.0.0.1")
+                .setting(ImapSettings.IMAP_PORT, String.valueOf(server.getImap().getPort()))
+                .setting(ImapSettings.IMAP_SECURITY, "none")
+                .setting(ImapSettings.SMTP_HOST, "127.0.0.1")
+                .setting(ImapSettings.SMTP_PORT, String.valueOf(server.getSmtp().getPort()))
+                .setting(ImapSettings.SMTP_SECURITY, "none")
+                .setting(ImapSettings.USERNAME, email)
+                .build();
+
+        GenericImapProvider provider = new GenericImapProvider();
+        try (var session = provider.openSession(setup)) {
+            List<Folder> folders = session.mailboxes().listFolders();
+            assertTrue(folders.stream().anyMatch(f -> f.id().equalsIgnoreCase("INBOX")),
+                    "INBOX must be listed, got: " + folders.stream().map(Folder::id).toList());
+            var result = session.synchronization()
+                    .synchronize("INBOX",
+                            com.graalmail.provider.api.FolderSyncState.neverSynced());
+            assertFalse(result.newUids().isEmpty(),
+                    "first sync must return UIDs instead of an empty delta");
+        }
+    }
+
+    @Test
     void rejectsUnencryptedConfigurationOnTheImplicitTlsPort() {
         ProviderException failure = assertThrows(ProviderException.class,
                 () -> ImapServerConfig.builder()

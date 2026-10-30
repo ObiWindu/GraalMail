@@ -39,6 +39,12 @@ import javafx.scene.control.ComboBox;
 import javafx.scene.control.CheckMenuItem;
 import javafx.scene.control.ContextMenu;
 import javafx.scene.control.Label;
+import javafx.scene.control.Menu;
+import javafx.scene.control.MenuBar;
+import javafx.scene.control.SeparatorMenuItem;
+import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyCodeCombination;
+import javafx.scene.input.KeyCombination;
 import javafx.scene.control.ListView;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TableColumn;
@@ -149,9 +155,7 @@ public final class MainWindow {
     private Node listPane;
     private VBox navigationPane;
     private VBox readerPane;
-    private VBox spacesToolbar;
-    private CheckMenuItem showSpacesToolbar;
-    private javafx.scene.layout.HBox readerActionsPane;
+    private javafx.scene.layout.FlowPane readerActionsPane;
     private String activeLayoutMode;
     private Scene mainScene;
     private boolean remoteImagesAllowed;
@@ -161,6 +165,8 @@ public final class MainWindow {
     private int readerGeneration;
     private Message currentMessage;
     private Stage owner;
+    private static final java.util.concurrent.atomic.AtomicBoolean FIRST_RUN_PROMPTED =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
 
     /**
      * Creates the window.
@@ -198,7 +204,7 @@ public final class MainWindow {
         // The legacy Thunderbird spaces rail is no longer shown.
         BorderPane mailShell = new BorderPane();
         mailShell.getStyleClass().add("mail-shell");
-        VBox top = new VBox(buildToolbar());
+        VBox top = new VBox(buildMenuBar(), buildToolbar());
         mailShell.setTop(top);
         mailShell.setCenter(buildCenter());
         mailShell.setBottom(buildStatusBar());
@@ -260,6 +266,15 @@ public final class MainWindow {
             } else if (singleKeySafe && !event.isControlDown() && !event.isMetaDown() && event.getCode() == KeyCode.C) {
                 composeNewMessage();
                 event.consume();
+            } else if (singleKeySafe && !event.isControlDown() && !event.isMetaDown() && event.getCode() == KeyCode.R) {
+                replyToSelected();
+                event.consume();
+            } else if (singleKeySafe && !event.isControlDown() && !event.isMetaDown() && event.getCode() == KeyCode.F) {
+                forwardSelected();
+                event.consume();
+            } else if (singleKeySafe && !event.isControlDown() && !event.isMetaDown() && event.getCode() == KeyCode.ENTER) {
+                reader.requestFocus();
+                event.consume();
             } else if (singleKeySafe && !event.isControlDown() && !event.isMetaDown() && event.getCode() == KeyCode.E) {
                 archiveSelected();
                 event.consume();
@@ -286,6 +301,11 @@ public final class MainWindow {
         });
 
         refreshFolders();
+        if (context.store().listAccounts().isEmpty()
+                && FIRST_RUN_PROMPTED.compareAndSet(false, true)) {
+            status.setText("Welcome to GraalMail — add your first account to get started.");
+            javafx.application.Platform.runLater(this::addAccount);
+        }
         Scene scene = new Scene(root);
         var stylesheet = getClass().getResource("/styles/mail.css");
         if (stylesheet != null) scene.getStylesheets().add(stylesheet.toExternalForm());
@@ -302,71 +322,98 @@ public final class MainWindow {
         return scene;
     }
 
-    private VBox buildSpacesToolbar() {
-        VBox apps = new VBox(UiScale.px(owner, 9));
-        apps.getStyleClass().add("spaces-toolbar-container");
-        apps.getChildren().addAll(
-                spaceButton("Mail", "mail", true),
-                spaceButton("Address Book", "address-book", false),
-                spaceButton("Calendar", "calendar", false),
-                spaceButton("Tasks", "tasks", false),
-                spaceButton("Chat", "chat", false));
-        javafx.scene.layout.Region spacer = new javafx.scene.layout.Region();
-        VBox.setVgrow(spacer, Priority.ALWAYS);
-        Button spacesMenu = new Button();
-        spacesMenu.setGraphic(ThunderbirdIcons.icon("spaces-menu", 1.25, "spaces-icon"));
-        spacesMenu.setAccessibleText("Spaces menu");
-        spacesMenu.setTooltip(new javafx.scene.control.Tooltip("Spaces Menu"));
-        spacesMenu.getStyleClass().add("spaces-toolbar-button");
-        ContextMenu spaceChoices = new ContextMenu();
-        for (String name : List.of("Mail", "Address Book", "Calendar", "Tasks", "Chat")) {
-            MenuItem choice = new MenuItem(name);
-            choice.setOnAction(event -> status.setText(name.equals("Mail")
-                    ? "Ready" : name + " space is not available in GraalMail."));
-            spaceChoices.getItems().add(choice);
-        }
-        spaceChoices.getItems().add(new javafx.scene.control.SeparatorMenuItem());
-        MenuItem hideSpaces = new MenuItem("Hide Spaces Toolbar");
-        hideSpaces.setOnAction(event -> {
-            spacesToolbar.setVisible(false);
-            spacesToolbar.setManaged(false);
-            showSpacesToolbar.setSelected(false);
-        });
-        spaceChoices.getItems().add(hideSpaces);
-        spacesMenu.setOnAction(event -> spaceChoices.show(spacesMenu,
-                javafx.geometry.Side.RIGHT, 0, 0));
-        Button settings = new Button();
-        settings.setGraphic(ThunderbirdIcons.icon("settings", 1.25, "spaces-icon"));
-        settings.setAccessibleText("Settings");
-        settings.setTooltip(new javafx.scene.control.Tooltip("Settings"));
-        settings.getStyleClass().add("spaces-toolbar-button");
-        settings.setOnAction(event -> showSettings());
-        Button hideToolbar = new Button();
-        hideToolbar.setGraphic(ThunderbirdIcons.icon("collapse", 1.25, "spaces-icon"));
-        hideToolbar.setAccessibleText("Hide Spaces Toolbar");
-        hideToolbar.setTooltip(new javafx.scene.control.Tooltip("Hide Spaces Toolbar"));
-        hideToolbar.getStyleClass().add("spaces-toolbar-button");
-        hideToolbar.setOnAction(event -> {
-            spacesToolbar.setVisible(false);
-            spacesToolbar.setManaged(false);
-            showSpacesToolbar.setSelected(false);
-        });
-        VBox bottom = new VBox(UiScale.px(owner, 9), spacesMenu, settings, hideToolbar);
-        bottom.getStyleClass().add("spaces-toolbar-container");
-        VBox rail = new VBox(apps, spacer, bottom);
-        rail.getStyleClass().add("spaces-toolbar");
-        return rail;
-    }
+    private MenuBar buildMenuBar() {
+        MenuBar bar = new MenuBar();
+        bar.getStyleClass().add("mail-menu-bar");
 
-    private Button spaceButton(String name, String icon, boolean selected) {
-        Button button = new Button();
-        button.setGraphic(ThunderbirdIcons.icon(icon, 1.25, "spaces-icon"));
-        button.setAccessibleText(name);
-        button.setTooltip(new javafx.scene.control.Tooltip(name));
-        button.getStyleClass().add("spaces-toolbar-button");
-        if (selected) button.getStyleClass().add("current");
-        else button.setOnAction(event -> status.setText(name + " space is not available in GraalMail."));
-        return button;
+        Menu file = new Menu("File");
+        MenuItem newMsg = new MenuItem("New Message");
+        newMsg.setAccelerator(new KeyCodeCombination(KeyCode.N, KeyCombination.CONTROL_DOWN));
+        newMsg.setOnAction(e -> composeNewMessage());
+        MenuItem getMail = new MenuItem("Get Mail");
+        getMail.setAccelerator(new KeyCodeCombination(KeyCode.R, KeyCombination.CONTROL_DOWN, KeyCombination.SHIFT_DOWN));
+        getMail.setOnAction(e -> syncNow());
+        MenuItem exit = new MenuItem("Exit");
+        exit.setOnAction(e -> { if (owner != null) owner.close(); });
+        file.getItems().addAll(newMsg, getMail, new SeparatorMenuItem(), exit);
+
+        Menu edit = new Menu("Edit");
+        MenuItem find = new MenuItem("Find Messages");
+        find.setAccelerator(new KeyCodeCombination(KeyCode.K, KeyCombination.CONTROL_DOWN));
+        find.setOnAction(e -> { searchField.requestFocus(); searchField.selectAll(); });
+        edit.getItems().add(find);
+
+        Menu view = new Menu("View");
+        Menu layoutMenu = new Menu("Layout");
+        for (String mode : List.of("Classic", "Wide", "Vertical")) {
+            RadioMenuItem choice = new RadioMenuItem(mode);
+            choice.setSelected(mode.equals(settings.layoutMode()));
+            choice.setOnAction(e -> { settings.layoutMode(mode); rebuildWorkspace(); });
+            layoutMenu.getItems().add(choice);
+        }
+        ToggleGroup tg = new ToggleGroup();
+        for (javafx.scene.control.MenuItem mi : layoutMenu.getItems()) ((RadioMenuItem) mi).setToggleGroup(tg);
+        CheckMenuItem showFolders = new CheckMenuItem("Show Folder Pane");
+        showFolders.setSelected(settings.showNavigation());
+        showFolders.setOnAction(e -> { settings.showNavigation(showFolders.isSelected()); rebuildWorkspace(); });
+        CheckMenuItem showReader = new CheckMenuItem("Show Reading Pane");
+        showReader.setSelected(settings.showReader());
+        showReader.setOnAction(e -> { settings.showReader(showReader.isSelected()); rebuildWorkspace(); });
+        view.getItems().addAll(layoutMenu, showFolders, showReader);
+
+        Menu go = new Menu("Go");
+        MenuItem next = new MenuItem("Next Message");
+        next.setOnAction(e -> selectAdjacent(1));
+        MenuItem prev = new MenuItem("Previous Message");
+        prev.setOnAction(e -> selectAdjacent(-1));
+        go.getItems().addAll(next, prev);
+
+        Menu folder = new Menu("Folder");
+        MenuItem updateFolder = new MenuItem("Update Folder");
+        updateFolder.setOnAction(e -> syncNow());
+        folder.getItems().add(updateFolder);
+
+        Menu message = new Menu("Message");
+        MenuItem reply = new MenuItem("Reply");
+        reply.setOnAction(e -> replyToSelected());
+        MenuItem replyAll = new MenuItem("Reply to All");
+        replyAll.setOnAction(e -> replyToSelected());
+        MenuItem forward = new MenuItem("Forward");
+        forward.setOnAction(e -> forwardSelected());
+        MenuItem archive = new MenuItem("Archive");
+        archive.setOnAction(e -> archiveSelected());
+        MenuItem del = new MenuItem("Delete");
+        del.setOnAction(e -> deleteSelected());
+        MenuItem markRead = new MenuItem("Mark as Read/Unread");
+        markRead.setOnAction(e -> toggleReadSelected());
+        MenuItem star = new MenuItem("Star Message");
+        star.setOnAction(e -> toggleStarSelected());
+        MenuItem junk = new MenuItem("Mark as Junk");
+        junk.setOnAction(e -> junkSelected());
+        MenuItem move = new MenuItem("Move to Folder…");
+        move.setOnAction(e -> showMoveMenu());
+        message.getItems().addAll(reply, replyAll, forward, new SeparatorMenuItem(),
+                archive, del, junk, move, new SeparatorMenuItem(), markRead, star);
+
+        Menu tools = new Menu("Tools");
+        MenuItem addAccount = new MenuItem("Add Account…");
+        addAccount.setOnAction(e -> addAccount());
+        MenuItem diagnostics = new MenuItem("Diagnostics…");
+        diagnostics.setOnAction(e -> showDiagnostics());
+        tools.getItems().addAll(addAccount, diagnostics);
+
+        Menu settingsMenu = new Menu("Settings");
+        MenuItem settingsItem = new MenuItem("Configure GraalMail…");
+        settingsItem.setOnAction(e -> showSettings());
+        settingsMenu.getItems().add(settingsItem);
+
+        Menu help = new Menu("Help");
+        MenuItem about = new MenuItem("About GraalMail");
+        about.setOnAction(e -> status.setText("GraalMail — KMail-inspired desktop mail client"));
+        help.getItems().add(about);
+
+        bar.getMenus().addAll(file, edit, view, go, folder, message, tools, settingsMenu, help);
+        return bar;
     }
 
     private ToolBar buildToolbar() {
@@ -395,6 +442,7 @@ public final class MainWindow {
         composeButton.getStyleClass().add("primary-action");
         composeButton.getStyleClass().add("proton-compose");
         composeButton.setTooltip(new javafx.scene.control.Tooltip("New message (C)"));
+        composeButton.setAccessibleText("New message (C)");
         composeButton.setOnAction(event -> composeNewMessage());
 
         searchField.setPromptText("Search messages…  ( / )");
@@ -411,11 +459,12 @@ public final class MainWindow {
         searchScope.getItems().setAll("All local mail");
         searchScope.setValue("All local mail");
         searchScope.setId("search-scope");
-        searchScope.setAccessibleText("Search scope");
+        searchScope.setAccessibleText("Search scope: all local mail");
+        searchScope.setTooltip(new javafx.scene.control.Tooltip("Search scope"));
 
         Button refresh = new Button();
         refresh.setGraphic(ThunderbirdIcons.icon("get-mail", "toolbar-icon"));
-        refresh.setAccessibleText("Get messages");
+        refresh.setAccessibleText("Get messages for all accounts");
         refresh.setTooltip(new javafx.scene.control.Tooltip("Get messages (Ctrl+Shift+R)"));
         refresh.getStyleClass().add("icon-button");
         refresh.setOnAction(event -> syncNow());
@@ -442,14 +491,25 @@ public final class MainWindow {
         showFolders.setOnAction(event -> {
             settings.showNavigation(showFolders.isSelected());
             rebuildWorkspace();
+            status.setText(showFolders.isSelected() ? "Folder pane shown" : "Folder pane hidden");
         });
         CheckMenuItem showReader = new CheckMenuItem("Show reading pane");
         showReader.setSelected(settings.showReader());
         showReader.setOnAction(event -> {
             settings.showReader(showReader.isSelected());
             rebuildWorkspace();
+            status.setText(showReader.isSelected() ? "Reading pane shown" : "Reading pane hidden");
         });
-        layoutButton.getItems().addAll(showFolders, showReader);
+        CheckMenuItem compactNav = new CheckMenuItem("Compact navigation rows");
+        compactNav.setSelected(settings.navCompact());
+        compactNav.setOnAction(event -> {
+            settings.navCompact(compactNav.isSelected());
+            applyNavDensity();
+            status.setText(compactNav.isSelected()
+                    ? "Compact navigation on"
+                    : "Compact navigation off");
+        });
+        layoutButton.getItems().addAll(showFolders, showReader, compactNav);
 
         Button settingsButton = new Button();
         settingsButton.setGraphic(ThunderbirdIcons.icon("settings", "toolbar-icon"));
@@ -485,7 +545,8 @@ public final class MainWindow {
 
     private BorderPane buildCenter() {
         folderTree.setShowRoot(false);
-        folderTree.setCellFactory(view -> new FolderTreeCell(this::removeAccount));
+        folderTree.setCellFactory(view -> new FolderTreeCell(
+                this::removeAccount, this::unreadTotal, this::markFolderRead));
         Label navSection = new Label("Mailboxes");
         navSection.getStyleClass().add("nav-section-label");
         HBox folderToolbar = new HBox(UiScale.px(owner, 3), navSection);
@@ -503,7 +564,7 @@ public final class MainWindow {
         folderToolbar.getStyleClass().add("proton-nav-header");
 
         messageList.setCellFactory(view -> new MessageListCell(settings.compactDensity(), UiScale.scale(owner)));
-        messageList.setPlaceholder(new Label("No messages here yet"));
+        messageList.setPlaceholder(new Label("No messages yet — press Get messages to sync"));
         configureMessageTable();
         ContextMenu messageMenu = new ContextMenu();
         MenuItem reply = new MenuItem("Reply");
@@ -537,6 +598,8 @@ public final class MainWindow {
             refreshFilterControls();
             reloadCurrentView();
         });
+        clearFiltersButton.setAccessibleText("Clear all quick filters");
+        clearFiltersButton.setTooltip(new javafx.scene.control.Tooltip("Clear filters"));
         clearFiltersButton.setVisible(false);
         clearFiltersButton.setManaged(false);
         javafx.scene.layout.FlowPane filters = new javafx.scene.layout.FlowPane(
@@ -558,6 +621,7 @@ public final class MainWindow {
         listModePicker.getItems().setAll("Cards", "Table");
         listModePicker.setValue(settings.listMode());
         listModePicker.setAccessibleText("Message list display mode");
+        listModePicker.setTooltip(new javafx.scene.control.Tooltip("Cards or table layout"));
         listModePicker.valueProperty().addListener((observable, old, value) -> {
             settings.listMode(value);
             updateListDisplayMode();
@@ -570,6 +634,8 @@ public final class MainWindow {
             messageList.getSelectionModel().setSelectionMode(multiple ? SelectionMode.MULTIPLE : SelectionMode.SINGLE);
             messageTable.getSelectionModel().setSelectionMode(multiple ? SelectionMode.MULTIPLE : SelectionMode.SINGLE);
             multiSelectButton.setText(multiple ? "Done" : "Select");
+            if (multiple) multiSelectButton.getStyleClass().add("active");
+            else multiSelectButton.getStyleClass().remove("active");
             if (!multiple) {
                 var selected = messageList.getSelectionModel().getSelectedItem();
                 messageList.getSelectionModel().clearSelection();
@@ -590,15 +656,23 @@ public final class MainWindow {
         titleRow.getStyleClass().add("proton-list-header");
         Button markSelectedRead = new Button("Read / unread");
         markSelectedRead.setGraphic(ThunderbirdIcons.icon("unread", "toolbar-icon"));
+        markSelectedRead.setAccessibleText("Mark selected messages read or unread (U)");
+        markSelectedRead.setTooltip(new javafx.scene.control.Tooltip("Mark read / unread (U)"));
         markSelectedRead.setOnAction(event -> toggleReadSelected());
         Button starSelected = new Button("Star / unstar");
         starSelected.setGraphic(ThunderbirdIcons.icon("star", "toolbar-icon"));
+        starSelected.setAccessibleText("Star or unstar selected messages (S)");
+        starSelected.setTooltip(new javafx.scene.control.Tooltip("Star / unstar (S)"));
         starSelected.setOnAction(event -> toggleStarSelected());
         Button archiveSelected = new Button("Archive");
         archiveSelected.setGraphic(ThunderbirdIcons.icon("archive", "toolbar-icon"));
+        archiveSelected.setAccessibleText("Archive selected messages (E)");
+        archiveSelected.setTooltip(new javafx.scene.control.Tooltip("Archive (E)"));
         archiveSelected.setOnAction(event -> archiveSelected());
         Button deleteSelected = new Button("Delete");
         deleteSelected.setGraphic(ThunderbirdIcons.icon("trash", "toolbar-icon"));
+        deleteSelected.setAccessibleText("Delete selected messages (Del)");
+        deleteSelected.setTooltip(new javafx.scene.control.Tooltip("Delete (Del)"));
         deleteSelected.setOnAction(event -> deleteSelected());
         javafx.scene.layout.FlowPane selectionActions = new javafx.scene.layout.FlowPane(
                 UiScale.px(owner, 6), UiScale.px(owner, 6), selectionCount, markSelectedRead,
@@ -640,12 +714,8 @@ public final class MainWindow {
         readerReplyButton.getStyleClass().add("proton-reply");
         moveButton.setOnAction(event -> showMoveMenu());
         moveButton.setGraphic(ThunderbirdIcons.icon("folder", "toolbar-icon"));
-        previousButton.setText("‹ Prev");
-        previousButton.setGraphic(ThunderbirdIcons.icon("collapse", "toolbar-icon"));
-        nextButton.setText("Next ›");
-        javafx.scene.Group nextIcon = ThunderbirdIcons.icon("collapse", "toolbar-icon");
-        nextIcon.setRotate(180);
-        nextButton.setGraphic(nextIcon);
+        previousButton.setText("Previous");
+        nextButton.setText("Next");
         previousButton.setOnAction(event -> selectAdjacent(-1));
         nextButton.setOnAction(event -> selectAdjacent(1));
         remoteImagesButton.setOnAction(event -> {
@@ -668,23 +738,38 @@ public final class MainWindow {
         readerMenu.getItems().get(5).setOnAction(event -> selectAdjacent(1));
         moreActions.setOnAction(event -> readerMenu.show(moreActions,
                 javafx.geometry.Side.BOTTOM, 0, 0));
-        javafx.scene.layout.Region readerSpacer = new javafx.scene.layout.Region();
-        HBox.setHgrow(readerSpacer, Priority.ALWAYS);
-        readerActionsPane = new HBox(
-                UiScale.px(owner, 7), readerReplyButton, readerForwardButton,
+        javafx.scene.layout.FlowPane readerBar = new javafx.scene.layout.FlowPane(
+                UiScale.px(owner, 7), UiScale.px(owner, 7),
+                readerReplyButton, readerForwardButton,
                 readerUnreadButton, readerStarButton,
-                readerSpacer, previousButton, nextButton,
+                previousButton, nextButton,
                 readerArchiveButton, readerJunkButton, moveButton, readerDeleteButton, moreActions);
-        readerActionsPane.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
-        readerActionsPane.setPadding(UiScale.insets(owner, 10));
-        readerActionsPane.getStyleClass().add("reader-actions");
+        readerBar.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
+        readerBar.setPadding(UiScale.insets(owner, 10));
+        readerBar.getStyleClass().add("reader-actions");
+        readerActionsPane = readerBar;
         readerReplyButton.setAccessibleText("Reply to selected message");
+        readerReplyButton.setTooltip(new javafx.scene.control.Tooltip("Reply (R)"));
         readerForwardButton.setAccessibleText("Forward selected message");
+        readerForwardButton.setTooltip(new javafx.scene.control.Tooltip("Forward (F)"));
+        readerUnreadButton.setAccessibleText("Mark selected message read or unread");
+        readerUnreadButton.setTooltip(new javafx.scene.control.Tooltip("Mark read / unread (U)"));
+        readerStarButton.setAccessibleText("Star or unstar selected message");
+        readerStarButton.setTooltip(new javafx.scene.control.Tooltip("Star / unstar (S)"));
         readerArchiveButton.setAccessibleText("Move selected message to Archive");
+        readerArchiveButton.setTooltip(new javafx.scene.control.Tooltip("Archive (E)"));
         readerJunkButton.setAccessibleText("Move selected message to Junk");
+        readerJunkButton.setTooltip(new javafx.scene.control.Tooltip("Move to Junk"));
         readerDeleteButton.setAccessibleText("Move selected message to Trash or delete");
+        readerDeleteButton.setTooltip(new javafx.scene.control.Tooltip("Delete (Del)"));
+        moveButton.setAccessibleText("Move selected message to another folder");
+        moveButton.setTooltip(new javafx.scene.control.Tooltip("Move to…"));
         previousButton.setAccessibleText("Select previous message");
+        previousButton.setTooltip(new javafx.scene.control.Tooltip("Previous message (K)"));
         nextButton.setAccessibleText("Select next message");
+        nextButton.setTooltip(new javafx.scene.control.Tooltip("Next message (J)"));
+        moreActions.setAccessibleText("More message actions");
+        moreActions.setTooltip(new javafx.scene.control.Tooltip("More actions"));
         readerState.getStyleClass().add("reader-state");
         readerState.setPadding(UiScale.insets(owner, 0, 12, 6, 12));
         attachmentActions.setPadding(UiScale.insets(owner, 0, 10, 8, 10));
@@ -792,7 +877,7 @@ public final class MainWindow {
     }
 
     private void configureMessageTable() {
-        messageTable.setPlaceholder(new Label("No messages here yet"));
+        messageTable.setPlaceholder(new Label("No messages yet — press Get messages to sync"));
         messageTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
         TableColumn<Message, String> state = new TableColumn<>("Status");
         state.setCellValueFactory(cell -> new SimpleStringProperty(cell.getValue().unread() ? "Unread" : ""));
@@ -925,6 +1010,20 @@ public final class MainWindow {
         }
         workspaceHost.setCenter(root);
         root.getStyleClass().add("mail-split-pane");
+        applyNavDensity();
+    }
+
+    /** Applies the persisted navigation density to the folder pane. */
+    private void applyNavDensity() {
+        if (navigationPane == null) return;
+        if (settings.navCompact()) {
+            if (!navigationPane.getStyleClass().contains("nav-compact")) {
+                navigationPane.getStyleClass().add("nav-compact");
+            }
+        } else {
+            navigationPane.getStyleClass().remove("nav-compact");
+        }
+        folderTree.refresh();
     }
 
     private SplitPane split(Orientation orientation, List<Node> children) {
@@ -995,8 +1094,11 @@ public final class MainWindow {
     private HBox buildStatusBar() {
         Label connection = new Label("Local cache");
         connection.getStyleClass().add("connection-indicator");
+        connection.setAccessibleText("Connection: local cache");
         polyMailStatus.getStyleClass().add("polymail-indicator");
         polyMailStatus.setAccessibleText("PolyMail network status");
+        status.setAccessibleText("Status messages");
+        status.setAccessibleHelp("Announces what the application just did");
         HBox box = new HBox(UiScale.px(owner, 10), connection, status, polyMailStatus);
         HBox.setHgrow(status, Priority.ALWAYS);
         box.setPadding(UiScale.insets(owner, 7, 12, 7, 12));
@@ -1045,6 +1147,150 @@ public final class MainWindow {
             if (target == null) target = items.getFirst();
             folderTree.getSelectionModel().select(target);
         }
+    }
+
+    private int unreadTotal(Account account) {
+        try {
+            int total = 0;
+            for (Folder folder : context.store().listFolders(account.id())) {
+                total += Math.max(0, folder.unreadCount());
+            }
+            return total;
+        } catch (RuntimeException e) {
+            LOG.debug("Unread rollup unavailable for account {}", account.id());
+            return 0;
+        }
+    }
+
+    /** Adjusts the cached unread count live; the next sync corrects any drift. */
+    private void adjustFolderUnread(String accountId, String folderId, int delta) {
+        if (delta == 0 || accountId == null || folderId == null) return;
+        try {
+            List<Folder> folders = new ArrayList<>(context.store().listFolders(accountId));
+            boolean changed = false;
+            for (int i = 0; i < folders.size(); i++) {
+                Folder folder = folders.get(i);
+                if (folder.id().equals(folderId)) {
+                    folders.set(i, folder.withCounts(folder.totalCount(),
+                            Math.max(0, folder.unreadCount() + delta)));
+                    changed = true;
+                    break;
+                }
+            }
+            if (changed) context.store().saveFolders(accountId, folders);
+        } catch (RuntimeException e) {
+            LOG.debug("Live unread adjustment failed for account {}", accountId);
+            return;
+        }
+        updateFolderTreeItem(accountId, folderId);
+    }
+
+    /** Sets the cached unread count live; the next sync corrects any drift. */
+    private void setFolderUnread(String accountId, String folderId, int unread) {
+        if (accountId == null || folderId == null) return;
+        try {
+            List<Folder> folders = new ArrayList<>(context.store().listFolders(accountId));
+            boolean changed = false;
+            for (int i = 0; i < folders.size(); i++) {
+                Folder folder = folders.get(i);
+                if (folder.id().equals(folderId)) {
+                    folders.set(i, folder.withCounts(folder.totalCount(), Math.max(0, unread)));
+                    changed = true;
+                    break;
+                }
+            }
+            if (changed) context.store().saveFolders(accountId, folders);
+        } catch (RuntimeException e) {
+            LOG.debug("Live unread update failed for account {}", accountId);
+            return;
+        }
+        updateFolderTreeItem(accountId, folderId);
+    }
+
+    private void updateFolderTreeItem(String accountId, String folderId) {
+        if (folderTree.getRoot() == null) return;
+        for (TreeItem<Object> accountItem : folderTree.getRoot().getChildren()) {
+            if (accountItem.getValue() instanceof Account account
+                    && account.id().equals(accountId)) {
+                for (TreeItem<Object> folderItem : accountItem.getChildren()) {
+                    if (folderItem.getValue() instanceof Folder folder
+                            && folder.id().equals(folderId)) {
+                        context.store().folder(accountId, folderId)
+                                .ifPresent(folderItem::setValue);
+                    }
+                }
+            }
+        }
+        folderTree.refresh();
+    }
+
+    /** Decrements cached unread counts for messages leaving their folder. */
+    private void noteMessagesRemoved(java.util.Collection<Message> removed) {
+        java.util.Map<String, Integer> deltas = new java.util.HashMap<>();
+        for (Message message : removed) {
+            if (message.unread()) {
+                deltas.merge(message.accountId() + "\u0000" + message.folderId(), 1, Integer::sum);
+            }
+        }
+        deltas.forEach((key, count) -> {
+            int split = key.indexOf('\u0000');
+            adjustFolderUnread(key.substring(0, split), key.substring(split + 1), -count);
+        });
+    }
+
+    /** Queues MARK_READ for every cached unread message in the folder. */
+    private void markFolderRead(Account account, Folder folder) {
+        status.setText("Marking " + folder.name() + " as read…");
+        io.submit(() -> {
+            try {
+                int marked = 0;
+                int offset = 0;
+                while (marked < 2000) {
+                    var page = context.store().listMessages(account.id(), folder.id(), 200, offset);
+                    if (page.messages().isEmpty()) break;
+                    boolean advanced = false;
+                    for (Message message : page.messages()) {
+                        offset++;
+                        if (message.unread()) {
+                            context.syncEngine().queue(account, PendingAction.Type.MARK_READ,
+                                    message.id(), "");
+                            updateVisibleMessageQuiet(message.toBuilder().unread(false).build());
+                            marked++;
+                            advanced = true;
+                        }
+                    }
+                    if (!page.hasMore()) break;
+                    if (!advanced && page.messages().size() < 200) break;
+                }
+                int done = marked;
+                adjustFolderUnread(account.id(), folder.id(), -done);
+                Platform.runLater(() -> {
+                    status.setText(done == 0 ? "Nothing unread in " + folder.name()
+                            : "Marked " + done + " message(s) as read — change queued for synchronisation");
+                    refreshFolders();
+                    reloadCurrentView();
+                });
+            } catch (RuntimeException e) {
+                LOG.warn("Mark all as read failed: {}", e.getMessage());
+                Platform.runLater(() -> status.setText("Could not mark as read: " + e.getMessage()));
+            }
+        });
+    }
+
+    /** Updates the visible row without changing the selection. */
+    private void updateVisibleMessageQuiet(Message updated) {
+        Platform.runLater(() -> {
+            int index = messages.indexOf(messageList.getSelectionModel().getSelectedItem());
+            if (index < 0) {
+                for (int i = 0; i < messages.size(); i++) {
+                    if (messages.get(i).id().equals(updated.id())) {
+                        index = i;
+                        break;
+                    }
+                }
+            }
+            if (index >= 0) messages.set(index, updated);
+        });
     }
 
     private TreeItem<Object> findTreeItem(List<TreeItem<Object>> items, Object value) {
@@ -1169,7 +1415,7 @@ public final class MainWindow {
             }
         } else {
             messages.clear();
-            messageCount.setText("0 messages");
+            messagesChanged("messages");
             viewTitle.setText("GraalMail");
             status.setText("Add an account to get started.");
             onMessageSelected(null);
@@ -1210,7 +1456,7 @@ public final class MainWindow {
                     hasMoreMessages = canLoadMore;
                     loadMoreButton.setVisible(canLoadMore);
                     loadMoreButton.setManaged(canLoadMore);
-                    messageCount.setText(result.size() + " messages");
+                    messagesChanged("messages");
                     status.setText(result.size() + " cached messages");
                 });
             } catch (RuntimeException e) {
@@ -1252,7 +1498,7 @@ public final class MainWindow {
                     loadMoreButton.setDisable(false);
                     loadMoreButton.setVisible(hasMoreMessages);
                     loadMoreButton.setManaged(hasMoreMessages);
-                    messageCount.setText(messages.size() + " messages shown");
+                    messagesChanged("messages");
                 });
             } catch (RuntimeException e) {
                 Platform.runLater(() -> {
@@ -1295,7 +1541,7 @@ public final class MainWindow {
                     loadMoreButton.setDisable(false);
                     loadMoreButton.setVisible(canLoadMore);
                     loadMoreButton.setManaged(canLoadMore);
-                    messageCount.setText(messages.size() + " messages shown");
+                    messagesChanged("messages");
                 });
             } catch (RuntimeException e) {
                 Platform.runLater(() -> {
@@ -1343,7 +1589,11 @@ public final class MainWindow {
             remoteImagesAllowed = false;
             remoteImagesButton.setVisible(false);
             remoteImagesButton.setManaged(false);
-            reader.getEngine().loadContent("<html><body><p>Select a message to read it.</p></body></html>");
+            reader.getEngine().loadContent(readerEmptyHtml(
+                    "Nothing selected",
+                    context.store().listAccounts().isEmpty()
+                            ? "Add an account with + Add account, then press Get messages."
+                            : "Select a message on the left to read it here."));
             return;
         }
         remoteImagesAllowed = false;
@@ -1351,7 +1601,7 @@ public final class MainWindow {
         readerState.setText("Loading cached message…");
         remoteImagesButton.setVisible(false);
         remoteImagesButton.setManaged(false);
-        reader.getEngine().loadContent("<html><body><p>Loading message from local cache…</p></body></html>");
+        reader.getEngine().loadContent(readerEmptyHtml("Loading…", "Fetching the message from the local cache."));
         io.submit(() -> {
             Message full;
             String pending;
@@ -1377,6 +1627,7 @@ public final class MainWindow {
                 if (loaded.unread()) {
                     context.store().account(loaded.accountId()).ifPresent(account ->
                             context.syncEngine().queue(account, PendingAction.Type.MARK_READ, loaded.id(), ""));
+                    adjustFolderUnread(loaded.accountId(), loaded.folderId(), -1);
                     displayMessage = loaded.toBuilder().unread(false).build();
                     int index = messages.indexOf(selected);
                     if (index >= 0) {
@@ -1416,6 +1667,18 @@ public final class MainWindow {
 
     private String render(Message message, boolean allowRemoteImages) {
         return MessageBodyRenderer.render(message, allowRemoteImages, isDarkTheme());
+    }
+
+    private String readerEmptyHtml(String title, String body) {
+        boolean dark = isDarkTheme();
+        String bg = dark ? "#2A2E32" : "#FCFCFC";
+        String fg = dark ? "#FCFCFC" : "#232629";
+        String muted = dark ? "#95A5A6" : "#7F7F7F";
+        return "<html><body style='background:" + bg + ";color:" + fg
+                + ";font-family:sans-serif;padding:32px;text-align:center;'>"
+                + "<h2 style='font-size:15px;margin:0 0 8px;'>" + title + "</h2>"
+                + "<p style='font-size:13px;color:" + muted + ";margin:0;'>" + body + "</p>"
+                + "</body></html>";
     }
 
     private String pendingActionStatus(Message message) {
@@ -1483,9 +1746,9 @@ public final class MainWindow {
         readerDeleteButton.setDisable(!selected);
         readerUnreadButton.setDisable(!flags);
         readerStarButton.setDisable(!flags);
-        previousButton.setDisable(!selected || messageList.getSelectionModel().getSelectedIndex() <= 0);
-        nextButton.setDisable(!selected || messageList.getSelectionModel().getSelectedIndex() < 0
-                || messageList.getSelectionModel().getSelectedIndex() >= messages.size() - 1);
+        previousButton.setDisable(!selected || selectedIndex() <= 0);
+        nextButton.setDisable(!selected || selectedIndex() < 0
+                || selectedIndex() >= messages.size() - 1);
         if (selected) {
             readerUnreadButton.setText(message.unread() ? "Mark read" : "Mark unread");
             readerStarButton.setText(message.flagged() ? "Unstar" : "Star");
@@ -1529,6 +1792,7 @@ public final class MainWindow {
             context.syncEngine().queue(account, PendingAction.Type.MOVE, message.id(), archive.id());
             queued.add(message);
         }
+        noteMessagesRemoved(queued);
         messages.removeAll(queued);
         onMessageSelected(messageList.getSelectionModel().getSelectedItem());
         status.setText(queued.size() + " Archive action(s) queued for synchronisation"
@@ -1552,6 +1816,7 @@ public final class MainWindow {
             context.syncEngine().queue(account, PendingAction.Type.MOVE, message.id(), spam.id());
             queued.add(message);
         }
+        noteMessagesRemoved(queued);
         messages.removeAll(queued);
         onMessageSelected(messageList.getSelectionModel().getSelectedItem());
         status.setText(queued.size() + " Junk action(s) queued for synchronisation"
@@ -1580,7 +1845,8 @@ public final class MainWindow {
     private void removeSelectedFromCurrentList(String message) {
         Message selected = messageList.getSelectionModel().getSelectedItem();
         if (selected != null) messages.remove(selected);
-        messageCount.setText(messages.size() + " messages");
+        if (selected != null) noteMessagesRemoved(List.of(selected));
+        messagesChanged("messages");
         onMessageSelected(null);
         status.setText(message);
     }
@@ -1646,7 +1912,7 @@ public final class MainWindow {
                     loadMoreButton.setDisable(false);
                     loadMoreButton.setVisible(canLoadMore);
                     loadMoreButton.setManaged(canLoadMore);
-                    messageCount.setText(messages.size() + " results");
+                    messagesChanged("results");
                     status.setText(messages.size() + (serverResults ? " provider results" : " local results")
                             + " for “" + query + "”");
                 });
@@ -1689,13 +1955,55 @@ public final class MainWindow {
         boolean active = unreadOnly || flaggedOnly || attachmentsOnly;
         clearFiltersButton.setVisible(active);
         clearFiltersButton.setManaged(active);
+        quickFilterToggle.setText(active ? "Filter •" : "Filter");
+    }
+
+    /** Refreshes chip counts, result count and context-aware empty states. */
+    private void messagesChanged(String scope) {
+        long unread = messages.stream().filter(Message::unread).count();
+        long starred = messages.stream().filter(Message::flagged).count();
+        long withFiles = messages.stream().filter(Message::hasAttachments).count();
+        unreadFilter.setText(unread > 0 ? "Unread (" + unread + ")" : "Unread");
+        starredFilter.setText(starred > 0 ? "Starred (" + starred + ")" : "Starred");
+        attachmentsFilter.setText(withFiles > 0 ? "Attachments (" + withFiles + ")" : "Attachments");
+        if ("results".equals(scope)) {
+            messageCount.setText(messages.size() + " results");
+        } else {
+            messageCount.setText(messages.size() + " messages");
+        }
+        updatePlaceholders();
+    }
+
+    private void updatePlaceholders() {
+        boolean searching = !searchText.get().isBlank();
+        boolean filtered = unreadOnly || flaggedOnly || attachmentsOnly;
+        boolean noAccounts = context.store().listAccounts().isEmpty();
+        String text;
+        if (noAccounts) {
+            text = "No accounts yet — use + Add account below to get started";
+        } else if (searching) {
+            text = "No matches for “" + searchText.get().trim() + "” — clear search or filters";
+        } else if (filtered) {
+            text = "No messages match the active filters — press Clear filters";
+        } else if (selectedFolder.get() == null && !unifiedInboxSelected && selectedAccount.get() == null) {
+            text = "Select a mailbox on the left to read mail";
+        } else {
+            text = "This folder is empty — press Get messages to sync";
+        }
+        messageList.setPlaceholder(new Label(text));
+        messageTable.setPlaceholder(new Label(text));
     }
 
     private void updateSelectionControls() {
-        int count = messageList.getSelectionModel().getSelectedItems().size();
-        selectionCount.setText(count + " selected");
-        boolean visible = count > 1
-                || messageList.getSelectionModel().getSelectionMode() == SelectionMode.MULTIPLE;
+        boolean tableMode = "Table".equalsIgnoreCase(settings.listMode());
+        int count = tableMode
+                ? messageTable.getSelectionModel().getSelectedItems().size()
+                : messageList.getSelectionModel().getSelectedItems().size();
+        boolean multi = (tableMode
+                ? messageTable.getSelectionModel().getSelectionMode()
+                : messageList.getSelectionModel().getSelectionMode()) == SelectionMode.MULTIPLE;
+        selectionCount.setText(count + (count == 1 ? " selected" : " selected"));
+        boolean visible = count > 1 || (multi && count > 0);
         selectionCount.getParent().setVisible(visible);
         selectionCount.getParent().setManaged(visible);
     }
@@ -1708,6 +2016,7 @@ public final class MainWindow {
             if (account == null) continue;
             PendingAction.Type type = message.unread() ? PendingAction.Type.MARK_READ : PendingAction.Type.MARK_UNREAD;
             context.syncEngine().queue(account, type, message.id(), "");
+            adjustFolderUnread(message.accountId(), message.folderId(), message.unread() ? -1 : 1);
             updateVisibleMessage(message.toBuilder().unread(!message.unread()).build());
         }
         status.setText(selected.size() == 1 ? "Read state queued for synchronisation"
@@ -1727,6 +2036,13 @@ public final class MainWindow {
         }
         status.setText(selected.size() == 1 ? "Star change queued for synchronisation"
                 : selected.size() + " star changes queued for synchronisation");
+    }
+
+    private int selectedIndex() {
+        boolean tableMode = "Table".equalsIgnoreCase(settings.listMode());
+        return tableMode
+                ? messageTable.getSelectionModel().getSelectedIndex()
+                : messageList.getSelectionModel().getSelectedIndex();
     }
 
     private List<Message> selectedMessages() {
@@ -1782,7 +2098,8 @@ public final class MainWindow {
             }
         }
         messages.removeAll(selected);
-        messageCount.setText(messages.size() + " messages");
+        noteMessagesRemoved(selected);
+        messagesChanged("messages");
         onMessageSelected(null);
         status.setText(selected.size() == 1
                 ? (movedToTrash == 1 ? "Message moved to Trash; change queued for synchronisation"
@@ -1793,6 +2110,7 @@ public final class MainWindow {
     private void updateVisibleMessage(Message updated) {
         int index = messages.indexOf(messageList.getSelectionModel().getSelectedItem());
         if (index >= 0) messages.set(index, updated);
+        messagesChanged("messages");
         onMessageSelected(updated);
     }
 
@@ -1891,6 +2209,13 @@ public final class MainWindow {
             try {
                 var reports = context.syncEngine().syncAll();
                 int newMessages = reports.stream().mapToInt(SyncReport::newMessages).sum();
+                var needsTwoFactor = reports.stream()
+                        .filter(report -> report.errors().stream()
+                                .anyMatch(error -> error.toLowerCase(java.util.Locale.ROOT)
+                                        .contains("two-factor code")))
+                        .map(report -> context.store().account(report.accountId()).orElse(null))
+                        .filter(java.util.Objects::nonNull)
+                        .toList();
                 Platform.runLater(() -> {
                     refreshFolders();
                     int errors = reports.stream().mapToInt(report -> report.errors().size()).sum();
@@ -1900,6 +2225,9 @@ public final class MainWindow {
                     if (settings.notificationsEnabled() && newMessages > 0) {
                         notifier.notifyNewMail(newMessages);
                     }
+                    if (!needsTwoFactor.isEmpty()) {
+                        promptTwoFactorReauth(needsTwoFactor.get(0));
+                    }
                 });
             } catch (RuntimeException e) {
                 LOG.warn("Synchronisation failed: {}", e.getMessage());
@@ -1908,6 +2236,49 @@ public final class MainWindow {
         }, "graalmail-sync");
         worker.setDaemon(true);
         worker.start();
+    }
+
+    /** Asks for a fresh TOTP code and refreshes the stored Proton session. */
+    private void promptTwoFactorReauth(Account account) {
+        var dialog = new javafx.scene.control.TextInputDialog();
+        dialog.setTitle("Two-factor code needed");
+        dialog.setHeaderText("Enter the two-factor code for " + account.email());
+        dialog.setContentText("Authenticator code:");
+        boolean maximized = UiScale.isMaximized(owner);
+        var code = dialog.showAndWait();
+        UiScale.restoreMaximized(owner, maximized);
+        if (code.isEmpty() || code.get().isBlank()) {
+            return;
+        }
+        status.setText("Verifying two-factor code…");
+        io.submit(() -> {
+            try {
+                var fresh = context.sessions().reauthenticateWithTwoFactor(account, code.get().trim());
+                Account updated = Account.builder(account.id(), account.providerId())
+                        .email(account.email())
+                        .displayName(account.displayName())
+                        .settings(fresh.settings())
+                        .credentialRef(account.credentialRef())
+                        .createdAt(account.createdAt())
+                        .enabled(account.enabled())
+                        .build();
+                context.store().saveAccount(updated);
+                Platform.runLater(() -> {
+                    status.setText("Two-factor verified. Synchronising…");
+                    syncNow();
+                });
+            } catch (com.graalmail.core.error.ProviderException e) {
+                LOG.warn("Two-factor re-authentication failed: {}", e.getMessage());
+                Platform.runLater(() -> status.setText(
+                        e.code() == com.graalmail.core.error.ErrorCode.CONSENT_REQUIRED
+                                ? "Two-factor code not accepted. Try again on the next sync."
+                                : "Two-factor verification failed: " + e.userMessage()));
+            } catch (RuntimeException e) {
+                LOG.warn("Two-factor re-authentication failed: {}", e.getMessage());
+                Platform.runLater(() -> status.setText(
+                        "Two-factor verification failed. Try again on the next sync."));
+            }
+        });
     }
 
     private void installShortcuts() {
@@ -2084,8 +2455,9 @@ public final class MainWindow {
         alert.setHeaderText("GraalMail desktop");
         alert.setContentText("A cross platform email client. Data directory: "
                 + context.paths().baseDirectory());
-        alert.showAndWait();
-        UiScale.restoreMaximized(owner, maximized);
+        alert.initOwner(owner);
+        alert.show();
+        alert.setOnHidden(event -> UiScale.restoreMaximized(owner, maximized));
     }
 
     private void showShortcuts() {
@@ -2096,12 +2468,14 @@ public final class MainWindow {
         alert.setContentText("""
                 C — New message          Ctrl+N — New message
                 / or Ctrl+K — Search     J / K — Next / previous message
-                Enter — Open message     E or A — Archive
+                Enter — Focus reader     E or A — Archive
                 U — Mark read / unread   S — Star / unstar
-                Del or # — Delete        R — Reply   Shift+F — Forward
+                Del or # — Delete        R — Reply   F — Forward
+                Ctrl+R — Reply           Ctrl+Shift+F — Forward
                 Ctrl+Shift+R — Sync      [ — Toggle folder pane""");
-        alert.showAndWait();
-        UiScale.restoreMaximized(owner, maximized);
+        alert.initOwner(owner);
+        alert.show();
+        alert.setOnHidden(event -> UiScale.restoreMaximized(owner, maximized));
     }
 
 }

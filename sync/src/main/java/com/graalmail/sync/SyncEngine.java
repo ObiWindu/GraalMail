@@ -108,7 +108,7 @@ public final class SyncEngine {
                     result.errors().forEach(errors::add);
                     
                     // Fetch and save new/updated messages
-                    if (result.newMessages() > 0 || result.updatedMessages() > 0) {
+                    if (!result.newUids().isEmpty() || !result.updatedUids().isEmpty()) {
                         fetchAndSaveMessages(account, session, folder.id(), syncState, result);
                     }
                     

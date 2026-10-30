@@ -76,6 +76,9 @@ public final class AccountSetupDialog {
             javafx.collections.FXCollections.observableArrayList("starttls", "ssl", "none"));
     private final PasswordField passwordField = new PasswordField();
     private final PasswordField mailboxPasswordField = new PasswordField();
+    private final TextField passwordVisibleField = new TextField();
+    private final TextField mailboxVisibleField = new TextField();
+    private final javafx.scene.control.CheckBox showPasswordsBox = new javafx.scene.control.CheckBox("Show passwords");
     private final TextField twoFactorField = new TextField();
     private boolean pendingTwoFactor;
     private boolean pendingCaptcha;
@@ -168,8 +171,37 @@ public final class AccountSetupDialog {
         row = addRow(connection, row, "SMTP port", smtpPortField);
         row = addRow(connection, row, "SMTP security", smtpSecurityField);
         row = addRow(connection, row, "Password or app password", passwordField);
+        row = addRow(connection, row, "", passwordVisibleField);
         row = addRow(connection, row, "Mailbox password (two-password mode only)", mailboxPasswordField);
+        row = addRow(connection, row, "", mailboxVisibleField);
         row = addRow(connection, row, "Two-factor code (if asked)", twoFactorField);
+        row = addRow(connection, row, "", showPasswordsBox);
+        passwordVisibleField.setVisible(false);
+        passwordVisibleField.setManaged(false);
+        mailboxVisibleField.setVisible(false);
+        mailboxVisibleField.setManaged(false);
+        syncPasswordVisibility(passwordField, passwordVisibleField);
+        syncPasswordVisibility(mailboxPasswordField, mailboxVisibleField);
+        showPasswordsBox.setAccessibleText("Show passwords in plain text");
+        showPasswordsBox.setTooltip(new javafx.scene.control.Tooltip("Reveal the entered passwords"));
+        showPasswordsBox.selectedProperty().addListener((observable, old, show) -> {
+            String login = show ? passwordField.getText() : passwordVisibleField.getText();
+            String mailbox = show ? mailboxPasswordField.getText() : mailboxVisibleField.getText();
+            passwordVisibleField.setText(login == null ? "" : login);
+            mailboxVisibleField.setText(mailbox == null ? "" : mailbox);
+            passwordField.setVisible(!show);
+            passwordField.setManaged(!show);
+            passwordVisibleField.setVisible(show);
+            passwordVisibleField.setManaged(show);
+            mailboxPasswordField.setVisible(!show && isMailboxRowNeeded());
+            mailboxPasswordField.setManaged(!show && isMailboxRowNeeded());
+            mailboxVisibleField.setVisible(show && isMailboxRowNeeded());
+            mailboxVisibleField.setManaged(show && isMailboxRowNeeded());
+            updateVisibility(providerChoice.getValue() == null
+                    ? ProviderType.GENERIC : providerChoice.getValue());
+        });
+        passwordVisibleField.setPromptText(passwordField.getPromptText());
+        mailboxVisibleField.setPromptText(mailboxPasswordField.getPromptText());
         emailField.textProperty().addListener((observable, old, value) ->
                 updateVisibility(providerChoice.getValue() == null
                         ? ProviderType.GENERIC : providerChoice.getValue()));
@@ -208,7 +240,7 @@ public final class AccountSetupDialog {
         scroll.setFitToWidth(true);
         scroll.setHbarPolicy(javafx.scene.control.ScrollPane.ScrollBarPolicy.NEVER);
         if (dark) scroll.getStyleClass().add("dark-theme");
-        scroll.setStyle(dark ? "-fx-background: #1e1830; -fx-background-color: #1e1830;" : "");
+        scroll.setStyle(dark ? "-fx-background: #2A2E32; -fx-background-color: #2A2E32;" : "");
         javafx.scene.Scene scene = new javafx.scene.Scene(scroll);
         var stylesheet = getClass().getResource("/styles/mail.css");
         if (stylesheet != null) scene.getStylesheets().add(stylesheet.toExternalForm());
@@ -541,21 +573,30 @@ public final class AccountSetupDialog {
     private void saveProtonAsync() {
         String email = emailField.getText() == null ? "" : emailField.getText().trim();
         String displayName = displayNameField.getText() == null ? "" : displayNameField.getText().trim();
+        markInvalid(emailField, false);
+        markInvalid(passwordField, false);
+        markInvalid(passwordVisibleField, false);
         if (email.isBlank()) {
+            markInvalid(emailField, true);
             status.setText("Enter the email address for this account first.");
             return;
         }
-        String loginPassword = passwordField.getText() == null ? "" : passwordField.getText();
+        if (!validEmail(email)) {
+            markInvalid(emailField, true);
+            status.setText("That email address does not look valid — check for typos.");
+            return;
+        }
+        String loginPassword = enteredLoginPassword();
         if (loginPassword.isEmpty()) {
+            markInvalid(showPasswordsBox.isSelected() ? passwordVisibleField : passwordField, true);
             status.setText("Enter the Proton password.");
             return;
         }
         saveButton.setDisable(true);
         status.setText("Signing in to Proton…");
         status.getStyleClass().removeAll("form-status-error", "form-status-ok");
-        String mailboxPassword = mailboxPasswordField.getText() == null
-                || mailboxPasswordField.getText().isEmpty()
-                ? loginPassword : mailboxPasswordField.getText();
+        String mailboxPassword = enteredMailboxPassword().isEmpty()
+                ? loginPassword : enteredMailboxPassword();
         String twoFactorCode = pendingTwoFactor && twoFactorField.getText() != null
                 ? twoFactorField.getText().trim() : null;
         Thread worker = new Thread(() -> {
@@ -642,9 +683,16 @@ public final class AccountSetupDialog {
     private AccountSetup buildSetup(ProviderType type, AccountProvider provider) {
         String email = emailField.getText() == null ? "" : emailField.getText().trim();
         String displayName = displayNameField.getText() == null ? "" : displayNameField.getText().trim();
+        markInvalid(emailField, false);
         if (email.isBlank()) {
+            markInvalid(emailField, true);
             throw new ProviderException(ErrorCode.CONFIGURATION_ERROR,
                     "The email address is missing.", false);
+        }
+        if (!validEmail(email)) {
+            markInvalid(emailField, true);
+            throw new ProviderException(ErrorCode.CONFIGURATION_ERROR,
+                    "That email address does not look valid — check for typos.", false);
         }
         if (type == ProviderType.MICROSOFT) {
             throw new ProviderException(ErrorCode.CONFIGURATION_ERROR,
@@ -654,28 +702,39 @@ public final class AccountSetupDialog {
                     false);
         }
         if (type == ProviderType.PROTON) {
-            String loginPassword = passwordField.getText() == null ? "" : passwordField.getText();
-            String mailboxPassword = mailboxPasswordField.getText() == null
-                    || mailboxPasswordField.getText().isEmpty()
-                    ? loginPassword : mailboxPasswordField.getText();
+            String loginPassword = enteredLoginPassword();
+            String mailboxPassword = enteredMailboxPassword().isEmpty()
+                    ? loginPassword : enteredMailboxPassword();
             String twoFactorCode = pendingTwoFactor && twoFactorField.getText() != null
                     ? twoFactorField.getText().trim() : null;
             return buildProtonSetupBlocking(email, displayName,
                     loginPassword, mailboxPassword, twoFactorCode);
         }
         if (type == ProviderType.GENERIC) {
+            String imapHost = orDefault(imapHostField.getText(), "").trim();
+            String smtpHost = orDefault(smtpHostField.getText(), "").trim();
+            if (imapHost.isEmpty() || imapHost.equalsIgnoreCase("imap.example.com")) {
+                throw new ProviderException(ErrorCode.CONFIGURATION_ERROR,
+                        "Enter the IMAP host of your provider (e.g. imap.example.org).", false);
+            }
+            if (smtpHost.isEmpty() || smtpHost.equalsIgnoreCase("smtp.example.com")) {
+                throw new ProviderException(ErrorCode.CONFIGURATION_ERROR,
+                        "Enter the SMTP host of your provider (e.g. smtp.example.org).", false);
+            }
+            int imapPort = parsePort(imapPortField.getText(), "IMAP");
+            int smtpPort = parsePort(smtpPortField.getText(), "SMTP");
             Map<String, String> settings = new LinkedHashMap<>();
-            settings.put(ImapSettings.IMAP_HOST, orDefault(imapHostField.getText(), "imap.example.com"));
-            settings.put(ImapSettings.IMAP_PORT, orDefault(imapPortField.getText(), "993"));
+            settings.put(ImapSettings.IMAP_HOST, imapHost);
+            settings.put(ImapSettings.IMAP_PORT, Integer.toString(imapPort));
             settings.put(ImapSettings.IMAP_SECURITY, orDefault(imapSecurityField.getValue(), "ssl"));
-            settings.put(ImapSettings.SMTP_HOST, orDefault(smtpHostField.getText(), "smtp.example.com"));
-            settings.put(ImapSettings.SMTP_PORT, orDefault(smtpPortField.getText(), "587"));
+            settings.put(ImapSettings.SMTP_HOST, smtpHost);
+            settings.put(ImapSettings.SMTP_PORT, Integer.toString(smtpPort));
             settings.put(ImapSettings.SMTP_SECURITY, orDefault(smtpSecurityField.getValue(), "starttls"));
             settings.put(ImapSettings.USERNAME, email);
             return AccountSetup.builder(AuthMethod.PASSWORD)
                     .email(email)
                     .displayName(displayName)
-                    .password(email, passwordField.getText() == null ? "" : passwordField.getText())
+                    .password(email, enteredLoginPassword())
                     .settings(settings)
                     .build();
         }
@@ -684,12 +743,87 @@ public final class AccountSetupDialog {
         return AccountSetup.builder(method)
                 .email(email)
                 .displayName(displayName)
-                .password(email, passwordField.getText() == null ? "" : passwordField.getText())
+                .password(email, enteredLoginPassword())
                 .build();
     }
 
     private static String orDefault(String value, String fallback) {
         return value == null || value.isBlank() ? fallback : value;
+    }
+
+    private static void syncPasswordVisibility(PasswordField hidden, TextField visible) {
+        boolean[] guard = {false};
+        hidden.textProperty().addListener((observable, old, value) -> {
+            if (guard[0]) return;
+            guard[0] = true;
+            try {
+                if (!visible.getText().equals(value == null ? "" : value)) {
+                    visible.setText(value == null ? "" : value);
+                }
+            } finally {
+                guard[0] = false;
+            }
+        });
+        visible.textProperty().addListener((observable, old, value) -> {
+            if (guard[0]) return;
+            guard[0] = true;
+            try {
+                if (!hidden.getText().equals(value == null ? "" : value)) {
+                    hidden.setText(value == null ? "" : value);
+                }
+            } finally {
+                guard[0] = false;
+            }
+        });
+    }
+
+    private boolean isMailboxRowNeeded() {
+        ProviderType type = providerChoice.getValue();
+        return type == ProviderType.PROTON;
+    }
+
+    private String enteredLoginPassword() {
+        String value = passwordVisibleField.isVisible()
+                ? passwordVisibleField.getText() : passwordField.getText();
+        return value == null ? "" : value;
+    }
+
+    private String enteredMailboxPassword() {
+        String value = mailboxVisibleField.isVisible()
+                ? mailboxVisibleField.getText() : mailboxPasswordField.getText();
+        return value == null ? "" : value;
+    }
+
+    private static void markInvalid(javafx.scene.Node field, boolean invalid) {
+        if (invalid) {
+            if (!field.getStyleClass().contains("compose-field-error")) {
+                field.getStyleClass().add("compose-field-error");
+            }
+        } else {
+            field.getStyleClass().remove("compose-field-error");
+        }
+    }
+
+    private static boolean validEmail(String value) {
+        return value != null && value.matches("[^@\\s]+@[^@\\s]+\\.[^@\\s]+");
+    }
+
+    private static int parsePort(String raw, String label) {
+        String text = raw == null ? "" : raw.trim();
+        if (text.isEmpty()) {
+            throw new ProviderException(ErrorCode.CONFIGURATION_ERROR,
+                    "Enter the " + label + " port (e.g. 993 for IMAP).", false);
+        }
+        try {
+            int port = Integer.parseInt(text);
+            if (port <= 0 || port > 65535) {
+                throw new NumberFormatException("out of range");
+            }
+            return port;
+        } catch (NumberFormatException e) {
+            throw new ProviderException(ErrorCode.CONFIGURATION_ERROR,
+                    "The " + label + " port must be a number between 1 and 65535.", false, e);
+        }
     }
 
     /**
@@ -699,7 +833,7 @@ public final class AccountSetupDialog {
      */
     public Credential enteredCredential() {
         return Credential.password(emailField.getText() == null ? "" : emailField.getText(),
-                passwordField.getText() == null ? "" : passwordField.getText());
+                enteredLoginPassword());
     }
 
     /**

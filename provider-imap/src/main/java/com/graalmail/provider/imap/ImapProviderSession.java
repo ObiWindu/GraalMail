@@ -272,7 +272,7 @@ public final class ImapProviderSession implements ProviderSession {
                 boolean defaultAdded = false;
                 for (String pattern : new String[]{"%", "*"}) {
                     for (jakarta.mail.Folder candidate : defaultFolder.list(pattern)) {
-                        if (candidate.getType() != Folder.HOLDS_FOLDERS) {
+                        if ((candidate.getType() & Folder.HOLDS_MESSAGES) == 0) {
                             continue;
                         }
                         if (folderIdOf(candidate).equals(folderIdOf(defaultFolder))) {
@@ -639,7 +639,7 @@ public final class ImapProviderSession implements ProviderSession {
             try {
                 List<Message> results = new ArrayList<>();
                 for (jakarta.mail.Folder candidate : store.getDefaultFolder().list("%")) {
-                    if (candidate.getType() != Folder.HOLDS_FOLDERS) {
+                    if ((candidate.getType() & Folder.HOLDS_MESSAGES) == 0) {
                         continue;
                     }
                     String folderId = folderIdOf(candidate);
@@ -701,8 +701,14 @@ public final class ImapProviderSession implements ProviderSession {
                 // Get IMAP UIDNEXT
                 long imapUidNext = getUidNext(folder);
 
+                // First sync has no baseline: fetch everything instead of
+                // returning an empty delta that would leave the cache empty.
+                if (syncState.isNeverSynced() || localUidNext <= 0) {
+                    return fullResync(folderId, folder, imapUidValidity, errors);
+                }
+
                 // Fetch new messages since last sync
-                if (localUidNext > 0 && imapUidNext > localUidNext) {
+                if (imapUidNext > localUidNext) {
                     try {
                         var fetchResult = fetchNewMessages(folder, localUidNext, imapUidNext - 1);
                         newUids.addAll(fetchResult.newUids());
@@ -1016,7 +1022,10 @@ public final class ImapProviderSession implements ProviderSession {
     private String findFolderByType(FolderType type) {
         try {
             for (jakarta.mail.Folder candidate : store.getDefaultFolder().list("%")) {
-                if (candidate.getType() == Folder.HOLDS_FOLDERS && folderType(candidate) == type) {
+                if ((candidate.getType() & Folder.HOLDS_MESSAGES) == 0) {
+                    continue;
+                }
+                if (folderType(candidate) == type) {
                     return folderIdOf(candidate);
                 }
             }

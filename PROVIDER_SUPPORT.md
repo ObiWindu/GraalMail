@@ -106,7 +106,9 @@ Bridge is needed on any platform:
 
 1. In GraalMail, add a Proton account with the Proton username and password.
 2. With two-password mode, also enter the mailbox password. With two-factor
-   authentication, enter the authenticator code when asked.
+   authentication, enter the authenticator code when asked. If a stored
+   session later expires, sign in again with a fresh authenticator code:
+   re-authentication refreshes the stored tokens, no remove/re-add needed.
 3. GraalMail authenticates with SRP, unlocks the mailbox keys locally and
    decrypts subjects and bodies on this machine; the server only ever sees
    ciphertext.

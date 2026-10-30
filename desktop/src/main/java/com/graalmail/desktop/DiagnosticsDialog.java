@@ -21,7 +21,6 @@ import javafx.scene.control.Label;
 import javafx.scene.control.TextArea;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
-import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.stage.Window;
 import org.slf4j.Logger;
@@ -108,7 +107,6 @@ public final class DiagnosticsDialog {
         if (owner != null) {
             try {
                 stage.initOwner(owner);
-                stage.initModality(Modality.WINDOW_MODAL);
             } catch (IllegalStateException e) {
                 LOG.warn("The diagnostics window cannot be attached: {}", e.getMessage());
             }
@@ -184,6 +182,7 @@ public final class DiagnosticsDialog {
             text.append("  - ").append(account.email())
                     .append(" (").append(account.providerId()).append(")\n");
             text.append("      connection: ").append(testAccount(account)).append('\n');
+            text.append("      cache: ").append(cacheSummary(account)).append('\n');
         }
         text.append('\n');
         text.append("polymail\n");
@@ -205,6 +204,35 @@ public final class DiagnosticsDialog {
                     + ", chain=" + settings.polyMailChainId();
         } catch (RuntimeException e) {
             return "settings unavailable: " + e.getMessage();
+        }
+    }
+
+    private String cacheSummary(Account account) {
+        try {
+            var store = context.store();
+            int folders = store.listFolders(account.id()).size();
+            long messages = 0;
+            for (var folder : store.listFolders(account.id())) {
+                messages += store.listMessages(account.id(), folder.id(), 1, 0).totalCount();
+            }
+            int pending = store.pendingActions(account.id()).size();
+            String lastSync = store.setting("sync.lastSuccess." + account.id(), "");
+            String cooldown = store.setting("sync.cooldownUntil." + account.id(), "");
+            StringBuilder summary = new StringBuilder();
+            summary.append(folders).append(" folder(s), ").append(messages).append(" message(s), ")
+                    .append(pending).append(" pending");
+            if (!lastSync.isBlank()) {
+                summary.append("; last sync: ").append(lastSync);
+            } else {
+                summary.append("; never synced (press Refresh to fetch mail)");
+            }
+            if (!cooldown.isBlank()) {
+                summary.append("; paused until ").append(cooldown);
+            }
+            return summary.toString();
+        } catch (RuntimeException e) {
+            LOG.warn("The cache summary of {} failed: {}", account.email(), e.getMessage());
+            return "unavailable: " + e.getMessage();
         }
     }
 

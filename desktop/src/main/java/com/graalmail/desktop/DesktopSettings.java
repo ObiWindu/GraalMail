@@ -29,6 +29,7 @@ public final class DesktopSettings {
     public static final String SHOW_READER = "desktop.showReader";
     public static final String LAYOUT_MODE = "desktop.layoutMode";
     public static final String LIST_MODE = "desktop.listMode";
+    public static final String NAV_COMPACT = "desktop.navCompact";
     /** PolyMail identity (username@graalemail) for decentralized delivery. */
     public static final String POLYMAIL_ENABLED = "polymail.enabled";
     public static final String POLYMAIL_IDENTITY = "polymail.identity";
@@ -213,26 +214,35 @@ public final class DesktopSettings {
 
     /** The workspace arrangement: Classic, Wide, or Vertical. */
     public String layoutMode() {
-        String value = store.setting(LAYOUT_MODE, "Vertical");
+        String value = store.setting(LAYOUT_MODE, "Classic");
         return switch (value) {
             case "Classic", "Wide", "Vertical" -> value;
-            default -> "Vertical";
+            default -> "Classic";
         };
     }
 
     public void layoutMode(String value) {
         store.putSetting(LAYOUT_MODE, switch (value == null ? "" : value) {
             case "Classic", "Wide" -> value;
-            default -> "Vertical";
+            default -> "Classic";
         });
     }
 
     public String listMode() {
-        return "Table".equalsIgnoreCase(store.setting(LIST_MODE, "Cards")) ? "Table" : "Cards";
+        return "Table".equalsIgnoreCase(store.setting(LIST_MODE, "Table")) ? "Table" : "Cards";
     }
 
     public void listMode(String value) {
         store.putSetting(LIST_MODE, "Table".equalsIgnoreCase(value) ? "Table" : "Cards");
+    }
+
+    /** Whether the folder navigation uses compact rows. */
+    public boolean navCompact() {
+        return Boolean.parseBoolean(store.setting(NAV_COMPACT, "false"));
+    }
+
+    public void navCompact(boolean compact) {
+        store.putSetting(NAV_COMPACT, Boolean.toString(compact));
     }
 
     public void showReader(boolean visible) {

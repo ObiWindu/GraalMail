@@ -46,7 +46,6 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
-import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.util.Duration;
 import org.slf4j.Logger;
@@ -389,7 +388,6 @@ public final class ComposeWindow {
         } else classes.remove("dark-theme");
         if (owner != null && stage.getOwner() == null) {
             stage.initOwner(owner);
-            stage.initModality(Modality.WINDOW_MODAL);
         }
         UiScale.configure(stage, stage.getScene(), owner, 760, 680, 560, 420);
     }
@@ -419,6 +417,10 @@ public final class ComposeWindow {
             ccRow.setManaged(show);
             bccRow.setVisible(show);
             bccRow.setManaged(show);
+            recipientOptions.setAccessibleText(show
+                    ? "Hide carbon copy and blind carbon copy fields"
+                    : "Show carbon copy and blind carbon copy fields");
+            if (show) ccField.requestFocus();
         });
         HBox toRow = new HBox(UiScale.px(stage, 8), labelled("To", toField), recipientOptions);
         HBox.setHgrow(toRow.getChildren().getFirst(), Priority.ALWAYS);
@@ -553,9 +555,19 @@ public final class ComposeWindow {
                 });
             }
         });
-        toField.textProperty().addListener((observable, old, value) -> updateSuggestions(value));
-        ccField.textProperty().addListener((observable, old, value) -> updateSuggestions(value));
-        bccField.textProperty().addListener((observable, old, value) -> updateSuggestions(value));
+        toField.textProperty().addListener((observable, old, value) -> {
+            markInvalid(toField, false);
+            updateSuggestions(value);
+        });
+        ccField.textProperty().addListener((observable, old, value) -> {
+            markInvalid(ccField, false);
+            updateSuggestions(value);
+        });
+        bccField.textProperty().addListener((observable, old, value) -> {
+            markInvalid(bccField, false);
+            updateSuggestions(value);
+        });
+        subjectField.textProperty().addListener((observable, old, value) -> markInvalid(subjectField, false));
     }
 
     private void wireShortcuts() {
@@ -569,6 +581,9 @@ public final class ComposeWindow {
             } else if (event.getCode() == KeyCode.ESCAPE && suggestionList.isVisible()) {
                 hideSuggestions();
                 event.consume();
+            } else if (event.getCode() == KeyCode.DOWN && suggestionList.isVisible()) {
+                suggestionList.requestFocus();
+                event.consume();
             }
         });
         ccField.setOnKeyPressed(event -> {
@@ -578,6 +593,12 @@ public final class ComposeWindow {
                     applySuggestion(selected);
                     event.consume();
                 }
+            } else if (event.getCode() == KeyCode.ESCAPE && suggestionList.isVisible()) {
+                hideSuggestions();
+                event.consume();
+            } else if (event.getCode() == KeyCode.DOWN && suggestionList.isVisible()) {
+                suggestionList.requestFocus();
+                event.consume();
             }
         });
         bccField.setOnKeyPressed(event -> {
@@ -587,6 +608,24 @@ public final class ComposeWindow {
                     applySuggestion(selected);
                     event.consume();
                 }
+            } else if (event.getCode() == KeyCode.ESCAPE && suggestionList.isVisible()) {
+                hideSuggestions();
+                event.consume();
+            } else if (event.getCode() == KeyCode.DOWN && suggestionList.isVisible()) {
+                suggestionList.requestFocus();
+                event.consume();
+            }
+        });
+        suggestionList.setOnKeyPressed(event -> {
+            if (event.getCode() == KeyCode.ENTER || event.getCode() == KeyCode.TAB) {
+                RecipientSuggestion selected = suggestionList.getSelectionModel().getSelectedItem();
+                if (selected != null) {
+                    applySuggestion(selected);
+                    event.consume();
+                }
+            } else if (event.getCode() == KeyCode.ESCAPE) {
+                hideSuggestions();
+                event.consume();
             }
         });
     }
@@ -723,16 +762,51 @@ public final class ComposeWindow {
             showWarning("No account is selected.");
             return null;
         }
+        markInvalid(toField, false);
+        markInvalid(ccField, false);
+        markInvalid(bccField, false);
+        markInvalid(subjectField, false);
         List<Address> to = AddressParser.parseList(toField.getText());
         List<Address> cc = AddressParser.parseList(ccField.getText());
         List<Address> bcc = AddressParser.parseList(bccField.getText());
         if (to.isEmpty() && cc.isEmpty() && bcc.isEmpty()) {
-            showWarning("At least one recipient is required.");
+            boolean toJunk = !toField.getText().isBlank();
+            boolean ccJunk = !ccField.getText().isBlank();
+            boolean bccJunk = !bccField.getText().isBlank();
+            markInvalid(toField, toJunk || (!ccJunk && !bccJunk));
+            markInvalid(ccField, ccJunk);
+            markInvalid(bccField, bccJunk);
+            showWarning(toJunk || ccJunk || bccJunk
+                    ? "Those recipients do not look like email addresses — check the highlighted fields."
+                    : "At least one recipient is required — type an address in To, Cc or Bcc.");
+            toField.requestFocus();
             return null;
         }
-        if (AddressParser.hasInvalid(to) || AddressParser.hasInvalid(cc) || AddressParser.hasInvalid(bcc)) {
-            showWarning("One of the recipient addresses is not valid.");
+        boolean toBad = AddressParser.hasInvalid(to) || (!toField.getText().isBlank() && to.isEmpty());
+        boolean ccBad = AddressParser.hasInvalid(cc) || (!ccField.getText().isBlank() && cc.isEmpty());
+        boolean bccBad = AddressParser.hasInvalid(bcc) || (!bccField.getText().isBlank() && bcc.isEmpty());
+        markInvalid(toField, toBad);
+        markInvalid(ccField, ccBad);
+        markInvalid(bccField, bccBad);
+        if (toBad || ccBad || bccBad) {
+            String field = toBad ? "To" : ccBad ? "Cc" : "Bcc";
+            showWarning("The " + field + " field has an address that cannot be delivered — fix the highlighted field.");
+            (toBad ? toField : ccBad ? ccField : bccField).requestFocus();
             return null;
+        }
+        if (subjectField.getText() == null || subjectField.getText().isBlank()) {
+            javafx.scene.control.Alert confirm = new javafx.scene.control.Alert(
+                    javafx.scene.control.Alert.AlertType.CONFIRMATION,
+                    "Send without a subject?", javafx.scene.control.ButtonType.OK,
+                    javafx.scene.control.ButtonType.CANCEL);
+            confirm.setTitle("No subject");
+            confirm.setHeaderText(null);
+            var choice = confirm.showAndWait().orElse(javafx.scene.control.ButtonType.CANCEL);
+            if (choice != javafx.scene.control.ButtonType.OK) {
+                markInvalid(subjectField, true);
+                subjectField.requestFocus();
+                return null;
+            }
         }
         MessageDraft.Builder builder = MessageDraft.builder()
                 .accountId(account.id())
@@ -902,6 +976,16 @@ public final class ComposeWindow {
             context.store().saveLocalDraft(LocalDraft.of(account.id(), "", json));
         } catch (Exception e) {
             LOG.warn("The local draft could not be saved: {}", e.getMessage());
+        }
+    }
+
+    private void markInvalid(javafx.scene.control.TextField field, boolean invalid) {
+        if (invalid) {
+            if (!field.getStyleClass().contains("compose-field-error")) {
+                field.getStyleClass().add("compose-field-error");
+            }
+        } else {
+            field.getStyleClass().remove("compose-field-error");
         }
     }
 

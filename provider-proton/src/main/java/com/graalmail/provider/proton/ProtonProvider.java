@@ -12,6 +12,7 @@ import com.graalmail.provider.api.AuthMethod;
 import com.graalmail.provider.api.ProviderCapabilities;
 import com.graalmail.provider.api.ProviderSession;
 import com.graalmail.provider.api.ProviderType;
+import com.graalmail.provider.api.TwoFactorCapableProvider;
 import com.graalmail.provider.proton.api.DefaultProtonHttpTransport;
 import com.graalmail.provider.proton.api.ProtonApiClient;
 import com.graalmail.provider.proton.api.ProtonAuth;
@@ -19,6 +20,7 @@ import com.graalmail.provider.proton.api.ProtonHttpRequest;
 import com.graalmail.security.model.Credential;
 import com.graalmail.security.model.TokenSet;
 import java.nio.charset.StandardCharsets;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
@@ -29,7 +31,7 @@ import java.util.Map;
  * mailbox password). The legacy Bridge transport is still available on desktop
  * Linux via the {@code proton.transport} setting.</p>
  */
-public final class ProtonProvider implements AccountProvider {
+public final class ProtonProvider implements AccountProvider, TwoFactorCapableProvider {
 
     /** Setting key for the bridge host. */
     public static final String SETTING_HOST = "bridge.host";
@@ -64,6 +66,9 @@ public final class ProtonProvider implements AccountProvider {
                     + "in GraalMail and add it again.";
 
     private final String platform;
+    private final java.util.function.Function<
+            com.graalmail.provider.proton.api.ProtonHttpTransport,
+            com.graalmail.provider.proton.api.ProtonAuth> authFactory;
 
     /** Creates the provider for the current runtime platform. */
     public ProtonProvider() {
@@ -72,7 +77,17 @@ public final class ProtonProvider implements AccountProvider {
 
     /** Creates the provider for an explicit platform, used by the platform modules and tests. */
     public ProtonProvider(String platform) {
+        this(platform, com.graalmail.provider.proton.api.ProtonAuth::new);
+    }
+
+    /** Test-only: injects the SRP/auth implementation. */
+    public ProtonProvider(String platform,
+            java.util.function.Function<
+                    com.graalmail.provider.proton.api.ProtonHttpTransport,
+                    com.graalmail.provider.proton.api.ProtonAuth> authFactory) {
         this.platform = platform == null ? ProtonPlatformSupport.currentPlatform() : platform;
+        this.authFactory = authFactory == null
+                ? com.graalmail.provider.proton.api.ProtonAuth::new : authFactory;
     }
 
     @Override
@@ -189,10 +204,10 @@ public final class ProtonProvider implements AccountProvider {
         String appVersion = setup.setting(SETTING_APP_VERSION, ProtonApiClient.DEFAULT_APP_VERSION);
         DefaultProtonHttpTransport transport =
                 new DefaultProtonHttpTransport(baseUrl, appVersion, 15_000, 30_000);
-        ProtonAuth auth = new ProtonAuth(transport);
+        ProtonAuth auth = authFactory.apply(transport);
         ProtonAuth.Tokens tokens = storedTokens(setup, credential);
         if (tokens == null) {
-            tokens = loginWithPassword(auth, username, loginPassword);
+            tokens = loginWithPassword(auth, username, loginPassword, setup.twoFactorCode());
         }
         ProtonApiClient client = new ProtonApiClient(transport, auth, tokens);
         ProtonApiSession session = new ProtonApiSession(username, client,
@@ -217,14 +232,60 @@ public final class ProtonProvider implements AccountProvider {
                 tokens.expiresAt(), tokens.scope(), 1);
     }
 
-    private static ProtonAuth.Tokens loginWithPassword(ProtonAuth auth, String username, String password) {
+    private static ProtonAuth.Tokens loginWithPassword(ProtonAuth auth, String username, String password,
+            String twoFactorCode) {
         try {
-            return auth.login(username, password);
+            return auth.login(username, password, twoFactorCode);
         } catch (ProtonAuth.TwoFactorRequired e) {
             throw new ProviderException(ErrorCode.CONSENT_REQUIRED,
-                    "This Proton account uses two-factor authentication. Remove the account and "
-                            + "add it again, entering the two-factor code when asked.", false, e);
+                    "This Proton account needs a two-factor code. Sign in again with the "
+                            + "authenticator code.", false, e);
         }
+    }
+
+    @Override
+    public AccountSetup reauthenticateWithTwoFactor(AccountSetup setup) {
+        String username = setup.email();
+        if (username == null || username.isBlank()) {
+            username = setup.setting(SETTING_USERNAME, "");
+        }
+        if (username.isBlank()) {
+            throw new ProviderException(ErrorCode.CONFIGURATION_ERROR,
+                    "Enter the Proton username.", false);
+        }
+        Credential credential = setup.credential();
+        String loginPassword = credential == null ? "" : credential.secret();
+        if (loginPassword.isEmpty()) {
+            throw new ProviderException(ErrorCode.CONFIGURATION_ERROR,
+                    "Enter the Proton password.", false);
+        }
+        String code = setup.twoFactorCode();
+        if (code == null || code.isBlank()) {
+            throw new ProviderException(ErrorCode.CONSENT_REQUIRED,
+                    "This Proton account needs a two-factor code. Sign in again with the "
+                            + "authenticator code.", false);
+        }
+        String baseUrl = setup.setting(SETTING_API_BASE_URL,
+                DefaultProtonHttpTransport.DEFAULT_BASE_URL);
+        String appVersion = setup.setting(SETTING_APP_VERSION, ProtonApiClient.DEFAULT_APP_VERSION);
+        ProtonAuth auth = authFactory.apply(
+                new DefaultProtonHttpTransport(baseUrl, appVersion, 15_000, 30_000));
+        ProtonAuth.Tokens tokens = loginWithPassword(auth, username, loginPassword, code);
+        String mailboxPassword = credential.keySecret();
+        if (mailboxPassword.isEmpty()) {
+            mailboxPassword = loginPassword;
+        }
+        TokenSet tokenSet = new TokenSet(tokens.accessToken(), tokens.refreshToken(),
+                tokens.expiresAt(), tokens.scope(), "", Map.of());
+        Credential fresh = new Credential(username, loginPassword, tokenSet, mailboxPassword);
+        Map<String, String> settings = new LinkedHashMap<>(setup.settings());
+        settings.put(SETTING_UID, tokens.uid());
+        return AccountSetup.builder(setup.authMethod())
+                .email(setup.email())
+                .displayName(setup.displayName())
+                .credential(fresh)
+                .settings(settings)
+                .build();
     }
 
     private ProtonBridgeConfig toBridgeConfig(AccountSetup setup) {

@@ -1,86 +1,88 @@
-/* GraalMail desktop theme — modern Proton-inspired design system, mapped to JavaFX. */
+/* GraalMail desktop theme — KMail-inspired KDE Breeze design system, mapped to JavaFX. */
 .mail-window, .compose-window, .account-setup, .diagnostics-window {
     -fx-font-family: "System";
     -fx-font-size: 1em;
-    -fx-gm-window: #EFE8F8;
-    -fx-gm-pane: #FFFFFF;
-    -fx-gm-sidebar: #FFFFFF;
+    -fx-gm-window: #EFF0F1;
+    -fx-gm-pane: #FCFCFC;
+    -fx-gm-sidebar: #EFF0F1;
     -fx-gm-raised: #FFFFFF;
-    -fx-gm-subtle: #F4EFFC;
-    -fx-gm-lower: #EAE3F8;
-    -fx-gm-deep: #E0D6F3;
-    -fx-gm-hover: #F1EBFC;
-    -fx-gm-toolbar-hover: #EAE1FA;
-    -fx-gm-button: #FFFFFF;
-    -fx-gm-button-hover: #F1EBFC;
-    -fx-gm-pressed: #DDCFF7;
-    -fx-gm-selected: #E9DFFC;
-    -fx-gm-selected-muted: #F2EBFD;
-    -fx-gm-border: #E0D6F3;
-    -fx-gm-border-strong: #C4B2EE;
-    -fx-gm-text: #1B1340;
-    -fx-gm-secondary: #4C4670;
-    -fx-gm-muted: #8A84A6;
-    -fx-gm-accent: #7B3FE4;
+    -fx-gm-subtle: #F5F5F5;
+    -fx-gm-lower: #E8E8E8;
+    -fx-gm-deep: #D8D8D8;
+    -fx-gm-hover: #E3E5E7;
+    -fx-gm-toolbar-hover: #E3E5E7;
+    -fx-gm-button: #FCFCFC;
+    -fx-gm-button-hover: #E3E5E7;
+    -fx-gm-pressed: #D1D5D9;
+    -fx-gm-selected: #3DAEE9;
+    -fx-gm-selected-muted: #D6EEF9;
+    -fx-gm-border: #CFCFCF;
+    -fx-gm-border-strong: #A8A8A8;
+    -fx-gm-text: #232629;
+    -fx-gm-secondary: #4D4D4D;
+    -fx-gm-muted: #7F7F7F;
+    -fx-gm-accent: #3DAEE9;
     -fx-gm-accent-text: #FFFFFF;
-    -fx-gm-accent-hover: #6529CF;
-    -fx-gm-accent-soft: #F0E9FC;
-    -fx-gm-warning-bg: #FFF7E0;
+    -fx-gm-accent-hover: #2980B9;
+    -fx-gm-accent-soft: #E5F4FB;
+    -fx-gm-warning-bg: #FFF3CD;
     -fx-gm-warning-text: #7A5200;
-    -fx-gm-success: #0AA176;
-    -fx-gm-unread-badge: #7B3FE4;
-    -fx-gm-star-fill: #FFB020;
-    -fx-gm-star-stroke: #E08A00;
-    -fx-gm-unread-dot: #7B3FE4;
-    -fx-gm-folder-inbox: #7B3FE4;
-    -fx-gm-folder-draft: #A855F7;
-    -fx-gm-folder-sent: #0AA176;
-    -fx-gm-folder-archive: #B45309;
-    -fx-gm-folder-spam: #DC2626;
-    -fx-gm-folder-trash: #6B7280;
-    -fx-gm-folder-outbox: #0E9F9F;
-    -fx-gm-folder-custom: #C9A400;
+    -fx-gm-success: #27AE60;
+    -fx-gm-danger: #DA4453;
+    -fx-gm-unread-badge: #3DAEE9;
+    -fx-gm-star-fill: #F67400;
+    -fx-gm-star-stroke: #B65B00;
+    -fx-gm-unread-dot: #3DAEE9;
+    -fx-gm-folder-inbox: #3DAEE9;
+    -fx-gm-folder-draft: #9B59B6;
+    -fx-gm-folder-sent: #27AE60;
+    -fx-gm-folder-archive: #F67400;
+    -fx-gm-folder-spam: #DA4453;
+    -fx-gm-folder-trash: #7F8C8D;
+    -fx-gm-folder-outbox: #16A085;
+    -fx-gm-folder-custom: #F39C12;
 }
 .mail-window.dark-theme, .compose-window.dark-theme, .account-setup.dark-theme,
 .diagnostics-window.dark-theme {
-    -fx-gm-window: #14101F;
-    -fx-gm-pane: #1E1830;
-    -fx-gm-sidebar: #191426;
-    -fx-gm-raised: #262038;
-    -fx-gm-subtle: #262038;
-    -fx-gm-lower: #1B1529;
-    -fx-gm-deep: #38304E;
-    -fx-gm-hover: #2C2540;
-    -fx-gm-toolbar-hover: #322A4A;
-    -fx-gm-button: #2D2640;
-    -fx-gm-button-hover: #38304E;
-    -fx-gm-pressed: #38304E;
-    -fx-gm-selected: #3A2A63;
-    -fx-gm-selected-muted: #2C2347;
-    -fx-gm-border: #3A3355;
-    -fx-gm-border-strong: #544A76;
-    -fx-gm-text: #EFEDF7;
-    -fx-gm-secondary: #C6C2DC;
-    -fx-gm-muted: #8E8AA6;
-    -fx-gm-accent: #A37CFF;
+    -fx-gm-window: #232629;
+    -fx-gm-pane: #2A2E32;
+    -fx-gm-sidebar: #232629;
+    -fx-gm-raised: #31363B;
+    -fx-gm-subtle: #31363B;
+    -fx-gm-lower: #1B1E20;
+    -fx-gm-deep: #4D4D4D;
+    -fx-gm-hover: #31363B;
+    -fx-gm-toolbar-hover: #31363B;
+    -fx-gm-button: #31363B;
+    -fx-gm-button-hover: #3A4045;
+    -fx-gm-pressed: #4D4D4D;
+    -fx-gm-selected: #3DAEE9;
+    -fx-gm-selected-muted: #2A3F4D;
+    -fx-gm-border: #4D4D4D;
+    -fx-gm-border-strong: #7F8C8D;
+    -fx-gm-text: #FCFCFC;
+    -fx-gm-secondary: #BDC3C7;
+    -fx-gm-muted: #95A5A6;
+    -fx-gm-accent: #3DAEE9;
     -fx-gm-accent-text: #FFFFFF;
-    -fx-gm-accent-hover: #B493FF;
-    -fx-gm-accent-soft: #352A5C;
-    -fx-gm-warning-bg: #3A2E08;
+    -fx-gm-accent-hover: #2980B9;
+    -fx-gm-accent-soft: #2A3F4D;
+    -fx-gm-warning-bg: #3D3208;
     -fx-gm-warning-text: #F5D67B;
-    -fx-gm-success: #34D399;
-    -fx-gm-unread-badge: #A37CFF;
-    -fx-gm-star-fill: #FFB020;
-    -fx-gm-star-stroke: #F59E0B;
-    -fx-gm-unread-dot: #A37CFF;
-    -fx-gm-folder-inbox: #A37CFF;
-    -fx-gm-folder-draft: #C084FC;
-    -fx-gm-folder-sent: #34D399;
-    -fx-gm-folder-archive: #F5D67B;
-    -fx-gm-folder-spam: #F87171;
-    -fx-gm-folder-trash: #9CA3AF;
-    -fx-gm-folder-outbox: #2DD4BF;
-    -fx-gm-folder-custom: #F5D67B;
+    -fx-gm-success: #27AE60;
+    -fx-gm-danger: #DA4453;
+    -fx-gm-unread-badge: #3DAEE9;
+    -fx-gm-star-fill: #F67400;
+    -fx-gm-star-stroke: #B65B00;
+    -fx-gm-unread-dot: #3DAEE9;
+    -fx-gm-folder-inbox: #3DAEE9;
+    -fx-gm-folder-draft: #9B59B6;
+    -fx-gm-folder-sent: #27AE60;
+    -fx-gm-folder-archive: #F67400;
+    -fx-gm-folder-spam: #DA4453;
+    -fx-gm-folder-trash: #7F8C8D;
+    -fx-gm-folder-outbox: #16A085;
+    -fx-gm-folder-custom: #F39C12;
 }
 .mail-window, .mail-shell, .workspace-host, .mail-split-pane { -fx-background-color: -fx-gm-window; }
 .workspace-host { -fx-padding: 0.6154em; -fx-background-color: -fx-gm-window; }
@@ -117,7 +119,8 @@
 }
 .main-toolbar .button:hover, .main-toolbar .menu-button:hover { -fx-background-color: -fx-gm-toolbar-hover; }
 .main-toolbar .icon-button {
-    -fx-min-width: 2.5385em; -fx-pref-width: 2.5385em; -fx-max-width: 2.5385em;
+    -fx-min-width: 2.75em; -fx-pref-width: 2.75em; -fx-max-width: 2.75em;
+    -fx-min-height: 2.75em; -fx-pref-height: 2.75em; -fx-max-height: 2.75em;
     -fx-padding: 0.4615em;
     -fx-background-radius: 0.6154em;
     -fx-graphic-text-gap: 0;
@@ -231,6 +234,11 @@
 .tree-cell.account-row { -fx-font-weight: bold; -fx-text-fill: -fx-gm-text; }
 .tree-cell.folder-row { -fx-padding: 0.3846em 0.6154em; }
 .tree-cell.unified-inbox-row { -fx-font-weight: bold; -fx-text-fill: -fx-gm-accent; }
+/* Compact navigation: tighter rows for small screens. */
+.navigation-pane.nav-compact { -fx-padding: 0.3077em; }
+.navigation-pane.nav-compact .tree-cell { -fx-padding: 0.1538em 0.4615em; -fx-font-size: 0.9231em; }
+.navigation-pane.nav-compact .tree-cell.folder-row { -fx-padding: 0.1538em 0.4615em; }
+.navigation-pane.nav-compact .folder-pane-toolbar { -fx-padding: 0.1538em 0.3077em 0.3077em; }
 
 /* ---- Message list (Proton rows) ---- */
 .message-list-pane {
@@ -690,6 +698,8 @@
 .compose-window .button, .account-setup .button { -fx-graphic-text-gap: 0.4615em; }
 .compose-window .recipient-suggestions { -fx-pref-height: 9.2308em; }
 .compose-window .attachment-list { -fx-pref-height: 6.1538em; }
+.compose-window .compose-field-error { -fx-border-color: -fx-gm-danger; -fx-border-width: 0.1538em; }
+.account-setup .compose-field-error { -fx-border-color: -fx-gm-danger; -fx-border-width: 0.1538em; }
 .compose-window .compose-caption { -fx-min-width: 4.6154em; -fx-font-weight: 600; -fx-text-fill: -fx-gm-secondary; }
 .mail-window .tooltip, .compose-window .tooltip, .account-setup .tooltip {
     -fx-background-color: -fx-gm-raised;
@@ -711,4 +721,16 @@
 .account-setup .spinner .decrement-arrow-button {
     -fx-background-color: -fx-gm-subtle;
     -fx-border-color: -fx-gm-border;
+}
+.mail-menu-bar {
+    -fx-background-color: -fx-gm-pane;
+    -fx-border-color: transparent transparent -fx-gm-border transparent;
+    -fx-padding: 0;
+}
+.mail-menu-bar .menu {
+    -fx-text-fill: -fx-gm-text;
+    -fx-padding: 0.3077em 0.6154em;
+}
+.mail-menu-bar .menu:hover, .mail-menu-bar .menu:showing {
+    -fx-background-color: -fx-gm-toolbar-hover;
 }
