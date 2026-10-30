@@ -61,11 +61,40 @@ class GmailProviderTest {
     }
 
     @Test
-    void refusesASessionWithoutAnOauthSignIn() {
+    void usesPlainPasswordSignInForAppPasswords() {
+        ImapServerConfig imap = GmailProvider.imapConfig(setup(AuthMethod.APP_PASSWORD));
+        assertEquals("imap.gmail.com", imap.host());
+        assertEquals(AuthMethod.APP_PASSWORD, imap.authMechanism());
+        assertTrue(imap.isEncrypted());
+
+        SmtpServerConfig smtp = GmailProvider.smtpConfig(setup(AuthMethod.APP_PASSWORD));
+        assertEquals("smtp.gmail.com", smtp.host());
+        assertEquals(SecurityMode.STARTTLS, smtp.securityMode());
+        assertEquals(AuthMethod.APP_PASSWORD, smtp.authMechanism());
+    }
+
+    @Test
+    void refusesAnAppPasswordSignInWithoutAPassword() {
+        AccountSetup setup = AccountSetup.builder(AuthMethod.APP_PASSWORD)
+                .email("user@gmail.com")
+                .build();
         GmailProvider provider = new GmailProvider();
         ProviderException failure = assertThrows(ProviderException.class,
-                () -> provider.openSession(setup(AuthMethod.PASSWORD)));
+                () -> provider.openSession(setup));
         assertEquals(ErrorCode.CONFIGURATION_ERROR, failure.code());
+    }
+
+    @Test
+    void refusesAnOauthSignInWithoutTokens() {
+        AccountSetup setup = AccountSetup.builder(AuthMethod.OAUTH2)
+                .email("user@gmail.com")
+                .setting("oauth.clientId", "client-id")
+                .setting("oauth.redirectUri", "http://localhost:8080/callback")
+                .build();
+        GmailProvider provider = new GmailProvider();
+        ProviderException failure = assertThrows(ProviderException.class,
+                () -> provider.openSession(setup));
+        assertEquals(ErrorCode.AUTH_EXPIRED, failure.code());
     }
 
     @Test

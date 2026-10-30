@@ -8,9 +8,10 @@ live service in the build environment.
 
 | Feature | Gmail | Microsoft | Yahoo | Proton (Linux) | Proton (Android) | Generic IMAP |
 |---|---|---|---|---|---|---|
-| OAuth sign in | yes | yes | partial (needs Yahoo approval) | no | no | no |
-| Password sign in | no | no | no | yes (Proton API) | yes (Proton API) | yes |
-| App password | no | no | yes | no | no | yes |
+| Sign in with email + password | yes (app password) | no | yes (app password) | yes | yes | yes |
+| Password sign in | no (account password rejected by Google) | no | no (account password rejected by Yahoo) | yes (Proton API) | yes (Proton API) | yes |
+| App password | yes (needs 2-Step Verification) | no | yes | no | no | yes |
+| OAuth sign in | no (legacy accounts keep working) | no (legacy accounts keep working) | no | — | — | no |
 | Read mail | yes (IMAP) | yes (Graph) | yes (IMAP) | yes (API) | yes (API) | yes |
 | Send mail | yes | yes | yes | no (not yet) | no (not yet) | yes |
 | Server side search | yes | yes | yes | partial (metadata) | partial (metadata) | yes |
@@ -28,65 +29,67 @@ live service in the build environment.
 Nothing in the table was verified against a live Gmail, Microsoft, Yahoo or
 Proton account: no such account was available in the build environment. The
 protocol paths are covered by the automated tests against a local GreenMail
-server, and the provider specific logic (label mapping, folder mapping, OAuth
-configuration, error mapping) is covered by unit tests.
+server, and the provider specific logic (label mapping, folder mapping,
+password sign in, error mapping) is covered by unit tests.
+
+Every GraalMail sign in is **email address + password** (the account password,
+or an app password where the provider forces one). No sign-in screen asks for
+anything else. Providers that only accept OAuth tokens cannot be added as new
+accounts; accounts that were added while OAuth was offered keep working with
+their stored tokens until the token is revoked.
 
 ## Gmail and Google Workspace
 
-* **Authentication**: OAuth 2.0 authorization code flow with PKCE. The token
-  endpoint is `https://oauth2.googleapis.com/token`, the authorization endpoint
-  is `https://accounts.google.com/o/oauth2/v2/auth`.
-* **Scopes**: `https://mail.google.com/`, `https://www.googleapis.com/auth/userinfo.email`
-  and `openid` by default. The mail scope is required because the mailbox is
-  accessed over IMAP and SMTP with XOAUTH2. A narrower scope set can be
-  configured with the account setting `oauth.scopes`.
+* **Authentication**: the email address and a Gmail **app password**. Google
+  rejects the account password for third-party mail clients, so the app
+  password is the only supported path; it is available when 2-Step
+  Verification is enabled on the Google account. GraalMail authenticates with
+  the app password over IMAP and SMTP (plain password mechanism).
 * **Transport**: `imap.gmail.com:993` (implicit TLS) and `smtp.gmail.com:587`
-  (STARTTLS), authenticated with the XOAUTH2 SASL mechanism.
+  (STARTTLS).
 * **Labels**: `INBOX`, `[Gmail]/Sent Mail`, `[Gmail]/Drafts`, `[Gmail]/Trash`,
   `[Gmail]/Spam` and `[Gmail]/All Mail` are mapped to the inbox, sent, drafts,
   trash, spam and archive roles. User labels appear as custom folders.
-* **Setup**: create an OAuth client in the Google Cloud console, enable the
-  Gmail API and register the redirect URI. Put the client id into the account
-  setting `oauth.clientId` and the redirect URI into `oauth.redirectUri`. A
-  desktop client secret is optional; the Android client must not contain one.
+* **Setup**: in the Google account security settings, enable 2-Step
+  Verification and generate an app password (under *Security ▸ App
+  passwords*), then enter it in the account setup dialog. If the app password
+  is revoked GraalMail reports an authentication failure and asks for a new
+  app password.
 * **Limits**: Google Workspace administrators can restrict IMAP and SMTP
   access for the whole organisation. When the access is revoked the client
   reports a re-authentication request instead of a generic failure.
+* **Legacy OAuth accounts**: accounts added while GraalMail still offered the
+  Google OAuth 2.0 sign in keep working; their tokens are refreshed in the
+  background. If the token is revoked remotely the account must be removed,
+  because OAuth sign in is no longer offered.
 
 ## Outlook.com, Hotmail, Live.com and Microsoft 365
 
-* **Authentication**: OAuth 2.0 against the Microsoft identity platform
-  (`https://login.microsoftonline.com/{tenant}/oauth2/v2.0/authorize`).
-  The tenant is `common` by default, which covers personal and organisational
-  accounts. The scopes are `openid`, `email`, `profile`, `offline_access` and
-  either `https://graph.microsoft.com/Mail.ReadWrite` or the protocol scopes
-  `https://outlook.office.com/IMAP.AccessAsUser.All` and
-  `https://outlook.office.com/SMTP.Send`.
-* **Transport**: the Microsoft Graph mail API by default. The IMAP and SMTP
-  endpoints (`outlook.office365.com:993` and `smtp.office365.com:587`) are
-  available when the tenant or the account requires the protocol based access.
-  Select the transport with the account setting `transport` (`graph` or
-  `imap`).
-* **Folders**: the well known Graph folder names (`inbox`, `sentitems`,
-  `drafts`, `archive`, `deleteditems`, `junkemail`) are mapped to the neutral
-  folder roles.
-* **Setup**: register an application in the Microsoft Entra admin centre, add
-  the redirect URI and grant the delegated permissions. Put the client id into
-  `oauth.clientId` and the tenant into `oauth.tenant`.
-* **Limits**: IMAP, SMTP and Graph access can be disabled by the tenant
-  administrator, and personal accounts do not support the organisational
-  policies. The client reports both cases with a distinct message.
+* **Authentication**: Microsoft disables basic password authentication for its
+  mail endpoints and personal accounts have no app passwords — every token
+  comes from an OAuth 2.0 flow against the Microsoft identity platform.
+  GraalMail signs in with the email address and password only, so **new
+  Microsoft accounts cannot be added**.
+* **Existing accounts**: accounts added while the OAuth sign in was offered
+  keep working. Their tokens are refreshed in the background over Graph or
+  the IMAP and SMTP endpoints, exactly as before. If the token is revoked
+  remotely the account must be removed.
+* **Transport (existing accounts)**: the Microsoft Graph mail API by default.
+  The IMAP and SMTP endpoints (`outlook.office365.com:993` and
+  `smtp.office365.com:587`) are available when the tenant or the account
+  requires the protocol based access. Select the transport with the account
+  setting `transport` (`graph` or `imap`).
+* **Folders (existing accounts)**: the well known Graph folder names
+  (`inbox`, `sentitems`, `drafts`, `archive`, `deleteditems`, `junkemail`)
+  are mapped to the neutral folder roles.
 
 ## Yahoo Mail
 
 * **Authentication**: Yahoo rejects the account password for third party
-  clients. The supported path is an app password that the user generates in
-  the Yahoo account security settings and that stays valid until it is
-  deleted.
-* **OAuth 2.0**: Yahoo supports OAuth 2.0 for IMAP and SMTP, but the mail
-  scopes are not available for self service. A distribution has to apply for
-  the commercial IMAP access. When a client id is configured the client
-  offers the OAuth flow as well.
+  clients. Sign in uses an app password that the user generates in the Yahoo
+  account security settings and that stays valid until it is deleted. The
+  Yahoo OAuth flow is no longer offered: it requires a distribution-approved
+  application and GraalMail signs in with a password only.
 * **Transport**: `imap.mail.yahoo.com:993` (implicit TLS) and
   `smtp.mail.yahoo.com:465` (implicit TLS) or `:587` (STARTTLS).
 * **Setup**: generate the app password in the Yahoo account security page

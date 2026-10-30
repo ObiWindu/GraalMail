@@ -57,9 +57,10 @@ flowchart LR
 
 ### Classic email — everything you already have
 
-- **Gmail / Google Workspace** over OAuth 2.0 + PKCE, IMAP/SMTP with XOAUTH2
-- **Outlook.com / Hotmail / Microsoft 365** over OAuth 2.0, Graph API or IMAP/SMTP
-- **Yahoo Mail** via app password (OAuth optional where Yahoo approves it)
+- Sign in everywhere with just the **email address and a password** (an app
+  password where the provider forces one)
+- **Gmail / Google Workspace** via a Gmail app password, IMAP/SMTP
+- **Yahoo Mail** via an app password, IMAP/SMTP
 - **Proton Mail** with direct username + password login (SRP), mailbox keys
   unlocked and messages PGP-decrypted **locally** — no Bridge required
 - **Any IMAP/SMTP server** with auto-deduced settings from your email domain
@@ -179,9 +180,9 @@ with real mail — and note the honest limits at the bottom of this file.
 
 | Provider | Sign-in | Read | Send | Notes |
 |---|---|---|---|---|
-| Gmail / Workspace | OAuth 2.0 + PKCE | IMAP | SMTP | Labels as folders |
-| Outlook / Microsoft 365 | OAuth 2.0 + PKCE | Graph or IMAP | Yes | Graph default, IMAP selectable |
-| Yahoo | App password (OAuth optional) | IMAP | SMTP | Needs Yahoo-generated app password |
+| Gmail / Workspace | Email + app password | IMAP | SMTP | Labels as folders; needs 2-Step Verification on the account |
+| Outlook / Microsoft 365 | Not supported (Microsoft requires OAuth) | Graph or IMAP | Yes | Existing OAuth accounts keep working |
+| Yahoo | Email + app password | IMAP | SMTP | Needs Yahoo-generated app password |
 | Proton (desktop + Android) | Username + password (SRP) | Proton API, local PGP decrypt | Not yet | 2FA + two-password mode supported |
 | Any IMAP provider | Password / app password | IMAP | SMTP | Settings deduced from domain |
 
@@ -213,8 +214,10 @@ against the live service*. Details in
 Add `--offline` once dependencies are cached.
 
 **Add an account:** `File ▸ Add account`, type your email — the provider is
-detected from the domain. OAuth providers open a browser flow; Proton asks for
-username + password (+ mailbox password and 2FA code when needed).
+detected from the domain. Every sign in asks for the email address and a
+password (or an app password for Gmail and Yahoo); Proton asks for
+username + password (+ mailbox password and 2FA code when needed). Microsoft
+accounts cannot be added because Microsoft only issues OAuth tokens.
 
 **Try PolyMail:** open `Tools ▸ Settings ▸ PolyMail`, enable it, set your
 `you@graalemail` identity, two Polygon RPC endpoints and the notification

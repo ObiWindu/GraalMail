@@ -32,10 +32,17 @@ import org.slf4j.Logger;
 /**
  * The Gmail and Google Workspace provider.
  *
- * <p>Google requires OAuth 2.0 for IMAP and SMTP. The provider uses the
- * OAuth 2.0 authorization code flow with PKCE, keeps the refresh token in the
- * credential store and accesses the mailbox over IMAP with the XOAUTH2 SASL
- * mechanism.</p>
+ * <p>GraalMail signs in with the email address and a password. Google rejects
+ * account passwords for mail clients, so the Gmail provider uses an app
+ * password: the user generates one in the Google account security settings
+ * (which requires 2-Step Verification on the account) and enters it in
+ * GraalMail. The mailbox is accessed over IMAP and SMTP with the plain
+ * password mechanism.</p>
+ *
+ * <p>Accounts that were added with the earlier OAuth 2.0 sign in keep
+ * working: their stored tokens are refreshed in the background. The OAuth
+ * code below is retained for those accounts only; new accounts always sign
+ * in with an app password.</p>
  */
 public final class GmailProvider implements AccountProvider, OAuthCapableProvider {
 
@@ -63,7 +70,7 @@ public final class GmailProvider implements AccountProvider, OAuthCapableProvide
     @Override
     public ProviderCapabilities capabilities() {
         return ProviderCapabilities.builder(ProviderType.GMAIL)
-                .authMethods(AuthMethod.OAUTH2)
+                .authMethods(AuthMethod.PASSWORD, AuthMethod.APP_PASSWORD, AuthMethod.OAUTH2)
                 .serverSideSearch(true)
                 .pushNotifications(false)
                 .idleSupport(true)
@@ -78,7 +85,10 @@ public final class GmailProvider implements AccountProvider, OAuthCapableProvide
                 .platform("linux", true)
                 .platform("android", true)
                 .note("Gmail labels are mapped to mailboxes; user labels appear as custom folders.")
-                .restriction("A registered Google OAuth client is required.")
+                .restriction("Google rejects account passwords for mail clients: GraalMail signs in "
+                        + "with an app password, which requires 2-Step Verification on the account. "
+                        + "Accounts added with the earlier OAuth sign in keep working with their "
+                        + "stored tokens.")
                 .documentationUrl("https://developers.google.com/gmail/imap/xoauth2-protocol")
                 .build();
     }
@@ -127,7 +137,7 @@ public final class GmailProvider implements AccountProvider, OAuthCapableProvide
                 .port(IMAP_PORT)
                 .securityMode(SecurityMode.SSL_TLS)
                 .username(setup.email())
-                .authMechanism(AuthMethod.OAUTH2)
+                .authMechanism(mechanism(setup))
                 .connectTimeoutMs(15_000)
                 .readTimeoutMs(30_000)
                 .build();
@@ -145,10 +155,15 @@ public final class GmailProvider implements AccountProvider, OAuthCapableProvide
                 .port(SMTP_PORT)
                 .securityMode(SecurityMode.STARTTLS)
                 .username(setup.email())
-                .authMechanism(AuthMethod.OAUTH2)
+                .authMechanism(mechanism(setup))
                 .connectTimeoutMs(15_000)
                 .readTimeoutMs(30_000)
                 .build();
+    }
+
+    /** The auth mechanism of an account: OAuth for the legacy sign in, plain password otherwise. */
+    private static AuthMethod mechanism(AccountSetup setup) {
+        return setup.authMethod() == null ? AuthMethod.APP_PASSWORD : setup.authMethod();
     }
 
     /**
@@ -171,11 +186,34 @@ public final class GmailProvider implements AccountProvider, OAuthCapableProvide
 
     @Override
     public ProviderSession openSession(Account account, AccountSetup setup) {
-        if (setup.authMethod() != AuthMethod.OAUTH2) {
+        if (setup.authMethod() == AuthMethod.OAUTH2) {
+            return openOauthSession(account, setup);
+        }
+        return openPasswordSession(account, setup);
+    }
+
+    /** Signs in with the email address and a password or app password over plain IMAP and SMTP. */
+    private ProviderSession openPasswordSession(Account account, AccountSetup setup) {
+        String secret = setup.credential() == null ? "" : setup.credential().secret();
+        if (secret.isBlank()) {
             throw new ProviderException(ErrorCode.CONFIGURATION_ERROR,
-                    "Gmail requires an OAuth sign in. Password sign in is not supported by Google.",
+                    "No password was provided. Google rejects account passwords for mail "
+                            + "clients: generate an app password in the Google account security "
+                            + "settings (this requires 2-Step Verification) and enter it here.",
                     false);
         }
+        ImapServerConfig imapConfig = imapConfig(setup);
+        SmtpServerConfig smtpConfig = smtpConfig(setup);
+        Map<String, String> settings = folderSettings(setup.settings());
+        ImapProviderSession session = new ImapProviderSession(
+                account == null ? "" : account.id(), setup.email(), secret, imapConfig, smtpConfig,
+                GmailFolderTypes.DEFAULT, settings, null);
+        session.connect();
+        return session;
+    }
+
+    /** Legacy path for accounts added with OAuth: refreshes the stored token and opens the session. */
+    private ProviderSession openOauthSession(Account account, AccountSetup setup) {
         TokenSet tokens = setup.credential() == null ? TokenSet.empty()
                 : setup.credential().tokens();
         OAuthConfig config = GmailOAuthConfig.forAccount(setup);

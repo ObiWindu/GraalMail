@@ -25,8 +25,8 @@ module.
 | IMAP and SMTP | `provider-imap` `GenericImapProviderTest` | a real IMAP conversation against GreenMail: mailbox listing, message reading, read and flagged flags, and a real SMTP submission |
 | Provider discovery | `desktop` `ProviderRegistryTest` | every provider is found through the service loader and declares its capabilities |
 | Gmail label mapping | `provider-gmail` `GmailFolderTypesTest` | the Gmail system labels and user labels map to the neutral folder roles |
-| Gmail server configuration | `provider-gmail` `GmailProviderTest` | the IMAP and SMTP endpoints of Gmail, the label mapping, the OAuth configuration and the refusal of a password sign in |
-| Yahoo server configuration | `provider-yahoo` `YahooProviderTest` | the IMAP and SMTP endpoints of Yahoo, the app password and the OAuth sign in path |
+| Gmail server configuration | `provider-gmail` `GmailProviderTest` | the IMAP and SMTP endpoints of Gmail, the label mapping, the app password sign in configuration and the OAuth configuration kept for legacy accounts |
+| Yahoo server configuration | `provider-yahoo` `YahooProviderTest` | the IMAP and SMTP endpoints of Yahoo, the app password sign in and the OAuth configuration kept for compatibility |
 | Recipient fields | `core` `AddressParserTest` | the parsing of a recipient list, the formatting and the detection of invalid addresses |
 | Desktop settings | `desktop` `DesktopSettingsTest` | the defaults, the persistence and the validation of the user settings |
 | Android compose form | `android` `ComposeValidatorTest` | the recipients, the missing body and the invalid addresses are reported |

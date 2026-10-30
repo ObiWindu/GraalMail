@@ -31,12 +31,12 @@ import org.slf4j.Logger;
 /**
  * The Yahoo Mail provider.
  *
- * <p>Yahoo supports two authentication paths. The one that works for every
- * account is an app password generated in the Yahoo account security settings;
- * it is used with IMAP and SMTP over TLS. The OAuth 2.0 path exists as well,
- * but the mail scopes are not available for self service: Yahoo has to approve
- * the application first. Both paths are implemented, the OAuth path is only
- * offered when a client id is configured.</p>
+ * <p>Yahoo rejects the account password for third party clients. Sign in uses
+ * an app password generated in the Yahoo account security settings; it is
+ * used with IMAP and SMTP over TLS. GraalMail signs in with a password only,
+ * so the account password is never requested. The OAuth 2.0 flow exists in
+ * the provider for compatibility, but Yahoo only grants the mail scopes to
+ * approved applications and no user interface offers it.</p>
  */
 public final class YahooProvider implements AccountProvider, OAuthCapableProvider {
 

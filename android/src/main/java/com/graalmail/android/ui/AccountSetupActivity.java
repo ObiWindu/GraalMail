@@ -250,10 +250,12 @@ public final class AccountSetupActivity extends AppCompatActivity {
         } else if (type == ProviderType.YAHOO) {
             passwordField.setHint(R.string.setup_app_password);
             authExplanation.setText(R.string.setup_yahoo_auth_hint);
+        } else if (type == ProviderType.GMAIL) {
+            passwordField.setHint(R.string.setup_app_password);
+            authExplanation.setText(R.string.setup_gmail_app_password_hint);
         } else {
             passwordField.setHint(R.string.setup_password);
-            authExplanation.setText(type == ProviderType.GENERIC
-                    ? R.string.setup_generic_auth_hint : R.string.setup_app_password_hint);
+            authExplanation.setText(R.string.setup_generic_auth_hint);
         }
     }
 
@@ -277,7 +279,8 @@ public final class AccountSetupActivity extends AppCompatActivity {
         connectButton.setEnabled(false);
 
         String password = passwordField.getText().toString();
-        AuthMethod authMethod = type == ProviderType.YAHOO ? AuthMethod.APP_PASSWORD : AuthMethod.PASSWORD;
+        AuthMethod authMethod = (type == ProviderType.YAHOO || type == ProviderType.GMAIL)
+                ? AuthMethod.APP_PASSWORD : AuthMethod.PASSWORD;
         AccountSetup setup = AccountSetup.builder(authMethod)
                 .email(email)
                 .displayName(displayNameField.getText().toString().trim())

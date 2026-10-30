@@ -12,7 +12,6 @@ import com.graalmail.core.util.Log;
 import com.graalmail.provider.api.AccountProvider;
 import com.graalmail.provider.api.AccountSetup;
 import com.graalmail.provider.api.AuthMethod;
-import com.graalmail.provider.api.OAuthCapableProvider;
 import com.graalmail.provider.api.ProviderRegistry;
 import com.graalmail.provider.api.ProviderType;
 import com.graalmail.provider.api.ProviderDeduction;
@@ -27,7 +26,6 @@ import com.graalmail.provider.proton.api.ProtonApiException;
 import com.graalmail.provider.proton.api.ProtonAuth;
 import com.graalmail.security.model.Credential;
 import com.graalmail.security.model.TokenSet;
-import com.graalmail.security.oauth.AuthorizationRequest;
 import com.graalmail.sync.AccountSessionFactory;
 import java.awt.Desktop;
 import java.net.URI;
@@ -81,24 +79,17 @@ public final class AccountSetupDialog {
     private final TextField twoFactorField = new TextField();
     private boolean pendingTwoFactor;
     private boolean pendingCaptcha;
-    private Button openBrowserButton;
     private Button protonBrowserButton;
     private Button protonVerifyButton;
     private ProtonVerificationBrowser verificationBrowser;
     private final java.util.concurrent.atomic.AtomicBoolean verificationRetryArmed =
             new java.util.concurrent.atomic.AtomicBoolean();
-    private final TextField clientIdField = new TextField();
-    private final TextField redirectUriField = new TextField("http://localhost:8080/oauth/callback");
-    private final TextField redirectResultField = new TextField();
     private final Label status = new Label("");
     private final Label helpLabel = new Label(
             "Choose your provider and follow the sign-in steps. Your mail stays in GraalMail's local cache.");
     private final Label signinSectionLabel = new Label("Sign-in details");
     private final Button saveButton = new Button("Save account");
     private final Map<Node, Label> rowLabels = new java.util.HashMap<>();
-
-    private AuthorizationRequest pendingAuthorization;
-    private AccountSetup pendingSetup;
 
     /**
      * Creates the dialog.
@@ -179,16 +170,10 @@ public final class AccountSetupDialog {
         row = addRow(connection, row, "Password or app password", passwordField);
         row = addRow(connection, row, "Mailbox password (two-password mode only)", mailboxPasswordField);
         row = addRow(connection, row, "Two-factor code (if asked)", twoFactorField);
-        row = addRow(connection, row, "OAuth client id", clientIdField);
-        row = addRow(connection, row, "OAuth redirect URI", redirectUriField);
-        row = addRow(connection, row, "Redirect result URL", redirectResultField);
         emailField.textProperty().addListener((observable, old, value) ->
                 updateVisibility(providerChoice.getValue() == null
                         ? ProviderType.GENERIC : providerChoice.getValue()));
 
-        Button openBrowser = new Button("Open sign in page");
-        openBrowser.setOnAction(event -> openAuthorizationPage());
-        openBrowserButton = openBrowser;
         protonBrowserButton = new Button("Open Proton login in browser");
         protonBrowserButton.setOnAction(event -> openProtonLoginPage());
         protonBrowserButton.setVisible(false);
@@ -204,7 +189,7 @@ public final class AccountSetupDialog {
 
         javafx.scene.layout.FlowPane buttons = new javafx.scene.layout.FlowPane(
                 UiScale.px(stage, 8), UiScale.px(stage, 6),
-                openBrowser, protonVerifyButton, protonBrowserButton, saveButton, cancel);
+                protonVerifyButton, protonBrowserButton, saveButton, cancel);
         buttons.setAlignment(javafx.geometry.Pos.CENTER_RIGHT);
 
         Label heading = new Label("Add an account");
@@ -268,13 +253,6 @@ public final class AccountSetupDialog {
                 ? "Provider: " + name + " (manual)" : "Detected: " + name);
     }
 
-    private boolean requiresOAuth() {
-        ProviderType type = providerChoice.getValue();
-        return type == ProviderType.GMAIL || type == ProviderType.MICROSOFT
-                || (type == ProviderType.YAHOO && clientIdField.getText() != null
-                && !clientIdField.getText().isBlank());
-    }
-
     private int addRow(GridPane grid, int row, String label, javafx.scene.Node node) {
         Label caption = new Label(label);
         caption.setLabelFor(node);
@@ -310,47 +288,46 @@ public final class AccountSetupDialog {
             protonVerifyButton.setVisible(showVerify);
             protonVerifyButton.setManaged(showVerify);
         }
-        boolean oauth = requiresOAuth();
         imapHostField.setDisable(!generic);
         imapPortField.setDisable(!generic);
         imapSecurityField.setDisable(!generic);
         smtpHostField.setDisable(!generic);
         smtpPortField.setDisable(!generic);
         smtpSecurityField.setDisable(!generic);
-        passwordField.setDisable(type == ProviderType.GMAIL || type == ProviderType.MICROSOFT);
-        clientIdField.setDisable(type == ProviderType.GENERIC || proton);
-        redirectUriField.setDisable(type == ProviderType.GENERIC || proton);
-        redirectResultField.setDisable(type == ProviderType.GENERIC || proton);
+        boolean microsoft = type == ProviderType.MICROSOFT;
+        boolean gmail = type == ProviderType.GMAIL;
+        passwordField.setDisable(microsoft);
         setRowVisible(imapHostField, generic);
         setRowVisible(imapPortField, generic);
         setRowVisible(imapSecurityField, generic);
         setRowVisible(smtpHostField, generic);
         setRowVisible(smtpPortField, generic);
         setRowVisible(smtpSecurityField, generic);
-        setRowVisible(passwordField, type != ProviderType.GMAIL && type != ProviderType.MICROSOFT);
+        setRowVisible(passwordField, !microsoft);
         setRowVisible(mailboxPasswordField, proton);
         setRowVisible(twoFactorField, proton && pendingTwoFactor);
-        setRowVisible(clientIdField, type != ProviderType.GENERIC && !proton);
-        setRowVisible(redirectUriField, type != ProviderType.GENERIC && !proton);
-        setRowVisible(redirectResultField, oauth);
-        if (openBrowserButton != null) {
-            openBrowserButton.setVisible(oauth);
-            openBrowserButton.setManaged(oauth);
-        }
         signinSectionLabel.setText(proton ? "Proton sign-in"
                 : generic ? "Server settings" : "Provider sign-in");
         Label passwordCaption = rowLabels.get(passwordField);
         if (passwordCaption != null) {
-            passwordCaption.setText(proton ? "Proton password" : "Password or app password");
+            passwordCaption.setText(proton ? "Proton password"
+                    : gmail ? "App password" : "Password or app password");
         }
         if (proton) {
             helpLabel.setText("Sign in with the Proton username and password; no Bridge is needed. "
                     + "With two-password mode, also enter the mailbox password. "
                     + "Mail is decrypted locally on this machine.");
-        } else if (oauth) {
-            helpLabel.setText("Press “Open sign in page”, finish signing in in the browser, "
-                    + "paste the redirect URL below, then press Save. "
+        } else if (gmail) {
+            helpLabel.setText("GraalMail signs in with the email address and a password. "
+                    + "Google rejects account passwords for mail clients: create an app password "
+                    + "in the Google account security settings (this requires 2-Step Verification "
+                    + "on the account) and enter it here. "
                     + "Your mail stays in GraalMail's local cache.");
+        } else if (microsoft) {
+            helpLabel.setText("GraalMail signs in with the email address and password only. "
+                    + "Microsoft requires OAuth tokens for mail access, which this version no "
+                    + "longer offers, so new Microsoft accounts cannot be added. Existing "
+                    + "Microsoft accounts keep working.");
         } else {
             helpLabel.setText("Enter the email address and follow the sign-in steps. "
                     + "Your mail stays in GraalMail's local cache.");
@@ -394,34 +371,6 @@ public final class AccountSetupDialog {
         if (label != null) {
             label.setVisible(visible);
             label.setManaged(visible);
-        }
-    }
-
-    private void openAuthorizationPage() {
-        ProviderType type = providerChoice.getValue();
-        if (type == null) {
-            return;
-        }
-        AccountProvider provider = ProviderRegistry.find(type).orElse(null);
-        if (!(provider instanceof OAuthCapableProvider oauth)) {
-            status.setText("This provider does not use an OAuth sign in.");
-            return;
-        }
-        try {
-            pendingSetup = AccountSetup.builder(AuthMethod.OAUTH2)
-                    .email(emailField.getText() == null ? "" : emailField.getText().trim())
-                    .displayName(displayNameField.getText())
-                    .setting("oauth.clientId", clientIdField.getText() == null ? "" : clientIdField.getText().trim())
-                    .setting("oauth.redirectUri", redirectUriField.getText() == null ? "" : redirectUriField.getText().trim())
-                    .build();
-            pendingAuthorization = oauth.beginAuthorization(pendingSetup);
-            browseInBackground(URI.create(pendingAuthorization.authorizationUrl()),
-                    "A browser window was opened. Paste the full redirect URL into the "
-                            + "redirect field and press Save.",
-                    "The sign in page could not be opened: ");
-        } catch (Exception e) {
-            LOG.warn("The authorization page could not be opened: {}", e.getMessage());
-            status.setText("The sign in page could not be opened: " + e.getMessage());
         }
     }
 
@@ -697,22 +646,12 @@ public final class AccountSetupDialog {
             throw new ProviderException(ErrorCode.CONFIGURATION_ERROR,
                     "The email address is missing.", false);
         }
-        if (type == ProviderType.GMAIL || type == ProviderType.MICROSOFT
-                || (type == ProviderType.YAHOO && !clientIdField.getText().isBlank())) {
-            if (pendingAuthorization == null || pendingSetup == null) {
-                throw new ProviderException(ErrorCode.CONSENT_REQUIRED,
-                        "Start the sign in first by pressing 'Open sign in page'.", false);
-            }
-            String redirect = redirectResultField.getText() == null ? ""
-                    : redirectResultField.getText().trim();
-            String code = extractCode(redirect);
-            if (code.isBlank()) {
-                throw new ProviderException(ErrorCode.CONSENT_REQUIRED,
-                        "Paste the full redirect URL that the browser was sent to.", false);
-            }
-            OAuthCapableProvider oauth = (OAuthCapableProvider) provider;
-            return oauth.completeAuthorization(pendingSetup, code, pendingAuthorization.state(),
-                    extractState(redirect), pendingAuthorization.codeVerifier());
+        if (type == ProviderType.MICROSOFT) {
+            throw new ProviderException(ErrorCode.CONFIGURATION_ERROR,
+                    "Microsoft does not accept password sign in for mail clients, and GraalMail "
+                            + "signs in with the email address and password only, so new Microsoft "
+                            + "accounts cannot be added. Existing Microsoft accounts keep working.",
+                    false);
         }
         if (type == ProviderType.PROTON) {
             String loginPassword = passwordField.getText() == null ? "" : passwordField.getText();
@@ -751,26 +690,6 @@ public final class AccountSetupDialog {
 
     private static String orDefault(String value, String fallback) {
         return value == null || value.isBlank() ? fallback : value;
-    }
-
-    private static String extractCode(String redirect) {
-        int index = redirect.indexOf("code=");
-        if (index < 0) {
-            return "";
-        }
-        String value = redirect.substring(index + 5);
-        int end = value.indexOf('&');
-        return end < 0 ? value : value.substring(0, end);
-    }
-
-    private static String extractState(String redirect) {
-        int index = redirect.indexOf("state=");
-        if (index < 0) {
-            return "";
-        }
-        String value = redirect.substring(index + 6);
-        int end = value.indexOf('&');
-        return end < 0 ? value : value.substring(0, end);
     }
 
     /**
