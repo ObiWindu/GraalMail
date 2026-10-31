@@ -371,7 +371,13 @@ public final class MainWindow {
         Menu folder = new Menu("Folder");
         MenuItem updateFolder = new MenuItem("Update Folder");
         updateFolder.setOnAction(e -> syncNow());
-        folder.getItems().add(updateFolder);
+        MenuItem markAllRead = new MenuItem("Mark All as Read");
+        markAllRead.setOnAction(e -> {
+            Account a = selectedAccount.get();
+            Folder f = selectedFolder.get();
+            if (a != null && f != null) markFolderRead(a, f);
+        });
+        folder.getItems().addAll(updateFolder, markAllRead);
 
         Menu message = new Menu("Message");
         MenuItem reply = new MenuItem("Reply");
