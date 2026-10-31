@@ -101,7 +101,7 @@
     -fx-min-height: 2.0769em; -fx-pref-height: 2.0769em; -fx-max-height: 2.0769em;
     -fx-alignment: center;
     -fx-background-color: -fx-gm-accent;
-    -fx-background-radius: 0.6154em;
+    -fx-background-radius: 0.3077em;
     -fx-text-fill: -fx-gm-accent-text;
     -fx-font-weight: 800;
     -fx-font-size: 1.1538em;
@@ -110,7 +110,7 @@
 .main-toolbar .button, .main-toolbar .menu-button {
     -fx-min-height: 2.5385em;
     -fx-background-color: transparent;
-    -fx-background-radius: 0.6154em;
+    -fx-background-radius: 0.3077em;
     -fx-padding: 0.4615em 0.7692em;
     -fx-text-fill: -fx-gm-secondary;
     -fx-graphic-text-gap: 0.4615em;
@@ -122,14 +122,14 @@
     -fx-min-width: 2.75em; -fx-pref-width: 2.75em; -fx-max-width: 2.75em;
     -fx-min-height: 2.75em; -fx-pref-height: 2.75em; -fx-max-height: 2.75em;
     -fx-padding: 0.4615em;
-    -fx-background-radius: 0.6154em;
+    -fx-background-radius: 0.3077em;
     -fx-graphic-text-gap: 0;
 }
 .main-toolbar .primary-action, .proton-compose {
     -fx-background-color: -fx-gm-accent;
     -fx-border-color: transparent;
-    -fx-background-radius: 0.6154em;
-    -fx-border-radius: 0.6154em;
+    -fx-background-radius: 0.3077em;
+    -fx-border-radius: 0.3077em;
     -fx-text-fill: -fx-gm-accent-text;
     -fx-font-weight: 700;
     -fx-padding: 0.5385em 1.2308em;
@@ -138,7 +138,7 @@
 .main-toolbar .text-field {
     -fx-min-height: 2.5385em;
     -fx-background-color: -fx-gm-subtle;
-    -fx-background-radius: 0.6154em;
+    -fx-background-radius: 0.3077em;
     -fx-border-color: transparent;
     -fx-padding: 0.4615em 0.6154em;
     -fx-prompt-text-fill: -fx-gm-muted;
@@ -150,9 +150,9 @@
     -fx-spacing: 0.4615em;
     -fx-padding: 0 0.7692em;
     -fx-background-color: -fx-gm-subtle;
-    -fx-background-radius: 0.6154em;
+    -fx-background-radius: 0.3077em;
     -fx-border-color: transparent;
-    -fx-border-radius: 0.6154em;
+    -fx-border-radius: 0.3077em;
 }
 .main-toolbar .toolbar-search { -fx-min-width: 16.9231em; -fx-pref-width: 30em; }
 .toolbar-search .text-field {
@@ -164,7 +164,7 @@
 .main-toolbar .combo-box {
     -fx-min-height: 2.5385em;
     -fx-background-color: -fx-gm-subtle;
-    -fx-background-radius: 0.6154em;
+    -fx-background-radius: 0.3077em;
     -fx-border-color: transparent;
 }
 .main-toolbar #search-scope { -fx-min-width: 8em; -fx-pref-width: 11.5385em; }
@@ -197,8 +197,8 @@
 .proton-ghost-button {
     -fx-background-color: transparent;
     -fx-border-color: -fx-gm-border;
-    -fx-border-radius: 0.6154em;
-    -fx-background-radius: 0.6154em;
+    -fx-border-radius: 0.3077em;
+    -fx-background-radius: 0.3077em;
     -fx-text-fill: -fx-gm-accent;
     -fx-font-weight: 600;
 }
@@ -222,7 +222,7 @@
 .tree-view { -fx-background-color: transparent; -fx-padding: 0.2308em; }
 .tree-cell {
     -fx-background-color: transparent;
-    -fx-background-radius: 0.6154em;
+    -fx-background-radius: 0.3077em;
     -fx-padding: 0.4615em 0.6923em;
     -fx-text-fill: -fx-gm-secondary;
 }
@@ -282,17 +282,17 @@
 .message-list-pane .list-view, .message-list-pane .table-view { -fx-min-height: 12.3077em; }
 .list-cell {
     -fx-background-color: transparent;
-    -fx-background-radius: 0.6154em;
+    -fx-background-radius: 0.3077em;
     -fx-border-color: transparent;
     -fx-padding: 0.1538em 0.2308em;
 }
 .list-cell:filled:hover { -fx-background-color: -fx-gm-hover; }
 .list-cell:filled:selected { -fx-background-color: -fx-gm-selected; }
-.list-cell:filled:selected:focused { -fx-background-color: -fx-gm-selected; -fx-border-color: -fx-gm-accent; -fx-border-width: 0 0 0 0.2308em; -fx-border-radius: 0.6154em; }
+.list-cell:filled:selected:focused { -fx-background-color: -fx-gm-selected; -fx-border-color: -fx-gm-accent; -fx-border-width: 0 0 0 0.2308em; -fx-border-radius: 0.3077em; }
 .dark-theme .list-cell:filled:hover { -fx-background-color: -fx-gm-hover; }
 .dark-theme .list-cell:filled:selected { -fx-background-color: -fx-gm-selected; }
 .list-cell.unread-row { -fx-border-color: transparent; }
-.message-cell-content { -fx-padding: 0.3077em 0.4615em; -fx-background-radius: 0.6154em; }
+.message-cell-content { -fx-padding: 0.3077em 0.4615em; -fx-background-radius: 0.3077em; }
 .list-cell.unread-row .message-cell-content { -fx-background-color: -fx-gm-accent-soft; -fx-border-color: transparent transparent transparent -fx-gm-accent; -fx-border-width: 0 0 0 0.2308em; }
 .message-read-status { -fx-min-width: 0.9231em; -fx-pref-width: 0.9231em; -fx-max-width: 0.9231em; }
 .proton-avatar { -fx-background-radius: 999px; }
@@ -311,7 +311,7 @@
     -fx-font-weight: 700;
     -fx-text-fill: -fx-gm-accent-text;
 }
-.selection-toolbar { -fx-alignment: center-left; -fx-hgap: 0.4615em; -fx-vgap: 0.4615em; -fx-padding: 0.4615em; -fx-background-color: -fx-gm-accent-soft; -fx-border-color: -fx-gm-accent; -fx-background-radius: 0.6154em; -fx-border-radius: 0.6154em; }
+.selection-toolbar { -fx-alignment: center-left; -fx-hgap: 0.4615em; -fx-vgap: 0.4615em; -fx-padding: 0.4615em; -fx-background-color: -fx-gm-accent-soft; -fx-border-color: -fx-gm-accent; -fx-background-radius: 0.3077em; -fx-border-radius: 0.3077em; }
 .selection-toolbar .label { -fx-font-weight: bold; -fx-text-fill: -fx-gm-accent; }
 
 /* ---- Reader (Proton card) ---- */
@@ -328,9 +328,9 @@
 .reader-actions .button, .reader-pane > .button {
     -fx-min-height: 2.3077em;
     -fx-background-color: -fx-gm-subtle;
-    -fx-background-radius: 0.6154em;
+    -fx-background-radius: 0.3077em;
     -fx-border-color: -fx-gm-border;
-    -fx-border-radius: 0.6154em;
+    -fx-border-radius: 0.3077em;
     -fx-padding: 0.3846em 0.7692em;
     -fx-text-fill: -fx-gm-secondary;
     -fx-font-weight: 600;
@@ -356,8 +356,8 @@
 .reader-sender { -fx-font-size: 1em; -fx-font-weight: 700; -fx-text-fill: -fx-gm-text; }
 .reader-date, .reader-recipients, .reader-indicators { -fx-text-fill: -fx-gm-muted; -fx-font-size: 0.8462em; }
 .reader-details-toggle { -fx-padding: 0.1538em 0.2308em; -fx-background-color: transparent; -fx-text-fill: -fx-gm-accent; }
-.reader-recipient-details { -fx-padding: 0.6154em 0.7692em; -fx-background-color: -fx-gm-subtle; -fx-background-radius: 0.6154em; -fx-text-fill: -fx-gm-secondary; }
-.reader-state { -fx-padding: 0.4615em 0.7692em; -fx-background-color: -fx-gm-warning-bg; -fx-background-radius: 0.6154em; -fx-text-fill: -fx-gm-warning-text; }
+.reader-recipient-details { -fx-padding: 0.6154em 0.7692em; -fx-background-color: -fx-gm-subtle; -fx-background-radius: 0.3077em; -fx-text-fill: -fx-gm-secondary; }
+.reader-state { -fx-padding: 0.4615em 0.7692em; -fx-background-color: -fx-gm-warning-bg; -fx-background-radius: 0.3077em; -fx-text-fill: -fx-gm-warning-text; }
 .reader-state:empty { -fx-padding: 0; -fx-background-color: transparent; }
 .form-status { -fx-wrap-text: true; -fx-text-fill: -fx-gm-secondary; }
 .form-status-error { -fx-text-fill: -fx-gm-danger; -fx-font-weight: 700; }
@@ -412,7 +412,7 @@
 .mail-window .mail-folder-icon.folder .mail-icon-fill { -fx-fill: -fx-gm-folder-custom; -fx-opacity: 0.2; }
 .mail-window .mail-folder-icon.folder .mail-icon-stroke { -fx-fill: -fx-gm-folder-custom; }
 
-.table-view { -fx-background-color: -fx-gm-pane; -fx-border-color: transparent; -fx-background-radius: 0.6154em; }
+.table-view { -fx-background-color: -fx-gm-pane; -fx-border-color: transparent; -fx-background-radius: 0.3077em; }
 .table-view .column-header-background, .table-view .column-header, .table-view .filler { -fx-background-color: -fx-gm-subtle; }
 .table-view .column-header, .table-view .filler { -fx-border-color: transparent transparent -fx-gm-border transparent; }
 .table-row-cell { -fx-cell-size: 2.3077em; -fx-background-color: transparent; }
@@ -423,7 +423,7 @@
 .button:focused, .text-field:focused, .tree-cell:focused, .list-cell:focused, .combo-box:focused {
     -fx-border-color: -fx-gm-accent;
     -fx-border-width: 0.1538em;
-    -fx-border-radius: 0.6154em;
+    -fx-border-radius: 0.3077em;
     -fx-background-insets: 0, 0;
     -fx-border-insets: -0.0769em;
     -fx-effect: none;
@@ -432,10 +432,10 @@
 .compose-window, .account-setup { -fx-background-color: -fx-gm-pane; }
 .compose-window { -fx-padding: 1.2308em; -fx-background-color: -fx-gm-pane; -fx-spacing: 0.7692em; }
 .compose-heading { -fx-font-size: 1.5385em; -fx-font-weight: 700; -fx-text-fill: -fx-gm-text; }
-.compose-window .text-field, .account-setup .text-field, .account-setup .combo-box, .compose-window .combo-box, .account-setup .password-field { -fx-background-color: -fx-gm-subtle; -fx-text-fill: -fx-gm-text; -fx-prompt-text-fill: -fx-gm-muted; -fx-background-radius: 0.6154em; -fx-border-radius: 0.6154em; -fx-border-color: transparent; -fx-padding: 0.5385em 0.7692em; }
-.compose-window .text-area { -fx-background-color: -fx-gm-subtle; -fx-control-inner-background: -fx-gm-subtle; -fx-text-fill: -fx-gm-text; -fx-border-color: transparent; -fx-border-radius: 0.6154em; -fx-background-radius: 0.6154em; }
+.compose-window .text-field, .account-setup .text-field, .account-setup .combo-box, .compose-window .combo-box, .account-setup .password-field { -fx-background-color: -fx-gm-subtle; -fx-text-fill: -fx-gm-text; -fx-prompt-text-fill: -fx-gm-muted; -fx-background-radius: 0.3077em; -fx-border-radius: 0.3077em; -fx-border-color: transparent; -fx-padding: 0.5385em 0.7692em; }
+.compose-window .text-area { -fx-background-color: -fx-gm-subtle; -fx-control-inner-background: -fx-gm-subtle; -fx-text-fill: -fx-gm-text; -fx-border-color: transparent; -fx-border-radius: 0.3077em; -fx-background-radius: 0.3077em; }
 .compose-window .text-area .content, .account-setup .scroll-pane, .account-setup .viewport { -fx-background-color: -fx-gm-subtle; }
-.account-setup .button, .compose-window .button { -fx-background-color: -fx-gm-subtle; -fx-background-radius: 0.6154em; -fx-border-color: -fx-gm-border; -fx-border-radius: 0.6154em; -fx-border-width: 0.0769em; -fx-padding: 0.5385em 1.2308em; -fx-text-fill: -fx-gm-text; -fx-font-weight: 600; }
+.account-setup .button, .compose-window .button { -fx-background-color: -fx-gm-subtle; -fx-background-radius: 0.3077em; -fx-border-color: -fx-gm-border; -fx-border-radius: 0.3077em; -fx-border-width: 0.0769em; -fx-padding: 0.5385em 1.2308em; -fx-text-fill: -fx-gm-text; -fx-font-weight: 600; }
 .compose-window .primary-action { -fx-background-color: -fx-gm-accent; -fx-border-color: transparent; -fx-text-fill: -fx-gm-accent-text; -fx-font-weight: 700; }
 .diagnostics-window { -fx-background-color: -fx-gm-window; -fx-padding: 1.2308em; -fx-spacing: 0.7692em; }
 .diagnostics-window .text-area { -fx-font-family: monospace; -fx-font-size: 0.9231em; -fx-control-inner-background: -fx-gm-window; -fx-text-fill: -fx-gm-text; -fx-border-color: -fx-gm-border; }
@@ -445,13 +445,13 @@
 .account-setup .button, .diagnostics-window .button, .mail-window .menu-button {
     -fx-min-height: 2.4615em;
     -fx-background-color: -fx-gm-button;
-    -fx-background-radius: 0.6154em;
+    -fx-background-radius: 0.3077em;
     -fx-background-insets: 0;
     -fx-border-color: -fx-gm-border;
     -fx-border-width: 0.0769em;
     -fx-border-insets: 0;
     -fx-effect: none;
-    -fx-border-radius: 0.6154em;
+    -fx-border-radius: 0.3077em;
     -fx-padding: 0.4615em 1.0769em;
     -fx-text-fill: -fx-gm-text;
     -fx-cursor: hand;
@@ -477,9 +477,9 @@
 .diagnostics-window .text-field, .mail-window .combo-box,
 .compose-window .combo-box, .account-setup .combo-box {
     -fx-background-color: -fx-gm-subtle;
-    -fx-background-radius: 0.6154em;
+    -fx-background-radius: 0.3077em;
     -fx-border-color: transparent;
-    -fx-border-radius: 0.6154em;
+    -fx-border-radius: 0.3077em;
     -fx-border-width: 0.0769em;
     -fx-text-fill: -fx-gm-text;
     -fx-prompt-text-fill: -fx-gm-muted;
@@ -500,8 +500,8 @@
     -fx-text-fill: -fx-gm-text;
     -fx-border-color: -fx-gm-border;
     -fx-border-width: 0.0769em;
-    -fx-background-radius: 0.6154em;
-    -fx-border-radius: 0.6154em;
+    -fx-background-radius: 0.3077em;
+    -fx-border-radius: 0.3077em;
 }
 .mail-window .menu-item:hover, .mail-window .menu-item:focused,
 .compose-window .menu-item:hover, .account-setup .menu-item:hover {
@@ -655,9 +655,9 @@
     -fx-max-height: 2.4615em;
     -fx-padding: 0.3846em;
     -fx-background-color: transparent;
-    -fx-background-radius: 0.6154em;
+    -fx-background-radius: 0.3077em;
     -fx-border-color: transparent;
-    -fx-border-radius: 0.6154em;
+    -fx-border-radius: 0.3077em;
     -fx-graphic-text-gap: 0;
     -fx-text-fill: -fx-gm-secondary;
 }
@@ -687,7 +687,7 @@
     -fx-text-fill: -fx-gm-accent;
     -fx-font-weight: 700;
 }
-.compose-window .list-view { -fx-background-color: -fx-gm-subtle; -fx-background-radius: 0.6154em; }
+.compose-window .list-view { -fx-background-color: -fx-gm-subtle; -fx-background-radius: 0.3077em; }
 .compose-window .list-cell { -fx-background-color: transparent; }
 .compose-window .list-cell:filled:hover { -fx-background-color: -fx-gm-hover; }
 .compose-window .list-cell:filled:selected { -fx-background-color: -fx-gm-selected; }
@@ -703,18 +703,18 @@
 .compose-window .compose-caption { -fx-min-width: 4.6154em; -fx-font-weight: 600; -fx-text-fill: -fx-gm-secondary; }
 .mail-window .tooltip, .compose-window .tooltip, .account-setup .tooltip {
     -fx-background-color: -fx-gm-raised;
-    -fx-background-radius: 0.6154em;
+    -fx-background-radius: 0.3077em;
     -fx-border-color: -fx-gm-border;
-    -fx-border-radius: 0.6154em;
+    -fx-border-radius: 0.3077em;
     -fx-text-fill: -fx-gm-text;
     -fx-padding: 0.3846em 0.6154em;
 }
 .account-setup .spinner,
 .account-setup .spinner .text-field {
     -fx-background-color: -fx-gm-subtle;
-    -fx-background-radius: 0.6154em;
+    -fx-background-radius: 0.3077em;
     -fx-border-color: -fx-gm-border;
-    -fx-border-radius: 0.6154em;
+    -fx-border-radius: 0.3077em;
     -fx-text-fill: -fx-gm-text;
 }
 .account-setup .spinner .increment-arrow-button,
