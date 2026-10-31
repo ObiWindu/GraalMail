@@ -1,7 +1,14 @@
-<!-- This Source Code Form is subject to the terms of the Mozilla Public
-   - License, v. 2.0. If a copy of the MPL was not distributed with this
-   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
-<svg xmlns="http://www.w3.org/2000/svg" fill-opacity="context-fill-opacity" viewBox="0 0 16 16" width="16" height="16">
-  <path d="M4 1C2.347 1 1 2.347 1 4v3c0 1.653 1.347 3 3 3v2.5a.5.5 0 0 0 .854.354L5.707 12h2.586l2.853 2.854A.5.5 0 0 0 12 14.5V12c1.653 0 3-1.347 3-3V6c0-1.35-.899-2.497-2.129-2.871A3.007 3.007 0 0 0 10 1Zm0 1h6c1.117 0 2 .883 2 2v3c0 1.117-.883 2-2 2H7.5a.5.5 0 0 0-.354.146L5 11.293V9.5a.5.5 0 0 0-.5-.5H4c-1.117 0-2-.883-2-2V4c0-1.117.883-2 2-2Zm9 2.264c.6.342 1 .986 1 1.736v3c0 1.117-.883 2-2 2h-.5a.5.5 0 0 0-.5.5v1.793l-2.146-2.147A.5.5 0 0 0 8.5 11H6.707l1-1H10c1.653 0 3-1.347 3-3zM4.5 5a.5.5 0 0 0-.5.5.5.5 0 0 0 .5.5.5.5 0 0 0 .5-.5.5.5 0 0 0-.5-.5Zm1.975 0A.5.5 0 0 0 6.5 6h1a.499.499 0 1 0 0-1H6.475ZM9.5 5a.5.5 0 0 0-.5.5.5.5 0 0 0 .5.5.5.5 0 0 0 .5-.5.5.5 0 0 0-.5-.5Z" fill="context-stroke"/>
-  <path d="M13 4.264c.6.342 1 .986 1 1.736v3c0 1.117-.883 2-2 2h-.5a.5.5 0 0 0-.5.5v1.793l-2.146-2.147A.5.5 0 0 0 8.5 11H6.707l1-1H10c1.653 0 3-1.347 3-3z" fill="context-fill"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 22 22">
+  <defs id="defs3051">
+    <style type="text/css" id="current-color-scheme">
+      .ColorScheme-Text {
+        color:#232629;
+      }
+      </style>
+  </defs>
+ <path 
+     style="fill:currentColor;fill-opacity:1;stroke:none" 
+     d="M 11 3 A 3.9999902 4.0000296 0 0 0 7 7 A 3.9999902 4.0000296 0 0 0 11 11 A 3.9999902 4.0000296 0 0 0 15 7 A 3.9999902 4.0000296 0 0 0 11 3 z M 11 4 A 3 3.0000296 0 0 1 14 7 A 3 3.0000296 0 0 1 11 10 A 3 3.0000296 0 0 1 8 7 A 3 3.0000296 0 0 1 11 4 z M 11 12 A 7.9999504 8.0000296 0 0 0 3.0722656 19 L 4.0800781 19 A 6.9999604 7.0000296 0 0 1 11 13 A 6.9999604 7.0000296 0 0 1 17.921875 19 L 18.929688 19 A 7.9999504 8.0000296 0 0 0 11 12 z "
+     class="ColorScheme-Text"
+     />
 </svg>

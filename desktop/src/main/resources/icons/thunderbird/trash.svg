@@ -1,7 +1,13 @@
-<!-- This Source Code Form is subject to the terms of the Mozilla Public
-   - License, v. 2.0. If a copy of the MPL was not distributed with this
-   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
-<svg xmlns="http://www.w3.org/2000/svg" fill-opacity="context-fill-opacity" viewBox="0 0 16 16" width="16" height="16">
-  <path d="M4 3c-.554 0-1 .446-1 1v1h10V4c0-.554-.446-1-1-1Zm0 3v7c0 .554.446 1 1 1h6c.554 0 1-.446 1-1V6Z" fill="context-fill"/>
-  <path d="M7 1c-.545 0-1 .455-1 1H4c-1.1 0-2 .9-2 2v1c0 .545.455 1 1 1v7c0 1.1.9 2 2 2h6c1.1 0 2-.9 2-2V6c.545 0 1-.455 1-1V4c0-1.1-.9-2-2-2h-2c0-.545-.455-1-1-1ZM4 3h8c.563 0 1 .437 1 1v1H3V4c0-.563.437-1 1-1Zm0 3h8v7c0 .563-.437 1-1 1H5c-.563 0-1-.437-1-1Zm2.5 1a.5.5 0 0 0-.5.5v5a.5.5 0 0 0 .5.5.5.5 0 0 0 .5-.5v-5a.5.5 0 0 0-.5-.5Zm3 0a.5.5 0 0 0-.5.5v5a.5.5 0 0 0 .5.5.5.5 0 0 0 .5-.5v-5a.5.5 0 0 0-.5-.5Z" fill="context-stroke"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 22 22">
+    <defs id="defs3051">
+        <style type="text/css" id="current-color-scheme">
+        .ColorScheme-NegativeText {
+            color:#da4453;
+        }
+        </style>
+    </defs>
+    <path
+     style="fill:currentColor;fill-opacity:1;stroke:none" 
+     class="ColorScheme-NegativeText"
+        d="M8 3v2h1V4h4v1h1V3H8M4 6v1h14V6H4m2 2v11h10V8h-1v10H7V8H6"/>
 </svg>
