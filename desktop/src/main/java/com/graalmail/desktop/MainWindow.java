@@ -928,13 +928,28 @@ public final class MainWindow {
                 setAccessibleText(empty || item == null || item.isBlank() ? null : "Has attachment");
             }
         });
-        state.prefWidthProperty().bind(messageTable.widthProperty().multiply(0.075));
-        star.prefWidthProperty().bind(messageTable.widthProperty().multiply(0.055));
-        sender.prefWidthProperty().bind(messageTable.widthProperty().multiply(0.205));
-        subject.prefWidthProperty().bind(messageTable.widthProperty().multiply(0.365));
-        date.prefWidthProperty().bind(messageTable.widthProperty().multiply(0.205));
-        attachment.prefWidthProperty().bind(messageTable.widthProperty().multiply(0.095));
-        messageTable.getColumns().setAll(state, star, sender, subject, date, attachment);
+        TableColumn<Message, Number> size = new TableColumn<>("Size");
+        size.setCellValueFactory(cell -> new SimpleObjectProperty<>(cell.getValue().size()));
+        size.setCellFactory(column -> new javafx.scene.control.TableCell<>() {
+            @Override protected void updateItem(Number item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) { setText(""); return; }
+                long bytes = item.longValue();
+                String text;
+                if (bytes < 1024) text = bytes + " B";
+                else if (bytes < 1024 * 1024) text = String.format("%.1f KB", bytes / 1024.0);
+                else text = String.format("%.1f MB", bytes / (1024.0 * 1024.0));
+                setText(text);
+            }
+        });
+        state.prefWidthProperty().bind(messageTable.widthProperty().multiply(0.07));
+        star.prefWidthProperty().bind(messageTable.widthProperty().multiply(0.05));
+        sender.prefWidthProperty().bind(messageTable.widthProperty().multiply(0.18));
+        subject.prefWidthProperty().bind(messageTable.widthProperty().multiply(0.30));
+        date.prefWidthProperty().bind(messageTable.widthProperty().multiply(0.18));
+        size.prefWidthProperty().bind(messageTable.widthProperty().multiply(0.10));
+        attachment.prefWidthProperty().bind(messageTable.widthProperty().multiply(0.12));
+        messageTable.getColumns().setAll(state, star, sender, subject, date, size, attachment);
         messageTable.setRowFactory(table -> new javafx.scene.control.TableRow<>() {
             @Override protected void updateItem(Message item, boolean empty) {
                 super.updateItem(item, empty);
