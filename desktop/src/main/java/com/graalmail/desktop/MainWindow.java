@@ -125,6 +125,7 @@ public final class MainWindow {
     private VBox readerHeader;
     private final javafx.scene.layout.FlowPane attachmentActions = new javafx.scene.layout.FlowPane(8, 8);
     private final Label status = new Label("Ready");
+    private final Label messageCountLabel = new Label();
     private final Label polyMailStatus = new Label("");
     private DesktopPolyMailService polyMail;
     private final Label viewTitle = new Label("Unified Inbox");
@@ -212,6 +213,8 @@ public final class MainWindow {
 
         folderTree.getSelectionModel().selectedItemProperty().addListener((observable, old, item) ->
                 onFolderSelected(item));
+        messages.addListener((javafx.collections.ListChangeListener<Message>) change -> updateMessageCount());
+        updateMessageCount();
         messageList.getSelectionModel().selectedItemProperty().addListener((observable, old, item) -> {
             if (synchronizingSelection) return;
             synchronizeSelection(messageList, messageTable);
@@ -1120,12 +1123,19 @@ public final class MainWindow {
         polyMailStatus.setAccessibleText("PolyMail network status");
         status.setAccessibleText("Status messages");
         status.setAccessibleHelp("Announces what the application just did");
-        HBox box = new HBox(UiScale.px(owner, 10), connection, status, polyMailStatus);
+        HBox box = new HBox(UiScale.px(owner, 10), connection, status, messageCountLabel, polyMailStatus);
         HBox.setHgrow(status, Priority.ALWAYS);
         box.setPadding(UiScale.insets(owner, 7, 12, 7, 12));
         box.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
         box.getStyleClass().add("status-bar");
         return box;
+    }
+
+    private void updateMessageCount() {
+        int count = messages.size();
+        int unread = 0;
+        for (Message m : messages) if (m.unread()) unread++;
+        messageCountLabel.setText(count == 0 ? "" : count + " message(s), " + unread + " unread");
     }
 
     private void refreshFolders() {
