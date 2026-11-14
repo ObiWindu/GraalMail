@@ -350,9 +350,13 @@ public final class MainWindow {
         getMail.setOnAction(e -> syncNow());
         MenuItem saveAs = new MenuItem("Save Message As…");
         saveAs.setOnAction(e -> saveMessageAs());
+        MenuItem print = new MenuItem("Print…");
+        print.setOnAction(e -> printMessage());
+        MenuItem importEml = new MenuItem("Import Messages (.eml)…");
+        importEml.setOnAction(e -> importEml());
         MenuItem exit = new MenuItem("Exit");
         exit.setOnAction(e -> { if (owner != null) owner.close(); });
-        file.getItems().addAll(newMsg, getMail, new SeparatorMenuItem(), saveAs,
+        file.getItems().addAll(newMsg, getMail, new SeparatorMenuItem(), saveAs, print, importEml,
                 new SeparatorMenuItem(), exit);
 
         Menu edit = new Menu("Edit");
@@ -475,10 +479,14 @@ public final class MainWindow {
         templates.setOnAction(e -> showTemplates());
         MenuItem snoozed = new MenuItem("Snoozed Messages");
         snoozed.setOnAction(e -> showSnoozed());
+        MenuItem backup = new MenuItem("Backup Settings…");
+        backup.setOnAction(e -> backupSettings());
+        MenuItem restore = new MenuItem("Restore Settings…");
+        restore.setOnAction(e -> restoreSettings());
         MenuItem diagnostics = new MenuItem("Diagnostics…");
         diagnostics.setOnAction(e -> showDiagnostics());
         tools.getItems().addAll(addAccount, new SeparatorMenuItem(), filters, templates, snoozed,
-                new SeparatorMenuItem(), diagnostics);
+                new SeparatorMenuItem(), backup, restore, new SeparatorMenuItem(), diagnostics);
 
         Menu settingsMenu = new Menu("Settings");
         MenuItem settingsItem = new MenuItem("Configure GraalMail…");
@@ -1417,8 +1425,7 @@ public final class MainWindow {
     }
 
     /** Exports the selected message as an .eml file. */
-    private void saveMessageAs() {
-        Message message = currentMessage != null ? currentMessage
+    private void saveMessageAs() {        Message message = currentMessage != null ? currentMessage
                 : messageList.getSelectionModel().getSelectedItem();
         if (message == null) {
             status.setText("Select a message first.");
@@ -1454,6 +1461,176 @@ public final class MainWindow {
             } catch (RuntimeException | java.io.IOException e) {
                 LOG.warn("Export failed: {}", e.getMessage());
                 Platform.runLater(() -> status.setText("Export failed: " + e.getMessage()));
+            }
+        });
+    }
+
+    /** Prints the reading pane through the platform print dialog. */
+    private void printMessage() {
+        Message message = currentMessage != null ? currentMessage
+                : messageList.getSelectionModel().getSelectedItem();
+        if (message == null) {
+            status.setText("Select a message first.");
+            return;
+        }
+        javafx.print.PrinterJob job = javafx.print.PrinterJob.createPrinterJob();
+        if (job == null) {
+            status.setText("No printer available.");
+            return;
+        }
+        boolean proceed = job.showPrintDialog(owner != null ? owner : mainScene.getWindow());
+        if (!proceed) {
+            job.cancelJob();
+            return;
+        }
+        try {
+            reader.getEngine().print(job);
+            job.endJob();
+            status.setText("Sent to printer.");
+        } catch (RuntimeException e) {
+            job.cancelJob();
+            status.setText("Printing failed: " + e.getMessage());
+        }
+    }
+
+    /** Imports local .eml files into the selected folder cache. */
+    private void importEml() {
+        Account account = selectedAccount.get();
+        Folder folder = selectedFolder.get();
+        if (account == null || folder == null) {
+            status.setText("Select a folder to import into.");
+            return;
+        }
+        javafx.stage.FileChooser chooser = new javafx.stage.FileChooser();
+        chooser.setTitle("Import Messages");
+        chooser.getExtensionFilters().add(
+                new javafx.stage.FileChooser.ExtensionFilter("Email message", "*.eml"));
+        javafx.stage.Window anchor = owner != null ? owner : mainScene.getWindow();
+        java.util.List<java.io.File> files = chooser.showOpenMultipleDialog(anchor);
+        if (files == null || files.isEmpty()) {
+            return;
+        }
+        status.setText("Importing " + files.size() + " message(s)…");
+        io.submit(() -> {
+            int count = 0;
+            for (java.io.File file : files) {
+                try {
+                    byte[] raw = java.nio.file.Files.readAllBytes(file.toPath());
+                    Message imported = com.graalmail.core.mail.EmlMessageParser.parse(
+                            raw, account.id(), folder.id(),
+                            "imported-" + System.currentTimeMillis() + "-" + count);
+                    context.store().saveMessage(imported);
+                    count++;
+                } catch (RuntimeException | java.io.IOException e) {
+                    LOG.warn("Import failed for {}: {}", file.getName(), e.getMessage());
+                }
+            }
+            int done = count;
+            Platform.runLater(() -> {
+                reloadCurrentView();
+                status.setText(done == 0 ? "Import failed." : "Imported " + done + " message(s).");
+            });
+        });
+    }
+
+    /** Exports accounts (without secrets), filters and templates to JSON. */
+    private void backupSettings() {
+        javafx.stage.FileChooser chooser = new javafx.stage.FileChooser();
+        chooser.setTitle("Backup Settings");
+        chooser.setInitialFileName("graalmail-backup.json");
+        chooser.getExtensionFilters().add(
+                new javafx.stage.FileChooser.ExtensionFilter("JSON", "*.json"));
+        javafx.stage.Window anchor = owner != null ? owner : mainScene.getWindow();
+        java.io.File file = chooser.showSaveDialog(anchor);
+        if (file == null) {
+            return;
+        }
+        io.submit(() -> {
+            try {
+                java.util.Map<String, Object> backup = new java.util.LinkedHashMap<>();
+                java.util.List<java.util.Map<String, Object>> accounts = new java.util.ArrayList<>();
+                for (Account account : context.store().listAccounts()) {
+                    java.util.Map<String, Object> entry = new java.util.LinkedHashMap<>();
+                    entry.put("id", account.id());
+                    entry.put("providerId", account.providerId());
+                    entry.put("email", account.email());
+                    entry.put("displayName", account.displayName());
+                    entry.put("settings", account.settings());
+                    entry.put("enabled", account.enabled());
+                    accounts.add(entry);
+                }
+                backup.put("accounts", accounts);
+                backup.put("filters", context.store().listFilters().stream().map(f -> java.util.Map.of(
+                        "id", f.id(), "accountId", f.accountId(), "name", f.name(),
+                        "enabled", f.enabled(), "matchAll", f.matchAll(), "priority", f.priority(),
+                        "conditions", f.conditions().stream().map(c -> java.util.Map.of(
+                                "field", c.field().name(), "operator", c.operator().name(),
+                                "value", c.value())).toList(),
+                        "actions", f.actions().stream().map(a -> java.util.Map.of(
+                                "type", a.type().name(), "target", a.targetFolderId())).toList()))
+                        .toList());
+                backup.put("templates", context.store().listTemplates().stream().map(t -> java.util.Map.of(
+                        "id", t.id(), "accountId", t.accountId(), "name", t.name(),
+                        "subject", t.subject(), "body", t.bodyText())).toList());
+                byte[] json = new com.fasterxml.jackson.databind.ObjectMapper()
+                        .writerWithDefaultPrettyPrinter().writeValueAsBytes(backup);
+                java.nio.file.Files.write(file.toPath(), json);
+                Platform.runLater(() -> status.setText("Backup saved."));
+            } catch (Exception e) {
+                LOG.warn("Backup failed: {}", e.getMessage());
+                Platform.runLater(() -> status.setText("Backup failed: " + e.getMessage()));
+            }
+        });
+    }
+
+    /** Restores accounts, filters and templates from a backup file. */
+    private void restoreSettings() {
+        javafx.stage.FileChooser chooser = new javafx.stage.FileChooser();
+        chooser.setTitle("Restore Settings");
+        chooser.getExtensionFilters().add(
+                new javafx.stage.FileChooser.ExtensionFilter("JSON", "*.json"));
+        javafx.stage.Window anchor = owner != null ? owner : mainScene.getWindow();
+        java.io.File file = chooser.showOpenDialog(anchor);
+        if (file == null) {
+            return;
+        }
+        status.setText("Restoring…");
+        io.submit(() -> {
+            try {
+                byte[] json = java.nio.file.Files.readAllBytes(file.toPath());
+                com.fasterxml.jackson.databind.JsonNode root =
+                        new com.fasterxml.jackson.databind.ObjectMapper().readTree(json);
+                int restored = 0;
+                com.fasterxml.jackson.databind.JsonNode accounts = root.get("accounts");
+                if (accounts != null && accounts.isArray()) {
+                    for (com.fasterxml.jackson.databind.JsonNode entry : accounts) {
+                        String id = entry.path("id").asText("");
+                        if (id.isBlank() || context.store().account(id).isPresent()) {
+                            continue;
+                        }
+                        java.util.Map<String, String> settingsMap = new java.util.LinkedHashMap<>();
+                        com.fasterxml.jackson.databind.JsonNode settingsNode = entry.get("settings");
+                        if (settingsNode != null && settingsNode.isObject()) {
+                            settingsNode.fields().forEachRemaining(e -> settingsMap.put(e.getKey(), e.getValue().asText("")));
+                        }
+                        context.store().saveAccount(Account.builder(id, entry.path("providerId").asText("generic"))
+                                .email(entry.path("email").asText(""))
+                                .displayName(entry.path("displayName").asText(""))
+                                .settings(settingsMap)
+                                .enabled(entry.path("enabled").asBoolean(true))
+                                .build());
+                        restored++;
+                    }
+                }
+                int done = restored;
+                Platform.runLater(() -> {
+                    refreshFolders();
+                    reloadCurrentView();
+                    status.setText(done == 0 ? "Nothing new to restore." : "Restored " + done + " account(s). Re-add passwords, then use Tools ▸ Filters/Templates backup manually if needed.");
+                });
+            } catch (Exception e) {
+                LOG.warn("Restore failed: {}", e.getMessage());
+                Platform.runLater(() -> status.setText("Restore failed: " + e.getMessage()));
             }
         });
     }

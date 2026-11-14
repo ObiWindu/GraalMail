@@ -70,6 +70,7 @@ flowchart LR
   Thunderbird-style Android UI and a Proton-style desktop with dark theme
 - Conversation threads, message filters that file mail on sync, snooze,
   reusable templates, and contacts that learn frequent recipients
+- Print, `.eml` import/export, and settings backup/restore on desktop
 
 ### PolyMail — email without the mail server
 
