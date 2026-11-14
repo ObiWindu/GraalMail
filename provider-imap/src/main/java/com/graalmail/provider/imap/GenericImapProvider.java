@@ -60,6 +60,7 @@ public final class GenericImapProvider implements AccountProvider {
                 .offlineActions(true)
                 .serverSideFlags(true)
                 .sendCapable(true)
+                .folderManagement(true)
                 .platform("linux", true)
                 .platform("android", true)
                 .note("Search, flags and drafts depend on the extensions the server supports.")

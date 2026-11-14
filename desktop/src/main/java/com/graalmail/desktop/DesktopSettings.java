@@ -5,6 +5,9 @@
 package com.graalmail.desktop;
 
 import com.graalmail.storage.MailStore;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 
 /**
  * The user settings of the desktop application.
@@ -30,6 +33,17 @@ public final class DesktopSettings {
     public static final String LAYOUT_MODE = "desktop.layoutMode";
     public static final String LIST_MODE = "desktop.listMode";
     public static final String NAV_COMPACT = "desktop.navCompact";
+    /** Comma separated keys of the visible message list columns. */
+    public static final String COLUMNS = "desktop.columns";
+    /** Signature appended to every new message. */
+    public static final String SIGNATURE = "desktop.signature";
+
+    /** All message list column keys, in display order. */
+    public static final List<String> ALL_COLUMNS = List.of("status", "subject", "sender", "date", "size");
+    /** Human readable column titles. */
+    public static final Map<String, String> COLUMN_TITLES = Map.of(
+            "status", "Status", "subject", "Subject", "sender", "Sender",
+            "date", "Date", "size", "Size");
     /** PolyMail identity (username@graalemail) for decentralized delivery. */
     public static final String POLYMAIL_ENABLED = "polymail.enabled";
     public static final String POLYMAIL_IDENTITY = "polymail.identity";
@@ -243,6 +257,46 @@ public final class DesktopSettings {
 
     public void navCompact(boolean compact) {
         store.putSetting(NAV_COMPACT, Boolean.toString(compact));
+    }
+
+    /** The visible message list columns, in display order; all visible by default. */
+    public List<String> visibleColumns() {
+        String raw = store.setting(COLUMNS, String.join(",", ALL_COLUMNS));
+        List<String> visible = new ArrayList<>();
+        for (String key : ALL_COLUMNS) {
+            if (raw.contains(key)) {
+                visible.add(key);
+            }
+        }
+        if (visible.isEmpty()) {
+            return List.copyOf(ALL_COLUMNS);
+        }
+        return List.copyOf(visible);
+    }
+
+    public void setColumnVisible(String key, boolean visible) {
+        java.util.Set<String> current = new java.util.LinkedHashSet<>(visibleColumns());
+        if (visible) {
+            current.add(key);
+        } else if (current.size() > 1) {
+            current.remove(key); // always keep at least one column
+        }
+        List<String> ordered = new ArrayList<>();
+        for (String known : ALL_COLUMNS) {
+            if (current.contains(known)) {
+                ordered.add(known);
+            }
+        }
+        store.putSetting(COLUMNS, String.join(",", ordered));
+    }
+
+    /** The signature appended to new messages, empty by default. */
+    public String signature() {
+        return store.setting(SIGNATURE, "");
+    }
+
+    public void signature(String value) {
+        store.putSetting(SIGNATURE, value == null ? "" : value);
     }
 
     public void showReader(boolean visible) {

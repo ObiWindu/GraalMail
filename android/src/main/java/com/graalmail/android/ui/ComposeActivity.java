@@ -57,6 +57,8 @@ public final class ComposeActivity extends AppCompatActivity {
     public static final String EXTRA_ACCOUNT_ID = "accountId";
     /** The prefilled recipient. */
     public static final String EXTRA_TO = "to";
+    /** The prefilled carbon-copy recipients. */
+    public static final String EXTRA_CC = "cc";
     /** The prefilled subject. */
     public static final String EXTRA_SUBJECT = "subject";
     /** The prefilled body. */
@@ -155,7 +157,10 @@ public final class ComposeActivity extends AppCompatActivity {
         }
         accountPicker.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-                if (position >= 0 && position < accounts.size()) accountId = accounts.get(position).id();
+                if (position >= 0 && position < accounts.size()) {
+                    accountId = accounts.get(position).id();
+                    updateSendAvailability();
+                }
             }
             @Override public void onNothingSelected(AdapterView<?> parent) { }
         });
@@ -208,10 +213,45 @@ public final class ComposeActivity extends AppCompatActivity {
         findViewById(R.id.compose_add_attachment).setOnClickListener(view -> pickAttachments());
 
         toField.setText(getIntent().getStringExtra(EXTRA_TO));
+        String prefilledCc = getIntent().getStringExtra(EXTRA_CC);
+        ccField.setText(prefilledCc);
+        if (prefilledCc != null && !prefilledCc.trim().isEmpty()) {
+            ccContainer.setVisibility(View.VISIBLE);
+            bccContainer.setVisibility(View.VISIBLE);
+            showCcBcc.setText(R.string.compose_hide_cc_bcc);
+            ccBccArrow.setImageResource(R.drawable.ic_arrow_down);
+        }
         subjectField.setText(getIntent().getStringExtra(EXTRA_SUBJECT));
         bodyField.setText(getIntent().getStringExtra(EXTRA_BODY));
 
         findViewById(R.id.compose_draft).setOnClickListener(view -> saveDraft());
+
+        updateSendAvailability();
+    }
+
+    /**
+     * Disables the send action up front when the selected account's provider
+     * cannot send (for example Proton Mail), instead of failing on send.
+     */
+    private void updateSendAvailability() {
+        boolean sendable = true;
+        String providerName = "";
+        try {
+            Account account = account();
+            if (account != null) {
+                var provider = context.sessions().provider(account);
+                providerName = provider.displayName();
+                sendable = provider.capabilities().sendCapable();
+            }
+        } catch (RuntimeException e) {
+            LOG.warn("The provider capabilities could not be read: {}", e.getMessage());
+            sendable = false;
+        }
+        toolbarSendEnabled(sendable);
+        if (!sendable) {
+            Toast.makeText(this, getString(R.string.compose_send_unsupported, providerName),
+                    Toast.LENGTH_LONG).show();
+        }
     }
 
     private void closeCompose() {
@@ -374,8 +414,28 @@ public final class ComposeActivity extends AppCompatActivity {
                 if (result.accepted()) {
                     message = getString(R.string.compose_sent);
                     finished = true;
-                } else {
+                } else if (result.ambiguous()) {
+                    // Queue the ambiguity for the send state machine of the sync
+                    // engine, exactly like the desktop client, so it is resolved
+                    // instead of being lost when the activity closes.
+                    try {
+                        String draftJson = new com.fasterxml.jackson.databind.ObjectMapper()
+                                .writeValueAsString(draft);
+                        com.graalmail.storage.PendingAction action =
+                                com.graalmail.storage.PendingAction.of(
+                                        java.util.UUID.randomUUID().toString(), accountId,
+                                        com.graalmail.storage.PendingAction.Type.SEND, "", draftJson);
+                        context.store().enqueue(action.withSendState(
+                                com.graalmail.storage.PendingAction.SendState.SUBMISSION_OUTCOME_UNKNOWN));
+                    } catch (Exception queueError) {
+                        LOG.warn("The ambiguous send could not be queued: {}", queueError.getMessage());
+                    }
                     message = getString(R.string.compose_ambiguous);
+                } else {
+                    // Defensive: providers report rejection as an exception, but a
+                    // result that is neither accepted nor ambiguous is a failure.
+                    message = getString(R.string.compose_failed,
+                            "The server did not accept the message.");
                 }
             } catch (ProviderException e) {
                 message = getString(R.string.compose_failed, e.userMessage());

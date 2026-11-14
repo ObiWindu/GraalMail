@@ -74,7 +74,7 @@ public final class YahooProvider implements AccountProvider, OAuthCapableProvide
     @Override
     public ProviderCapabilities capabilities() {
         return ProviderCapabilities.builder(ProviderType.YAHOO)
-                .authMethods(AuthMethod.APP_PASSWORD, AuthMethod.OAUTH2)
+                .authMethods(AuthMethod.PASSWORD, AuthMethod.APP_PASSWORD, AuthMethod.OAUTH2)
                 .serverSideSearch(true)
                 .pushNotifications(false)
                 .idleSupport(true)
@@ -86,10 +86,14 @@ public final class YahooProvider implements AccountProvider, OAuthCapableProvide
                 .offlineActions(true)
                 .serverSideFlags(true)
                 .sendCapable(true)
+                .folderManagement(true)
                 .platform("linux", true)
                 .platform("android", true)
-                .note("Sign in uses a Yahoo app password unless a Yahoo OAuth client was approved.")
-                .restriction("Yahoo requires an app password; the account password is rejected.")
+                .note("Sign in uses the email address and a password: an app password generated "
+                        + "in the Yahoo account security settings, unless a Yahoo OAuth client "
+                        + "was approved.")
+                .restriction("Yahoo rejects the account password for third party clients; "
+                        + "use an app password (requires 2-Step Verification on the account).")
                 .documentationUrl("https://help.yahoo.com/kb/SLN15241.html")
                 .build();
     }

@@ -50,6 +50,8 @@ public final class SettingsDialog {
     private final Spinner<Integer> polyMailPort;
     private final javafx.scene.control.TextField polyMailMailboxPeers =
             new javafx.scene.control.TextField();
+    private final javafx.scene.control.TextArea signatureField =
+            new javafx.scene.control.TextArea();
 
     /**
      * Creates the settings window.
@@ -106,6 +108,11 @@ public final class SettingsDialog {
         polyMailPort.getValueFactory().setValue(clamp(settings.polyMailListenPort(), 0, 65535));
         polyMailMailboxPeers.setText(settings.polyMailMailboxPeers());
         polyMailMailboxPeers.setPromptText("mailbox1.example.com:9000, mailbox2.example.com:9000");
+        signatureField.setText(settings.signature());
+        signatureField.setPromptText("Jane Doe\njane@example.com");
+        signatureField.setPrefRowCount(5);
+        signatureField.setWrapText(true);
+        signatureField.setAccessibleText("Signature appended to new messages");
 
         Label intervalLabel = new Label("Synchronise every (minutes)");
         intervalLabel.setLabelFor(syncInterval);
@@ -155,6 +162,7 @@ public final class SettingsDialog {
                 return;
             }
             settings.polyMailMailboxPeers(polyMailMailboxPeers.getText());
+            settings.signature(signatureField.getText());
             LOG.info("Settings saved: sync every {} minutes, {} messages per page",
                     syncMinutes, page);
             stage.close();
@@ -181,15 +189,24 @@ public final class SettingsDialog {
                 showNavigation, showReader,
                 new Label("You can also change pane visibility from the Layout menu in the main toolbar."));
         javafx.scene.layout.VBox polyMailSettings = buildPolyMailPane();
+        Label signatureHelp = new Label("Appended to every new message after the -- separator line. "
+                + "Replies and forwards keep the original text.");
+        signatureHelp.setWrapText(true);
+        signatureHelp.getStyleClass().add("settings-explanation");
+        javafx.scene.layout.VBox composeSettings = new javafx.scene.layout.VBox(UiScale.px(stage, 10),
+                new Label("Signature"), signatureField, signatureHelp);
         javafx.scene.control.Tab syncTab = new javafx.scene.control.Tab("Sync", syncSettings);
         javafx.scene.control.Tab appearanceTab = new javafx.scene.control.Tab("Appearance", appearanceSettings);
         javafx.scene.control.Tab layoutTab = new javafx.scene.control.Tab("Layout", layoutSettings);
+        javafx.scene.control.Tab composeTab = new javafx.scene.control.Tab("Compose", composeSettings);
         javafx.scene.control.Tab polyMailTab = new javafx.scene.control.Tab("PolyMail", polyMailSettings);
         syncTab.setClosable(false);
         appearanceTab.setClosable(false);
         layoutTab.setClosable(false);
+        composeTab.setClosable(false);
         polyMailTab.setClosable(false);
-        javafx.scene.control.TabPane tabs = new javafx.scene.control.TabPane(syncTab, appearanceTab, layoutTab, polyMailTab);
+        javafx.scene.control.TabPane tabs = new javafx.scene.control.TabPane(syncTab, appearanceTab,
+                layoutTab, composeTab, polyMailTab);
         Label heading = new Label("GraalMail Settings");
         heading.getStyleClass().add("compose-heading");
         Label explanation = new Label("Choose how GraalMail looks, syncs, and arranges your workspace.");

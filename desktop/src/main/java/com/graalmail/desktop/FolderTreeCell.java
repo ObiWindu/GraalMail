@@ -17,13 +17,29 @@ import javafx.scene.control.TreeItem;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
+import java.util.function.Predicate;
 
-/** Renders Proton-style navigation rows: rounded pills with count badges. */
+/** Renders KMail-style folder rows: icon, name, and an inline bold "(n)" unread count. */
 final class FolderTreeCell extends TreeCell<Object> {
+
+    /** Folder management actions offered in the context menus. */
+    record FolderActions(
+            java.util.function.BiConsumer<Account, com.graalmail.core.domain.Folder> onNewFolder,
+            java.util.function.BiConsumer<Account, com.graalmail.core.domain.Folder> onRenameFolder,
+            java.util.function.BiConsumer<Account, com.graalmail.core.domain.Folder> onDeleteFolder,
+            java.util.function.BiConsumer<Account, com.graalmail.core.domain.Folder> onEmptyFolder,
+            Predicate<Account> supported) {
+
+        static FolderActions none() {
+            return new FolderActions((a, f) -> { }, (a, f) -> { }, (a, f) -> { }, (a, f) -> { },
+                    account -> false);
+        }
+    }
 
     private final java.util.function.Consumer<Account> onRemoveAccount;
     private final java.util.function.ToIntFunction<Account> unreadCounts;
     private final java.util.function.BiConsumer<Account, com.graalmail.core.domain.Folder> onMarkAllRead;
+    private final FolderActions folderActions;
 
     /** Creates cells without account actions. */
     FolderTreeCell() {
@@ -60,9 +76,21 @@ final class FolderTreeCell extends TreeCell<Object> {
     FolderTreeCell(java.util.function.Consumer<Account> onRemoveAccount,
             java.util.function.ToIntFunction<Account> unreadCounts,
             java.util.function.BiConsumer<Account, com.graalmail.core.domain.Folder> onMarkAllRead) {
+        this(onRemoveAccount, unreadCounts, onMarkAllRead, FolderActions.none());
+    }
+
+    /**
+     * Creates cells with account actions, unread rollups, folder actions and
+     * the folder management capability flag.
+     */
+    FolderTreeCell(java.util.function.Consumer<Account> onRemoveAccount,
+            java.util.function.ToIntFunction<Account> unreadCounts,
+            java.util.function.BiConsumer<Account, com.graalmail.core.domain.Folder> onMarkAllRead,
+            FolderActions folderActions) {
         this.onRemoveAccount = onRemoveAccount == null ? account -> { } : onRemoveAccount;
         this.unreadCounts = unreadCounts == null ? account -> 0 : unreadCounts;
         this.onMarkAllRead = onMarkAllRead == null ? (account, folder) -> { } : onMarkAllRead;
+        this.folderActions = folderActions == null ? FolderActions.none() : folderActions;
     }
 
     @Override
@@ -90,26 +118,33 @@ final class FolderTreeCell extends TreeCell<Object> {
             HBox.setHgrow(text, Priority.ALWAYS);
             javafx.scene.layout.StackPane avatar = ProtonAvatar.avatar(
                     account.displayName(), account.email(), 28 * UiScale.currentScale());
-            HBox row = new HBox(avatar, text);
+            HBox row = new HBox(6 * UiScale.currentScale(), avatar, text);
             int totalUnread = Math.max(0, unreadCounts.applyAsInt(account));
-            if (totalUnread > 0) row.getChildren().add(badge(formatCount(totalUnread)));
+            if (totalUnread > 0) row.getChildren().add(unreadCount(formatCount(totalUnread)));
             row.setAlignment(Pos.CENTER_LEFT);
             row.getStyleClass().add("folder-row-content");
             setText(null);
             setGraphic(row);
             setAccessibleText(title + ", account " + account.email() + (totalUnread > 0
                     ? ", " + totalUnread + " unread" : ""));
+            MenuItem newFolder = new MenuItem("New Folder…");
+            boolean ops = folderActions.supported().test(account);
+            newFolder.setDisable(!ops);
+            newFolder.setOnAction(event -> folderActions.onNewFolder().accept(account, null));
             MenuItem remove = new MenuItem("Remove account…");
             remove.setOnAction(event -> onRemoveAccount.accept(account));
             javafx.scene.control.ContextMenu menu =
-                    new javafx.scene.control.ContextMenu(remove);
+                    new javafx.scene.control.ContextMenu(newFolder, remove);
             setContextMenu(menu);
         } else if (value instanceof Folder folder) {
             getStyleClass().add("folder-row");
             setDisclosureNode(null);
             String type = iconFor(folder.type());
             Label count = folder.unreadCount() > 0
-                    ? badge(formatCount(folder.unreadCount())) : null;
+                    ? unreadCount(formatCount(folder.unreadCount())) : null;
+            if (folder.unreadCount() > 0) {
+                getStyleClass().add("folder-row-unread");
+            }
             setText(null);
             setGraphic(row(icon(type, type), folder.name(), "folder-name", count));
             setAccessibleText(folder.name() + (folder.unreadCount() > 0
@@ -124,7 +159,34 @@ final class FolderTreeCell extends TreeCell<Object> {
                     onMarkAllRead.accept(account, folder);
                 }
             });
-            setContextMenu(new javafx.scene.control.ContextMenu(markRead));
+            TreeItem<Object> item = getTreeItem();
+            Object parent = item == null || item.getParent() == null
+                    ? null : item.getParent().getValue();
+            Account owner = parent instanceof Account account ? account : null;
+            boolean ops = owner != null && folderActions.supported().test(owner);
+            MenuItem newSubfolder = new MenuItem("New Subfolder…");
+            newSubfolder.setDisable(!ops);
+            newSubfolder.setOnAction(event -> {
+                if (owner != null) folderActions.onNewFolder().accept(owner, folder);
+            });
+            MenuItem rename = new MenuItem("Rename…");
+            rename.setDisable(!ops);
+            rename.setOnAction(event -> {
+                if (owner != null) folderActions.onRenameFolder().accept(owner, folder);
+            });
+            MenuItem emptyItem = new MenuItem("Empty Folder");
+            emptyItem.setDisable(!ops);
+            emptyItem.setOnAction(event -> {
+                if (owner != null) folderActions.onEmptyFolder().accept(owner, folder);
+            });
+            MenuItem delete = new MenuItem("Delete Folder…");
+            delete.setDisable(!ops);
+            delete.setOnAction(event -> {
+                if (owner != null) folderActions.onDeleteFolder().accept(owner, folder);
+            });
+            setContextMenu(new javafx.scene.control.ContextMenu(
+                    markRead, new javafx.scene.control.SeparatorMenuItem(),
+                    newSubfolder, rename, emptyItem, delete));
         } else if (value == MainWindow.UNIFIED_INBOX) {
             getStyleClass().add("unified-inbox-row");
             setText(null);
@@ -150,8 +212,9 @@ final class FolderTreeCell extends TreeCell<Object> {
         return row;
     }
 
-    private static Label badge(String value) {
-        Label count = new Label(value);
+    /** KMail-style inline unread count: plain bold text "(n)" after the name. */
+    private static Label unreadCount(String value) {
+        Label count = new Label("(" + value + ")");
         count.getStyleClass().add("folder-unread-count");
         return count;
     }

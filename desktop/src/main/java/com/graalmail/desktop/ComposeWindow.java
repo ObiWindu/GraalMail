@@ -172,6 +172,10 @@ public final class ComposeWindow {
         bccField.clear();
         subjectField.clear();
         bodyArea.clear();
+        String signature = new DesktopSettings(context.store()).signature().strip();
+        if (!signature.isEmpty()) {
+            bodyArea.setText("-- \n" + signature + "\n");
+        }
         attachments.clear();
         attachmentList.getItems().clear();
         updateAttachmentVisibility();
@@ -196,6 +200,21 @@ public final class ComposeWindow {
      * @param owner the owner window, may be {@code null}
      */
     public void reply(Account account, Message message, Stage owner) {
+        openReply(account, message, owner, false);
+    }
+
+    /**
+     * Opens the window with a reply to every recipient of a message.
+     *
+     * @param account the account the reply is sent from
+     * @param message the message that is answered
+     * @param owner the owner window, may be {@code null}
+     */
+    public void replyAll(Account account, Message message, Stage owner) {
+        openReply(account, message, owner, true);
+    }
+
+    private void openReply(Account account, Message message, Stage owner, boolean all) {
         prepare(owner);
         this.account = account;
         this.allowClose = false;
@@ -208,20 +227,16 @@ public final class ComposeWindow {
         attachmentList.getItems().clear();
         updateAttachmentVisibility();
         if (message != null) {
-            List<Address> targets = new java.util.ArrayList<>();
-            if (message.from().hasEmail()) {
-                targets.add(message.from());
-            }
-            targets.addAll(message.to());
-            targets.addAll(message.cc());
-            toField.setText(AddressParser.formatList(unique(targets)));
+            ReplyAddressing.ReplyTargets targets = ReplyAddressing.targets(account, message, all);
+            toField.setText(AddressParser.formatList(unique(targets.to())));
+            ccField.setText(AddressParser.formatList(unique(targets.cc())));
             String subject = message.subject();
             subjectField.setText(subject.toLowerCase(java.util.Locale.ROOT).startsWith("re:")
                     ? subject : "Re: " + subject);
             bodyArea.setText(quote(message));
         }
         status.setText(" ");
-        stage.setTitle("Reply");
+        stage.setTitle(all ? "Reply to All" : "Reply");
         stage.show();
         startAutosave();
         bodyArea.requestFocus();
@@ -398,12 +413,10 @@ public final class ComposeWindow {
      * @return the scene
      */
     public Scene build() {
-        VBox root = new VBox(UiScale.px(stage, 8));
+        VBox root = new VBox(0);
         root.getStyleClass().add("compose-window");
         if (new DesktopSettings(context.store()).darkTheme()) root.getStyleClass().add("dark-theme");
-        root.setPadding(UiScale.insets(stage, 10));
-        Label heading = new Label("Compose message");
-        heading.getStyleClass().add("compose-heading");
+        root.setPadding(Insets.EMPTY);
 
         Button recipientOptions = new Button("Cc / Bcc");
         recipientOptions.setAccessibleText("Show or hide carbon copy and blind carbon copy fields");
@@ -424,8 +437,8 @@ public final class ComposeWindow {
         });
         HBox toRow = new HBox(UiScale.px(stage, 8), labelled("To", toField), recipientOptions);
         HBox.setHgrow(toRow.getChildren().getFirst(), Priority.ALWAYS);
-        root.getChildren().addAll(toRow, ccRow, bccRow, labelled("Subject", subjectField));
-        root.getChildren().add(0, heading);
+        VBox header = new VBox(UiScale.px(stage, 4), toRow, ccRow, bccRow, labelled("Subject", subjectField));
+        header.setPadding(UiScale.insets(stage, 8, 10, 0, 10));
 
         suggestionList.getStyleClass().add("recipient-suggestions");
         suggestionList.setVisible(false);
@@ -476,11 +489,8 @@ public final class ComposeWindow {
         polyMailStatus.setVisible(false);
         polyMailStatus.setManaged(false);
 
-        HBox buttons = new HBox(UiScale.px(stage, 8), accountButton, draftButton, attachButton, sendButton);
-        buttons.setAlignment(Pos.CENTER_RIGHT);
-
-        root.getChildren().addAll(suggestionList, bodyArea, attachmentList, polyMailStatus, status, buttons);
-
+        // KMail-style compose toolbar: From selector on the left, actions on
+        // the right, status bar at the very bottom.
         sendButton.setDefaultButton(true);
         sendButton.setGraphic(ThunderbirdIcons.icon("sent", "toolbar-icon"));
         sendButton.getStyleClass().add("primary-action");
@@ -489,11 +499,48 @@ public final class ComposeWindow {
         draftButton.setOnAction(event -> saveDraft());
         attachButton.setGraphic(ThunderbirdIcons.icon("attachment", "toolbar-icon"));
         attachButton.setOnAction(event -> pickAttachments());
+        accountButton.setAccessibleText("Sending account");
+        accountButton.setTooltip(new javafx.scene.control.Tooltip("Account used to send this message"));
+        javafx.scene.layout.Region toolbarSpacer = new javafx.scene.layout.Region();
+        HBox.setHgrow(toolbarSpacer, Priority.ALWAYS);
+        javafx.scene.control.ToolBar toolbar = new javafx.scene.control.ToolBar(
+                accountButton, toolbarSpacer, attachButton, draftButton, sendButton);
+        toolbar.getStyleClass().add("main-toolbar");
+        toolbar.setId("compose-toolbar");
+
+        HBox statusBar = new HBox(UiScale.px(stage, 10), polyMailStatus, status);
+        HBox.setHgrow(status, Priority.ALWAYS);
+        statusBar.getStyleClass().add("status-bar");
+        statusBar.setPadding(UiScale.insets(stage, 5, 10, 5, 10));
+
+        VBox content = new VBox(0, header, suggestionList, bodyArea, attachmentList, polyMailStatus);
+        content.setPadding(Insets.EMPTY);
+        VBox.setVgrow(bodyArea, Priority.ALWAYS);
+        root.getChildren().addAll(toolbar, content, statusBar);
 
         wireSuggestions();
         wireShortcuts();
 
         Scene scene = new Scene(root);
+        // Files dropped onto the compose window are attached, like in KMail.
+        scene.setOnDragOver(event -> {
+            if (event.getGestureSource() == null
+                    && event.getDragboard() != null && event.getDragboard().hasFiles()) {
+                event.acceptTransferModes(javafx.scene.input.TransferMode.COPY);
+            }
+            event.consume();
+        });
+        scene.setOnDragDropped(event -> {
+            boolean added = false;
+            if (event.getDragboard() != null && event.getDragboard().hasFiles()) {
+                for (File file : event.getDragboard().getFiles()) {
+                    addAttachment(file.toPath());
+                    added = true;
+                }
+            }
+            event.setDropCompleted(added);
+            event.consume();
+        });
         scene.setOnKeyPressed(event -> {
             boolean command = event.isControlDown() || event.isMetaDown();
             if (command && event.getCode() == KeyCode.ENTER) {
@@ -709,16 +756,23 @@ public final class ComposeWindow {
                 if (!result.accepted() && result.ambiguous()) {
                     // Queue for retry with ambiguous outcome
                     String actionId = java.util.UUID.randomUUID().toString();
-                    PendingAction action = PendingAction.of(actionId, account.id(), 
+                    PendingAction action = PendingAction.of(actionId, account.id(),
                             PendingAction.Type.SEND, "", draftJson);
                     action = action.withSendState(PendingAction.SendState.SUBMISSION_OUTCOME_UNKNOWN);
                     context.store().enqueue(action);
-                    return "Message sent but delivery not confirmed. Check sent folder before resending.";
+                    return Outcome.of("Message sent but delivery not confirmed. Check sent folder before resending.");
+                }
+                if (!result.accepted()) {
+                    // Defensive: providers report rejection as an exception, but a
+                    // result that is neither accepted nor ambiguous must not be
+                    // presented as sent — the window stays open with the text.
+                    return Outcome.failed("The server did not accept the message without an error. "
+                            + "The window stays open — check the recipients and retry.");
                 }
                 // Clear autosaved draft
                 context.store().getLocalDraft(account.id()).ifPresent(d -> context.store().deleteLocalDraft(d.id()));
                 lastAutosavedDraftJson = null;
-                return "Message sent";
+                return Outcome.of("Message sent");
             }
         });
     }
@@ -752,7 +806,7 @@ public final class ComposeWindow {
                 // Clear autosaved draft
                 context.store().getLocalDraft(account.id()).ifPresent(d -> context.store().deleteLocalDraft(d.id()));
                 lastAutosavedDraftJson = null;
-                return "Draft saved";
+                return Outcome.of("Draft saved");
             }
         });
     }
@@ -823,25 +877,37 @@ public final class ComposeWindow {
         return builder.build();
     }
 
-    private void runInBackground(java.util.function.Supplier<String> work) {
+    /** The outcome of a background send or save: a status text and whether the window may close. */
+    private record Outcome(String message, boolean completed) {
+        static Outcome of(String message) {
+            return new Outcome(message, true);
+        }
+
+        static Outcome failed(String message) {
+            return new Outcome(message, false);
+        }
+    }
+
+    private void runInBackground(java.util.function.Supplier<Outcome> work) {
         Thread worker = new Thread(() -> {
-            String result;
+            Outcome result;
             try {
                 result = work.get();
             } catch (ProviderException e) {
-                result = e.getMessage();
+                LOG.warn("The message could not be processed by the provider: {}", e.getMessage());
+                result = Outcome.failed(e.userMessage() == null ? e.getMessage() : e.userMessage());
             } catch (RuntimeException e) {
                 LOG.warn("The message could not be processed: {}", e.getMessage());
-                result = "Failed: " + e.getMessage();
+                result = Outcome.failed("Failed: " + e.getMessage());
             }
-            String message = result;
+            Outcome outcome = result;
             javafx.application.Platform.runLater(() -> {
                 sending = false;
                 sendButton.setDisable(false);
                 draftButton.setDisable(false);
                 attachButton.setDisable(false);
-                status.setText(message);
-                if (message.endsWith("sent") || message.endsWith("saved") || message.contains("not confirmed")) {
+                status.setText(outcome.message());
+                if (outcome.completed()) {
                     allowClose = true;
                     stage.close();
                 }
@@ -1119,6 +1185,31 @@ public final class ComposeWindow {
             accountButton.setVisible(false);
             accountButton.setManaged(false);
         }
+        updateSendAvailability();
+    }
+
+    /**
+     * Disables the send action up front when the selected account's provider
+     * cannot send (for example Proton Mail), instead of failing on send.
+     */
+    private void updateSendAvailability() {
+        boolean sendable = true;
+        String providerName = "";
+        try {
+            if (account != null) {
+                var provider = context.sessions().provider(account);
+                providerName = provider.displayName();
+                sendable = provider.capabilities().sendCapable();
+            }
+        } catch (RuntimeException e) {
+            LOG.warn("The provider capabilities could not be read: {}", e.getMessage());
+            sendable = false;
+        }
+        sendButton.setDisable(!sendable);
+        if (!sendable) {
+            status.setText(providerName + " does not support sending from third-party clients yet — "
+                    + "save the message as a draft instead.");
+        }
     }
 
     private void removeAttachment(Attachment attachment) {
@@ -1156,6 +1247,7 @@ public final class ComposeWindow {
             if (index >= 0) {
                 this.account = accounts.get(index);
                 accountButton.setText("From: " + this.account.email());
+                updateSendAvailability();
                 checkAndRecoverDraft(this.account);
             }
         });

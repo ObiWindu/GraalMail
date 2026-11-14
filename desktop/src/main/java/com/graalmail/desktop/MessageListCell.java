@@ -21,7 +21,7 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 
-/** Renders a modern Proton-style message row: avatar, sender, subject, snippet. */
+/** Renders a message row (card mode): avatar, sender, subject, snippet, date. */
 final class MessageListCell extends ListCell<Message> {
 
     private final boolean compact;

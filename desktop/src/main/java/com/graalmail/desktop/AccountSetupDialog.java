@@ -48,9 +48,12 @@ import org.slf4j.Logger;
 /**
  * The guided account setup.
  *
- * <p>The dialog adapts itself to the selected provider: a manual server
- * configuration for generic IMAP accounts, an app password for Yahoo and an
- * OAuth 2.0 browser flow for Gmail, Microsoft and Yahoo OAuth accounts.</p>
+ * <p>Every sign-in is the email address plus a password. The dialog adapts
+ * itself to the selected provider: a manual server configuration for generic
+ * IMAP accounts, an app password for Gmail and Yahoo (generated after
+ * enabling 2-Step Verification), a plain account password for Microsoft, and
+ * the Proton username plus password with an optional two-factor code and
+ * mailbox password. Legacy OAuth accounts keep their stored tokens.</p>
  */
 public final class AccountSetupDialog {
 
@@ -328,38 +331,45 @@ public final class AccountSetupDialog {
         smtpSecurityField.setDisable(!generic);
         boolean microsoft = type == ProviderType.MICROSOFT;
         boolean gmail = type == ProviderType.GMAIL;
-        passwordField.setDisable(microsoft);
+        boolean yahoo = type == ProviderType.YAHOO;
         setRowVisible(imapHostField, generic);
         setRowVisible(imapPortField, generic);
         setRowVisible(imapSecurityField, generic);
         setRowVisible(smtpHostField, generic);
         setRowVisible(smtpPortField, generic);
         setRowVisible(smtpSecurityField, generic);
-        setRowVisible(passwordField, !microsoft);
+        setRowVisible(passwordField, true);
         setRowVisible(mailboxPasswordField, proton);
-        setRowVisible(twoFactorField, proton && pendingTwoFactor);
+        setRowVisible(twoFactorField, pendingTwoFactor);
         signinSectionLabel.setText(proton ? "Proton sign-in"
                 : generic ? "Server settings" : "Provider sign-in");
         Label passwordCaption = rowLabels.get(passwordField);
         if (passwordCaption != null) {
             passwordCaption.setText(proton ? "Proton password"
-                    : gmail ? "App password" : "Password or app password");
+                    : gmail || yahoo ? "App password" : "Password");
         }
         if (proton) {
             helpLabel.setText("Sign in with the Proton username and password; no Bridge is needed. "
-                    + "With two-password mode, also enter the mailbox password. "
+                    + "With two-password mode, also enter the mailbox password. If the account has "
+                    + "two-factor authentication, enter the authenticator code when asked. "
                     + "Mail is decrypted locally on this machine.");
         } else if (gmail) {
             helpLabel.setText("GraalMail signs in with the email address and a password. "
-                    + "Google rejects account passwords for mail clients: create an app password "
-                    + "in the Google account security settings (this requires 2-Step Verification "
-                    + "on the account) and enter it here. "
+                    + "Google rejects account passwords for mail clients: enable 2-Step "
+                    + "Verification on the account, create an app password in the Google account "
+                    + "security settings and enter it here. "
+                    + "Your mail stays in GraalMail's local cache.");
+        } else if (yahoo) {
+            helpLabel.setText("GraalMail signs in with the email address and a password. "
+                    + "Yahoo rejects account passwords for third party clients: enable 2-Step "
+                    + "Verification on the account, generate an app password in the Yahoo account "
+                    + "security settings and enter it here. "
                     + "Your mail stays in GraalMail's local cache.");
         } else if (microsoft) {
-            helpLabel.setText("GraalMail signs in with the email address and password only. "
-                    + "Microsoft requires OAuth tokens for mail access, which this version no "
-                    + "longer offers, so new Microsoft accounts cannot be added. Existing "
-                    + "Microsoft accounts keep working.");
+            helpLabel.setText("Sign in with the Outlook email address and the account password. "
+                    + "Microsoft may refuse password sign-in for accounts protected by multi-factor "
+                    + "authentication or when the tenant disables basic authentication; in that case "
+                    + "the server explains the refusal. Your mail stays in GraalMail's local cache.");
         } else {
             helpLabel.setText("Enter the email address and follow the sign-in steps. "
                     + "Your mail stays in GraalMail's local cache.");
@@ -538,7 +548,7 @@ public final class AccountSetupDialog {
         }
         try {
             AccountSetup setup = buildSetup(type, provider);
-            persistAccount(setup);
+            verifyThenPersist(type, provider, setup);
         } catch (ProviderException e) {
             status.setText(e.userMessage());
             status.getStyleClass().remove("form-status-ok");
@@ -549,6 +559,52 @@ public final class AccountSetupDialog {
             LOG.warn("The account could not be saved: {}", e.getMessage());
             status.setText("The account could not be saved: " + e.getMessage());
         }
+    }
+
+    /**
+     * Opens a session with the entered credentials before the account is
+     * stored, so a typo or a missing app password is reported in the setup
+     * dialog instead of on the first synchronisation.
+     */
+    private void verifyThenPersist(ProviderType type, AccountProvider provider, AccountSetup setup) {
+        saveButton.setDisable(true);
+        status.setText("Verifying the connection…");
+        status.getStyleClass().removeAll("form-status-error", "form-status-ok");
+        Thread worker = new Thread(() -> {
+            String failed = null;
+            String failedHint = null;
+            try (com.graalmail.provider.api.ProviderSession session = provider.openSession(setup)) {
+                session.mailboxes().listFolders();
+            } catch (ProviderException e) {
+                LOG.warn("The verification of {} failed: {}", setup.email(), e.getMessage());
+                failed = e.userMessage() == null ? e.getMessage() : e.userMessage();
+            } catch (RuntimeException e) {
+                LOG.warn("The verification of {} failed: {}", setup.email(), e.getMessage());
+                failed = "The provider could not be reached. Check the connection and retry.";
+                failedHint = e.getMessage();
+            }
+            final String failure = failed;
+            final String logHint = failedHint;
+            Platform.runLater(() -> {
+                saveButton.setDisable(false);
+                if (failure != null) {
+                    status.setText(failure);
+                    status.getStyleClass().remove("form-status-ok");
+                    if (!status.getStyleClass().contains("form-status-error")) {
+                        status.getStyleClass().add("form-status-error");
+                    }
+                    return;
+                }
+                try {
+                    persistAccount(setup);
+                } catch (RuntimeException e) {
+                    LOG.warn("The account could not be saved: {}", logHint == null ? e.getMessage() : logHint);
+                    status.setText("The account could not be saved: " + e.getMessage());
+                }
+            });
+        }, "graalmail-account-verify");
+        worker.setDaemon(true);
+        worker.start();
     }
 
     private void persistAccount(AccountSetup setup) {
@@ -693,13 +749,6 @@ public final class AccountSetupDialog {
             markInvalid(emailField, true);
             throw new ProviderException(ErrorCode.CONFIGURATION_ERROR,
                     "That email address does not look valid — check for typos.", false);
-        }
-        if (type == ProviderType.MICROSOFT) {
-            throw new ProviderException(ErrorCode.CONFIGURATION_ERROR,
-                    "Microsoft does not accept password sign in for mail clients, and GraalMail "
-                            + "signs in with the email address and password only, so new Microsoft "
-                            + "accounts cannot be added. Existing Microsoft accounts keep working.",
-                    false);
         }
         if (type == ProviderType.PROTON) {
             String loginPassword = enteredLoginPassword();

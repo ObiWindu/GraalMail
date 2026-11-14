@@ -23,7 +23,7 @@ class ThunderbirdIconsTest {
             "get-mail", "more", "new-mail", "reply", "search", "sent",
             "settings", "spaces-menu", "spam", "star", "trash", "unread",
             "inbox", "mail", "address-book", "calendar", "chat", "tasks",
-            "sync", "outbox");
+            "sync", "outbox", "arrow-left", "arrow-right");
 
     @Test
     void allReferencedIconsLoad() {

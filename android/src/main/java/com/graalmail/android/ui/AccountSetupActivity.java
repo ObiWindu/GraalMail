@@ -250,6 +250,9 @@ public final class AccountSetupActivity extends AppCompatActivity {
         } else if (type == ProviderType.YAHOO) {
             passwordField.setHint(R.string.setup_app_password);
             authExplanation.setText(R.string.setup_yahoo_auth_hint);
+        } else if (type == ProviderType.MICROSOFT) {
+            passwordField.setHint(R.string.setup_password);
+            authExplanation.setText(R.string.setup_microsoft_auth_hint);
         } else if (type == ProviderType.GMAIL) {
             passwordField.setHint(R.string.setup_app_password);
             authExplanation.setText(R.string.setup_gmail_app_password_hint);

@@ -181,9 +181,9 @@ with real mail — and note the honest limits at the bottom of this file.
 | Provider | Sign-in | Read | Send | Notes |
 |---|---|---|---|---|
 | Gmail / Workspace | Email + app password | IMAP | SMTP | Labels as folders; needs 2-Step Verification on the account |
-| Outlook / Microsoft 365 | Not supported (Microsoft requires OAuth) | Graph or IMAP | Yes | Existing OAuth accounts keep working |
+| Outlook / Microsoft 365 | Email + password (basic auth where the tenant allows it) | IMAP/SMTP or Graph | Yes | MFA-protected or basic-auth-disabled accounts are refused by the server; legacy OAuth accounts keep working |
 | Yahoo | Email + app password | IMAP | SMTP | Needs Yahoo-generated app password |
-| Proton (desktop + Android) | Username + password (SRP) | Proton API, local PGP decrypt | Not yet | 2FA + two-password mode supported |
+| Proton (desktop + Android) | Username + password (SRP) | Proton API, local PGP decrypt | Not yet | 2FA (TOTP) + two-password mode supported |
 | Any IMAP provider | Password / app password | IMAP | SMTP | Settings deduced from domain |
 
 Live accounts of the hosted providers were not available in the build
@@ -215,9 +215,14 @@ Add `--offline` once dependencies are cached.
 
 **Add an account:** `File ▸ Add account`, type your email — the provider is
 detected from the domain. Every sign in asks for the email address and a
-password (or an app password for Gmail and Yahoo); Proton asks for
-username + password (+ mailbox password and 2FA code when needed). Microsoft
-accounts cannot be added because Microsoft only issues OAuth tokens.
+password (or an app password for Gmail and Yahoo, which the providers issue
+after 2-Step Verification); Proton asks for username + password (+ mailbox
+password and 2FA code when needed); Outlook signs in with the email address
+and the account password over IMAP/SMTP basic authentication where the
+tenant allows it. Accounts added earlier with an OAuth sign-in keep working
+with their stored tokens. GraalMail logs in while the dialog is open, so a
+wrong password or a missing app password is reported at setup, not at the
+first synchronisation.
 
 **Try PolyMail:** open `Tools ▸ Settings ▸ PolyMail`, enable it, set your
 `you@graalemail` identity, two Polygon RPC endpoints and the notification

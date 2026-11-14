@@ -175,6 +175,7 @@ public final class MessageViewActivity extends AppCompatActivity {
         render();
         markAsRead();
         findViewById(R.id.message_reply).setOnClickListener(view -> reply());
+        findViewById(R.id.message_reply_all).setOnClickListener(view -> replyAll());
         findViewById(R.id.message_forward).setOnClickListener(view -> forward());
         findViewById(R.id.view_recipient_details_toggle).setOnClickListener(view -> toggleRecipientDetails());
     }
@@ -408,6 +409,48 @@ private void downloadAttachment(Attachment attachment) {
                         ? message.subject() : "Re: " + message.subject());
         intent.putExtra(ComposeActivity.EXTRA_BODY, quote());
         startActivity(intent);
+    }
+
+    private void replyAll() {
+        String self = context.store().account(accountId).map(Account::email).orElse(null);
+        Intent intent = new Intent(this, ComposeActivity.class);
+        intent.putExtra(ComposeActivity.EXTRA_ACCOUNT_ID, accountId);
+        StringBuilder to = new StringBuilder();
+        if (message.from().hasEmail()
+                && (self == null || !self.equalsIgnoreCase(message.from().email()))) {
+            to.append(message.from().email());
+        }
+        String originalTo = joinEmails(message.to(), self);
+        if (!originalTo.isEmpty()) {
+            if (to.length() > 0) {
+                to.append(", ");
+            }
+            to.append(originalTo);
+        }
+        intent.putExtra(ComposeActivity.EXTRA_TO, to.toString());
+        intent.putExtra(ComposeActivity.EXTRA_CC, joinEmails(message.cc(), self));
+        intent.putExtra(ComposeActivity.EXTRA_SUBJECT,
+                message.subject().toLowerCase(java.util.Locale.ROOT).startsWith("re:")
+                        ? message.subject() : "Re: " + message.subject());
+        intent.putExtra(ComposeActivity.EXTRA_BODY, quote());
+        startActivity(intent);
+    }
+
+    private static String joinEmails(java.util.List<Address> addresses, String self) {
+        StringBuilder result = new StringBuilder();
+        for (Address address : addresses) {
+            if (address == null || !address.hasEmail()) {
+                continue;
+            }
+            if (self != null && self.equalsIgnoreCase(address.email())) {
+                continue;
+            }
+            if (result.length() > 0) {
+                result.append(", ");
+            }
+            result.append(address.email());
+        }
+        return result.toString();
     }
 
     private void forward() {

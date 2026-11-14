@@ -7,6 +7,7 @@ package com.graalmail.sync;
 import com.graalmail.core.domain.Account;
 import com.graalmail.core.domain.Folder;
 import com.graalmail.core.domain.FolderType;
+import com.graalmail.core.domain.LocalDraft;
 import com.graalmail.core.domain.MessageDraft;
 import com.graalmail.core.error.ErrorCode;
 import com.graalmail.core.error.ProviderException;
@@ -90,6 +91,35 @@ class SyncEngineSendTest {
         // Verify action is marked DONE
         List<PendingAction> pending = store.pendingActions("a1");
         assertTrue(pending.isEmpty(), "Action should be marked DONE and removed from pending");
+    }
+
+    @Test
+    void testSuccessfulSendClearsTheMatchingLocalDraft() {
+        String draftJson = createDraftJson("Test Subject", "test@example.com", "Body text");
+        PendingAction action = PendingAction.of("action1", "a1", PendingAction.Type.SEND, "msg1", draftJson);
+        store.enqueue(action);
+        store.saveLocalDraft(LocalDraft.of("a1", "", draftJson));
+        testSession.setSendResult(SendResult.accepted("provider-msg-1"));
+
+        syncEngine.applyPendingActions(store.account("a1").orElseThrow(), testSession);
+
+        assertTrue(store.getLocalDraft("a1").isEmpty(),
+                "The autosaved draft of the sent message must be cleared");
+    }
+
+    @Test
+    void testSuccessfulSendKeepsTheDraftOfAnotherMessage() {
+        String draftJson = createDraftJson("Test Subject", "test@example.com", "Body text");
+        PendingAction action = PendingAction.of("action1", "a1", PendingAction.Type.SEND, "msg1", draftJson);
+        store.enqueue(action);
+        String newerDraftJson = createDraftJson("Newer Draft", "test@example.com", "Started meanwhile");
+        store.saveLocalDraft(LocalDraft.of("a1", "", newerDraftJson));
+        testSession.setSendResult(SendResult.accepted("provider-msg-1"));
+
+        syncEngine.applyPendingActions(store.account("a1").orElseThrow(), testSession);
+
+        assertTrue(store.getLocalDraft("a1").isPresent(),
+                "A newer autosaved draft must survive the send of an older message");
     }
 
     @Test

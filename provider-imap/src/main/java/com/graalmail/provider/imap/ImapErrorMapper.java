@@ -49,6 +49,10 @@ public final class ImapErrorMapper {
                 detail = message;
             }
             if (cause instanceof AuthenticationFailedException) {
+                String hint = appPasswordHint(chainText(error));
+                if (hint != null) {
+                    return new ProviderException(ErrorCode.AUTHENTICATION_FAILED, hint, false, cause);
+                }
                 return new ProviderException(ErrorCode.AUTHENTICATION_FAILED,
                         "Sign in failed while trying to " + context
                                 + ". Check the user name and the password or app password.", false, cause);
@@ -110,5 +114,53 @@ public final class ImapErrorMapper {
         return new ProviderException(ErrorCode.PROTOCOL_ERROR,
                 "The mail server could not be used to " + context
                         + (safeDetail.isBlank() ? "." : ": " + safeDetail), true, error);
+    }
+
+    /** Concatenates the messages of the whole causal chain for marker detection. */
+    private static String chainText(Throwable error) {
+        StringBuilder text = new StringBuilder();
+        Throwable cause = error;
+        while (cause != null) {
+            if (cause.getMessage() != null) {
+                text.append(cause.getMessage()).append('\n');
+            }
+            cause = cause.getCause() == cause ? null : cause.getCause();
+        }
+        return text.toString().toLowerCase(java.util.Locale.ROOT);
+    }
+
+    /**
+     * Recognises provider specific sign-in rejections and returns a message
+     * that tells the user exactly what to enter instead, or {@code null}.
+     */
+    static String appPasswordHint(String chainText) {
+        if (chainText.contains("application-specific password")
+                || chainText.contains("app password required")
+                || chainText.contains("use an app password")) {
+            return "The provider rejects the account password for mail clients and requires an "
+                    + "app password. Enable 2-Step Verification on the account, generate an app "
+                    + "password in the provider's security settings and enter it as the password.";
+        }
+        if (chainText.contains("basic authentication is disabled")
+                || chainText.contains("5.7.139")
+                || chainText.contains("basic auth")) {
+            return "The mail server refused the password sign-in: basic authentication is disabled "
+                    + "for this account or tenant, or the account is protected by multi-factor "
+                    + "authentication, which a password cannot complete. Check the account's "
+                    + "sign-in settings with the provider.";
+        }
+        if (chainText.contains("multi-factor") || chainText.contains("mfa")
+                || chainText.contains("two-factor") || chainText.contains("2fa")
+                || chainText.contains("additional verification")) {
+            return "The account requires a second factor that cannot be completed with a plain "
+                    + "password over IMAP. If the provider offers app passwords, generate one "
+                    + "after enabling 2-Step Verification and enter it as the password.";
+        }
+        if (chainText.contains("temporarily blocked") || chainText.contains("account is locked")
+                || chainText.contains("too many attempts")) {
+            return "The provider temporarily blocked the sign-in after repeated attempts. Wait a "
+                    + "while and try again; do not retry in a loop.";
+        }
+        return null;
     }
 }

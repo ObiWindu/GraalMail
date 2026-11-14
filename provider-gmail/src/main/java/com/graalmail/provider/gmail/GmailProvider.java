@@ -82,6 +82,7 @@ public final class GmailProvider implements AccountProvider, OAuthCapableProvide
                 .offlineActions(true)
                 .serverSideFlags(true)
                 .sendCapable(true)
+                .folderManagement(true)
                 .platform("linux", true)
                 .platform("android", true)
                 .note("Gmail labels are mapped to mailboxes; user labels appear as custom folders.")

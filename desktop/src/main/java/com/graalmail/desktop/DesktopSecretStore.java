@@ -88,14 +88,19 @@ public final class DesktopSecretStore {
         }
         Path file = paths.masterPassphraseFile();
         if (Files.exists(file)) {
-            String stored = new String(Files.readAllBytes(file), StandardCharsets.UTF_8).trim();
+            String stored = stripLineTerminators(
+                    new String(Files.readAllBytes(file), StandardCharsets.UTF_8));
             if (!stored.isEmpty()) {
                 return stored.toCharArray();
             }
         }
         byte[] random = new byte[PASSPHRASE_BYTES];
         new SecureRandom().nextBytes(random);
-        String generated = new String(random, StandardCharsets.UTF_8);
+        // Base64 keeps the generated passphrase free of whitespace and control
+        // characters, so the file round-trips byte-identically on every read.
+        // (A raw UTF-8 decoding of random bytes can end in a whitespace char,
+        // which a trim() on read would strip and silently change the key.)
+        String generated = java.util.Base64.getEncoder().encodeToString(random);
         Files.createDirectories(file.getParent());
         Files.write(file, generated.getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE,
                 StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING);
@@ -103,6 +108,15 @@ public final class DesktopSecretStore {
         LOG.info("Generated a local master passphrase in {} — this is not an OS keyring, protect the "
                 + "data directory", file.getFileName());
         return generated.toCharArray();
+    }
+
+    /** Removes trailing CR/LF only, never other whitespace of the passphrase. */
+    private static String stripLineTerminators(String value) {
+        int end = value.length();
+        while (end > 0 && (value.charAt(end - 1) == '\n' || value.charAt(end - 1) == '\r')) {
+            end--;
+        }
+        return value.substring(0, end);
     }
 
     private static void restrictPermissions(Path file) {

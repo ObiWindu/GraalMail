@@ -29,4 +29,18 @@ public interface MessageService {
 
     /** Sends a composed message; returns the submission result. */
     SendResult send(String payloadBase64);
+
+    /**
+     * Returns the full RFC 822 source of a message, for export
+     * ("Save message as…").
+     *
+     * @throws com.graalmail.core.error.ProviderException with
+     *         {@code FEATURE_UNSUPPORTED} when the provider cannot export raw
+     *         messages
+     */
+    default byte[] rawMessage(String messageId) {
+        throw new com.graalmail.core.error.ProviderException(
+                com.graalmail.core.error.ErrorCode.FEATURE_UNSUPPORTED,
+                "Exporting the raw message is not supported by this provider.", false);
+    }
 }

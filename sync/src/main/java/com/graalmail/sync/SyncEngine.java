@@ -365,6 +365,14 @@ public final class SyncEngine {
                     nextState = PendingAction.SendState.ACCEPTED;
                     PendingAction updated = action.withSendState(nextState);
                     store.updatePendingAction(updated);
+                    // The autosaved local draft of this message is obsolete now.
+                    // Only clear it when it still holds the message that was sent,
+                    // so a newer draft started meanwhile is preserved.
+                    final String accountId = action.accountId();
+                    final String payload = action.payload();
+                    store.getLocalDraft(accountId)
+                            .filter(draft -> java.util.Objects.equals(draft.draftJson(), payload))
+                            .ifPresent(draft -> store.deleteLocalDraft(draft.id()));
                     return Optional.of(updated); // Mark DONE
                 } else if (result.ambiguous()) {
                     // Ambiguous outcome - server may have accepted

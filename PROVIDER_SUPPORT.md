@@ -8,8 +8,8 @@ live service in the build environment.
 
 | Feature | Gmail | Microsoft | Yahoo | Proton (Linux) | Proton (Android) | Generic IMAP |
 |---|---|---|---|---|---|---|
-| Sign in with email + password | yes (app password) | no | yes (app password) | yes | yes | yes |
-| Password sign in | no (account password rejected by Google) | no | no (account password rejected by Yahoo) | yes (Proton API) | yes (Proton API) | yes |
+| Sign in with email + password | yes (app password) | yes (basic auth where the tenant allows it) | yes (app password) | yes | yes | yes |
+| Password sign in | no (account password rejected by Google) | yes, when basic auth is enabled and the account has no MFA | no (account password rejected by Yahoo) | yes (Proton API) | yes (Proton API) | yes |
 | App password | yes (needs 2-Step Verification) | no | yes | no | no | yes |
 | OAuth sign in | no (legacy accounts keep working) | no (legacy accounts keep working) | no | — | — | no |
 | Read mail | yes (IMAP) | yes (Graph) | yes (IMAP) | yes (API) | yes (API) | yes |
@@ -23,6 +23,8 @@ live service in the build environment.
 | IMAP IDLE | yes | yes | yes | no | no | depends on the server |
 | Offline actions | yes | yes | yes | yes | yes | yes |
 | Unified inbox | yes | yes | yes | yes | yes | yes |
+| Folder management (create / rename / delete / empty) | yes | yes (password accounts over IMAP) | yes | no | no | yes |
+| Export raw message (.eml) | yes | yes (password accounts over IMAP) | yes | no | no | yes |
 | Contacts | local only | local only | local only | local only | local only | local only |
 | Push notifications | no | no | no | no | no | no |
 
@@ -33,10 +35,12 @@ server, and the provider specific logic (label mapping, folder mapping,
 password sign in, error mapping) is covered by unit tests.
 
 Every GraalMail sign in is **email address + password** (the account password,
-or an app password where the provider forces one). No sign-in screen asks for
-anything else. Providers that only accept OAuth tokens cannot be added as new
-accounts; accounts that were added while OAuth was offered keep working with
-their stored tokens until the token is revoked.
+or an app password where the provider forces one). Where the provider owns an
+interactive second factor, the one-time code is asked for in the same dialog
+(Proton TOTP); Gmail and Yahoo fold their second factor into the app password,
+which is generated after enabling 2-Step Verification. No sign-in screen asks
+for anything else. Accounts that were added while OAuth was offered keep
+working with their stored tokens until the token is revoked.
 
 ## Gmail and Google Workspace
 
@@ -65,23 +69,28 @@ their stored tokens until the token is revoked.
 
 ## Outlook.com, Hotmail, Live.com and Microsoft 365
 
-* **Authentication**: Microsoft disables basic password authentication for its
-  mail endpoints and personal accounts have no app passwords — every token
-  comes from an OAuth 2.0 flow against the Microsoft identity platform.
-  GraalMail signs in with the email address and password only, so **new
-  Microsoft accounts cannot be added**.
-* **Existing accounts**: accounts added while the OAuth sign in was offered
-  keep working. Their tokens are refreshed in the background over Graph or
-  the IMAP and SMTP endpoints, exactly as before. If the token is revoked
-  remotely the account must be removed.
-* **Transport (existing accounts)**: the Microsoft Graph mail API by default.
-  The IMAP and SMTP endpoints (`outlook.office365.com:993` and
-  `smtp.office365.com:587`) are available when the tenant or the account
-  requires the protocol based access. Select the transport with the account
-  setting `transport` (`graph` or `imap`).
-* **Folders (existing accounts)**: the well known Graph folder names
-  (`inbox`, `sentitems`, `drafts`, `archive`, `deleteditems`, `junkemail`)
-  are mapped to the neutral folder roles.
+* **Authentication**: GraalMail signs in with the **email address and the
+  account password** over the IMAP and SMTP endpoints with basic
+  authentication (`outlook.office365.com:993`, implicit TLS, and
+  `smtp.office365.com:587`, STARTTLS). This works wherever the tenant or the
+  account still allows basic authentication. Microsoft has disabled basic
+  authentication for many consumer accounts and refuses it outright for
+  accounts protected by multi-factor authentication — in that case the server
+  answers with a refusal (for example `535 5.7.139`) and GraalMail reports
+  that password sign-in cannot complete for this account; there is no
+  interactive second factor over IMAP.
+* **Legacy OAuth accounts**: accounts added while the OAuth sign in was
+  offered keep working. Their tokens are refreshed in the background over
+  Graph or the IMAP and SMTP endpoints with XOAUTH2, exactly as before. If
+  the token is revoked remotely the account must be removed.
+* **Transport**: password accounts always use the IMAP and SMTP endpoints.
+  Legacy OAuth accounts use the Microsoft Graph mail API by default; select
+  the protocol based access with the account setting `transport` (`graph` or
+  `imap`).
+* **Folders**: the well known Graph folder names (`inbox`, `sentitems`,
+  `drafts`, `archive`, `deleteditems`, `junkemail`) are mapped to the neutral
+  folder roles; the IMAP endpoints report special-use attributes that are
+  mapped the same way.
 
 ## Yahoo Mail
 

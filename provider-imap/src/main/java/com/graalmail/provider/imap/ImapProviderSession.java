@@ -294,6 +294,99 @@ public final class ImapProviderSession implements ProviderSession {
         }
 
         @Override
+        public com.graalmail.core.domain.Folder createFolder(String parentFolderId, String name) {
+            String cleanName = name == null ? "" : name.strip();
+            if (cleanName.isEmpty()) {
+                throw new ProviderException(ErrorCode.CONFIGURATION_ERROR,
+                        "The folder name must not be empty.", false);
+            }
+            try {
+                jakarta.mail.Folder parent = parentFolderId == null || parentFolderId.isBlank()
+                        ? store.getDefaultFolder()
+                        : store.getFolder(parentFolderId);
+                jakarta.mail.Folder child = parent.getFolder(cleanName);
+                if (child.exists()) {
+                    throw new ProviderException(ErrorCode.CONFIGURATION_ERROR,
+                            "A folder named '" + cleanName + "' already exists.", false);
+                }
+                if (!child.create(jakarta.mail.Folder.HOLDS_MESSAGES)) {
+                    throw new ProviderException(ErrorCode.PROTOCOL_ERROR,
+                            "The server refused to create the folder '" + cleanName + "'.", true);
+                }
+                return toFolder(child);
+            } catch (ProviderException e) {
+                throw e;
+            } catch (MessagingException | RuntimeException e) {
+                throw ImapErrorMapper.map(e, "create the folder '" + cleanName + "'");
+            }
+        }
+
+        @Override
+        public void renameFolder(String folderId, String newName) {
+            String cleanName = newName == null ? "" : newName.strip();
+            if (cleanName.isEmpty()) {
+                throw new ProviderException(ErrorCode.CONFIGURATION_ERROR,
+                        "The folder name must not be empty.", false);
+            }
+            try {
+                jakarta.mail.Folder folder = store.getFolder(folderId);
+                if (!folder.exists()) {
+                    throw new ProviderException(ErrorCode.MAILBOX_NOT_FOUND,
+                            "The mailbox '" + folderId + "' does not exist on the server.", false);
+                }
+                jakarta.mail.Folder parent = folder.getParent();
+                jakarta.mail.Folder target = parent == null
+                        ? store.getDefaultFolder().getFolder(cleanName)
+                        : parent.getFolder(cleanName);
+                if (!folder.renameTo(target)) {
+                    throw new ProviderException(ErrorCode.PROTOCOL_ERROR,
+                            "The server refused to rename the folder to '" + cleanName + "'.", true);
+                }
+                openFolders.remove(folderId);
+            } catch (ProviderException e) {
+                throw e;
+            } catch (MessagingException | RuntimeException e) {
+                throw ImapErrorMapper.map(e, "rename the folder '" + folderId + "'");
+            }
+        }
+
+        @Override
+        public void deleteFolder(String folderId) {
+            try {
+                jakarta.mail.Folder folder = store.getFolder(folderId);
+                if (!folder.exists()) {
+                    throw new ProviderException(ErrorCode.MAILBOX_NOT_FOUND,
+                            "The mailbox '" + folderId + "' does not exist on the server.", false);
+                }
+                if (!folder.delete(true)) {
+                    throw new ProviderException(ErrorCode.PROTOCOL_ERROR,
+                            "The server refused to delete the folder '" + folderId + "'.", true);
+                }
+                openFolders.remove(folderId);
+            } catch (ProviderException e) {
+                throw e;
+            } catch (MessagingException | RuntimeException e) {
+                throw ImapErrorMapper.map(e, "delete the folder '" + folderId + "'");
+            }
+        }
+
+        @Override
+        public void emptyFolder(String folderId) {
+            try {
+                jakarta.mail.Folder folder = folder(folderId);
+                jakarta.mail.Message[] all = folder.getMessages();
+                if (all.length > 0) {
+                    folder.setFlags(all, new jakarta.mail.Flags(jakarta.mail.Flags.Flag.DELETED), true);
+                }
+                expunge(folder);
+            } catch (ProviderException e) {
+                throw e;
+            } catch (MessagingException | RuntimeException e) {
+                throw ImapErrorMapper.map(e, "empty the folder '" + folderId + "'");
+            }
+        }
+
+        @Override
         public MessageListPage listMessages(String folderId, int page, int pageSize) {
             int safePage = Math.max(page, 0);
             int safeSize = pageSize <= 0 ? 50 : pageSize;
@@ -370,6 +463,26 @@ public final class ImapProviderSession implements ProviderSession {
                 throw e;
             } catch (MessagingException | RuntimeException e) {
                 throw ImapErrorMapper.map(e, "read the message");
+            }
+        }
+
+        @Override
+        public byte[] rawMessage(String messageId) {
+            MessageId id = MessageId.parse(messageId);
+            try {
+                jakarta.mail.Folder folder = folder(id.folderId);
+                jakarta.mail.Message message = messageById(folder, id.uid);
+                if (message == null) {
+                    throw new ProviderException(ErrorCode.MESSAGE_NOT_FOUND,
+                            "The message no longer exists on the server.", false);
+                }
+                java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+                message.writeTo(out);
+                return out.toByteArray();
+            } catch (ProviderException e) {
+                throw e;
+            } catch (MessagingException | RuntimeException | java.io.IOException e) {
+                throw ImapErrorMapper.map(e, "export the message");
             }
         }
 

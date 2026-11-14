@@ -21,21 +21,30 @@ import com.graalmail.provider.api.ProviderSession;
 import com.graalmail.provider.api.ProviderType;
 import com.graalmail.provider.api.SearchService;
 import com.graalmail.provider.api.SynchronizationService;
+import com.graalmail.provider.imap.ImapFolderTypes;
+import com.graalmail.provider.imap.ImapServerConfig;
+import com.graalmail.provider.imap.SecurityMode;
+import com.graalmail.provider.imap.SmtpServerConfig;
 import com.graalmail.security.model.Credential;
 import com.graalmail.security.model.TokenSet;
 import com.graalmail.security.oauth.AuthorizationRequest;
 import com.graalmail.security.oauth.OAuthClient;
 import com.graalmail.security.oauth.OAuthConfig;
 import java.time.Instant;
+import java.util.HashMap;
+import java.util.Map;
 import org.slf4j.Logger;
 
 /**
  * The provider for Outlook.com, Hotmail, Live.com and Microsoft 365.
  *
- * <p>Microsoft accounts are always authorized with the Microsoft identity
- * platform. The mailbox is then accessed either through the IMAP and SMTP
- * endpoints with XOAUTH2 or through the Microsoft Graph web API; both
- * transports implement the same provider-api interfaces.</p>
+ * <p>GraalMail signs in with the email address and the account password.
+ * Password accounts use the IMAP and SMTP protocol endpoints with basic
+ * authentication ({@code outlook.office365.com:993} and
+ * {@code smtp.office365.com:587}), which works wherever the tenant or the
+ * account still allows basic authentication. Accounts added while the OAuth
+ * sign-in was offered keep working: their tokens are used with XOAUTH2 on the
+ * protocol endpoints or with the Microsoft Graph web API.</p>
  */
 public final class MicrosoftProvider implements AccountProvider, OAuthCapableProvider {
 
@@ -54,7 +63,7 @@ public final class MicrosoftProvider implements AccountProvider, OAuthCapablePro
     @Override
     public ProviderCapabilities capabilities() {
         return ProviderCapabilities.builder(ProviderType.MICROSOFT)
-                .authMethods(AuthMethod.OAUTH2)
+                .authMethods(AuthMethod.OAUTH2, AuthMethod.PASSWORD)
                 .serverSideSearch(true)
                 .pushNotifications(false)
                 .idleSupport(true)
@@ -66,11 +75,15 @@ public final class MicrosoftProvider implements AccountProvider, OAuthCapablePro
                 .offlineActions(true)
                 .serverSideFlags(true)
                 .sendCapable(true)
+                .folderManagement(true)
                 .platform("linux", true)
                 .platform("android", true)
-                .note("Uses the Microsoft Graph API by default; the IMAP and SMTP endpoints are "
-                        + "available for tenants that require the protocol based access.")
-                .restriction("IMAP and SMTP may be disabled by the tenant administrator.")
+                .note("Password accounts use the IMAP and SMTP endpoints with basic authentication. "
+                        + "Legacy OAuth accounts use the Microsoft Graph API by default or the IMAP "
+                        + "and SMTP endpoints with XOAUTH2.")
+                .restriction("IMAP and SMTP may be disabled by the tenant administrator, and "
+                        + "accounts with multi-factor authentication may be refused by basic "
+                        + "authentication; such accounts keep using the stored OAuth tokens.")
                 .documentationUrl("https://learn.microsoft.com/graph/api/resources/mail-api-overview")
                 .build();
     }
@@ -104,11 +117,53 @@ public final class MicrosoftProvider implements AccountProvider, OAuthCapablePro
         return openSession(null, setup);
     }
 
+    /**
+     * Builds the IMAP configuration of a password account: the Microsoft
+     * protocol endpoint with basic authentication over implicit TLS.
+     *
+     * @param setup the account setup
+     * @return the IMAP configuration
+     */
+    static ImapServerConfig passwordImapConfig(AccountSetup setup) {
+        return ImapServerConfig.builder()
+                .host(MicrosoftHosts.IMAP_HOST)
+                .port(MicrosoftHosts.IMAP_PORT)
+                .securityMode(SecurityMode.SSL_TLS)
+                .username(setup.email())
+                .authMechanism(AuthMethod.PASSWORD)
+                .connectTimeoutMs(15_000)
+                .readTimeoutMs(30_000)
+                .build();
+    }
+
+    /**
+     * Builds the SMTP configuration of a password account: the Microsoft
+     * submission endpoint with basic authentication over STARTTLS.
+     *
+     * @param setup the account setup
+     * @return the SMTP configuration
+     */
+    static SmtpServerConfig passwordSmtpConfig(AccountSetup setup) {
+        return SmtpServerConfig.builder()
+                .host(MicrosoftHosts.SMTP_HOST)
+                .port(MicrosoftHosts.SMTP_PORT_STARTTLS)
+                .securityMode(SecurityMode.STARTTLS)
+                .username(setup.email())
+                .authMechanism(AuthMethod.PASSWORD)
+                .connectTimeoutMs(15_000)
+                .readTimeoutMs(30_000)
+                .build();
+    }
+
     @Override
     public ProviderSession openSession(Account account, AccountSetup setup) {
+        if (setup.authMethod() == AuthMethod.PASSWORD || setup.authMethod() == AuthMethod.APP_PASSWORD) {
+            return openPasswordSession(account, setup);
+        }
         if (setup.authMethod() != AuthMethod.OAUTH2) {
             throw new ProviderException(ErrorCode.CONFIGURATION_ERROR,
-                    "Microsoft accounts require an OAuth sign in.", false);
+                    "Microsoft accounts sign in with the email address and password, "
+                            + "or with the stored OAuth tokens of a legacy account.", false);
         }
         TokenSet tokens = setup.credential() == null ? TokenSet.empty() : setup.credential().tokens();
         OAuthConfig config = MicrosoftOAuthConfig.build(setup, MicrosoftTransportMode.GRAPH);
@@ -131,6 +186,29 @@ public final class MicrosoftProvider implements AccountProvider, OAuthCapablePro
         SynchronizationService synchronization = new GraphBackedSynchronizationService(client);
         return new SimpleProviderSession(mailboxes, messages, submission, attachments, search,
                 synchronization);
+    }
+
+    /**
+     * Signs in with the email address and the account password over the IMAP
+     * and SMTP protocol endpoints using basic authentication.
+     */
+    private ProviderSession openPasswordSession(Account account, AccountSetup setup) {
+        String secret = setup.credential() == null ? "" : setup.credential().secret();
+        if (secret.isBlank()) {
+            throw new ProviderException(ErrorCode.CONFIGURATION_ERROR,
+                    "No password was provided. Sign in with the email address and the account "
+                            + "password.", false);
+        }
+        Map<String, String> settings = new HashMap<>(setup.settings());
+        settings.put(MicrosoftTransportMode.SETTING, MicrosoftTransportMode.IMAP.name().toLowerCase(
+                java.util.Locale.ROOT));
+        com.graalmail.provider.imap.ImapProviderSession session =
+                new com.graalmail.provider.imap.ImapProviderSession(
+                        account == null ? "" : account.id(), setup.email(), secret,
+                        passwordImapConfig(setup), passwordSmtpConfig(setup),
+                        ImapFolderTypes.DEFAULT, settings, null);
+        session.connect();
+        return session;
     }
 
     @Override

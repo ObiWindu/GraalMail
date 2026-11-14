@@ -30,6 +30,7 @@ public final class ProviderCapabilities {
     private final boolean offlineActions;
     private final boolean serverSideFlags;
     private final boolean sendCapable;
+    private final boolean folderManagement;
     private final Map<String, Boolean> platformSupport;
     private final List<String> restrictions;
     private final List<String> notes;
@@ -49,6 +50,7 @@ public final class ProviderCapabilities {
         this.offlineActions = b.offlineActions;
         this.serverSideFlags = b.serverSideFlags;
         this.sendCapable = b.sendCapable;
+        this.folderManagement = b.folderManagement;
         this.platformSupport = Map.copyOf(b.platformSupport);
         this.restrictions = List.copyOf(b.restrictions);
         this.notes = List.copyOf(b.notes);
@@ -73,6 +75,7 @@ public final class ProviderCapabilities {
     public boolean offlineActions() { return offlineActions; }
     public boolean serverSideFlags() { return serverSideFlags; }
     public boolean sendCapable() { return sendCapable; }
+    public boolean folderManagement() { return folderManagement; }
     public Map<String, Boolean> platformSupport() { return platformSupport; }
 
     /** True when the given platform key ("linux" or "android") is supported. */
@@ -98,6 +101,7 @@ public final class ProviderCapabilities {
         private boolean offlineActions;
         private boolean serverSideFlags;
         private boolean sendCapable;
+        private boolean folderManagement;
         private final Map<String, Boolean> platformSupport = new LinkedHashMap<>();
         private final List<String> restrictions = new ArrayList<>();
         private final List<String> notes = new ArrayList<>();
@@ -123,6 +127,7 @@ public final class ProviderCapabilities {
         public Builder offlineActions(boolean v) { this.offlineActions = v; return this; }
         public Builder serverSideFlags(boolean v) { this.serverSideFlags = v; return this; }
         public Builder sendCapable(boolean v) { this.sendCapable = v; return this; }
+        public Builder folderManagement(boolean v) { this.folderManagement = v; return this; }
         public Builder platform(String platform, boolean supported) {
             platformSupport.put(platform, supported);
             return this;

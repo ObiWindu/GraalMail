@@ -85,187 +85,129 @@
     -fx-gm-folder-custom: #F39C12;
 }
 .mail-window, .mail-shell, .workspace-host, .mail-split-pane { -fx-background-color: -fx-gm-window; }
-.workspace-host { -fx-padding: 0.6154em; -fx-background-color: -fx-gm-window; }
+.workspace-host { -fx-padding: 0; -fx-background-color: -fx-gm-window; }
 
-/* ---- Proton top bar ---- */
-.proton-topbar, .main-toolbar {
+/* ---- KMail-style flat toolbar (Breeze) ---- */
+.main-toolbar {
     -fx-background-color: -fx-gm-pane;
     -fx-border-color: transparent transparent -fx-gm-border transparent;
-    -fx-padding: 0.4615em 0.9231em;
-    -fx-spacing: 0.6154em;
+    -fx-padding: 0.2308em 0.4615em;
+    -fx-spacing: 0.1538em;
     -fx-alignment: center-left;
 }
-.proton-brand { -fx-spacing: 0.5385em; -fx-alignment: center-left; -fx-padding: 0 0.6154em 0 0; }
-.proton-logo-mark {
-    -fx-min-width: 2.0769em; -fx-pref-width: 2.0769em; -fx-max-width: 2.0769em;
-    -fx-min-height: 2.0769em; -fx-pref-height: 2.0769em; -fx-max-height: 2.0769em;
-    -fx-alignment: center;
-    -fx-background-color: -fx-gm-accent;
-    -fx-background-radius: 0.3077em;
-    -fx-text-fill: -fx-gm-accent-text;
-    -fx-font-weight: 800;
-    -fx-font-size: 1.1538em;
-}
-.proton-logo-name { -fx-font-size: 1.2308em; -fx-font-weight: 700; -fx-text-fill: -fx-gm-text; }
 .main-toolbar .button, .main-toolbar .menu-button {
-    -fx-min-height: 2.5385em;
+    -fx-min-height: 2.3077em;
     -fx-background-color: transparent;
-    -fx-background-radius: 0.3077em;
-    -fx-padding: 0.4615em 0.7692em;
-    -fx-text-fill: -fx-gm-secondary;
+    -fx-background-radius: 0.2308em;
+    -fx-padding: 0.3077em 0.6154em;
+    -fx-text-fill: -fx-gm-text;
     -fx-graphic-text-gap: 0.4615em;
     -fx-cursor: hand;
     -fx-border-color: transparent;
 }
 .main-toolbar .button:hover, .main-toolbar .menu-button:hover { -fx-background-color: -fx-gm-toolbar-hover; }
+.main-toolbar .button:disabled { -fx-text-fill: -fx-gm-muted; }
 .main-toolbar .icon-button {
-    -fx-min-width: 2.75em; -fx-pref-width: 2.75em; -fx-max-width: 2.75em;
-    -fx-min-height: 2.75em; -fx-pref-height: 2.75em; -fx-max-height: 2.75em;
-    -fx-padding: 0.4615em;
-    -fx-background-radius: 0.3077em;
+    -fx-min-width: 2.4615em; -fx-pref-width: 2.4615em; -fx-max-width: 2.4615em;
+    -fx-min-height: 2.3077em; -fx-pref-height: 2.3077em; -fx-max-height: 2.3077em;
+    -fx-padding: 0.3077em;
+    -fx-background-radius: 0.2308em;
     -fx-graphic-text-gap: 0;
 }
-.main-toolbar .primary-action, .proton-compose {
-    -fx-background-color: -fx-gm-accent;
-    -fx-border-color: transparent;
-    -fx-background-radius: 0.3077em;
-    -fx-border-radius: 0.3077em;
-    -fx-text-fill: -fx-gm-accent-text;
-    -fx-font-weight: 700;
-    -fx-padding: 0.5385em 1.2308em;
-}
-.main-toolbar .primary-action:hover, .proton-compose:hover { -fx-background-color: -fx-gm-accent-hover; }
+.main-toolbar .separator { -fx-padding: 0 0.2308em; }
 .main-toolbar .text-field {
-    -fx-min-height: 2.5385em;
-    -fx-background-color: -fx-gm-subtle;
-    -fx-background-radius: 0.3077em;
-    -fx-border-color: transparent;
-    -fx-padding: 0.4615em 0.6154em;
+    -fx-min-height: 2.3077em;
+    -fx-background-color: -fx-gm-raised;
+    -fx-background-radius: 0.2308em;
+    -fx-border-color: -fx-gm-border;
+    -fx-border-radius: 0.2308em;
+    -fx-padding: 0.3077em 0.6154em;
     -fx-prompt-text-fill: -fx-gm-muted;
+    -fx-text-fill: -fx-gm-text;
 }
-.toolbar-search, .proton-search {
+.main-toolbar .text-field:focused { -fx-border-color: -fx-gm-accent; }
+.toolbar-search {
     -fx-alignment: center-left;
-    -fx-min-width: 16.9231em;
-    -fx-pref-width: 30em;
+    -fx-min-width: 15.3846em;
+    -fx-pref-width: 24em;
     -fx-spacing: 0.4615em;
-    -fx-padding: 0 0.7692em;
-    -fx-background-color: -fx-gm-subtle;
-    -fx-background-radius: 0.3077em;
-    -fx-border-color: transparent;
-    -fx-border-radius: 0.3077em;
+    -fx-padding: 0 0.2308em;
 }
-.main-toolbar .toolbar-search { -fx-min-width: 16.9231em; -fx-pref-width: 30em; }
 .toolbar-search .text-field {
-    -fx-background-color: transparent;
+    -fx-background-color: -fx-gm-raised;
     -fx-background-insets: 0;
-    -fx-border-color: transparent;
-    -fx-padding: 0.4615em 0.1538em;
+    -fx-border-color: -fx-gm-border;
+    -fx-padding: 0.3077em 0.6154em;
 }
+.toolbar-search.search-focused .text-field { -fx-border-color: -fx-gm-accent; }
 .main-toolbar .combo-box {
-    -fx-min-height: 2.5385em;
-    -fx-background-color: -fx-gm-subtle;
-    -fx-background-radius: 0.3077em;
-    -fx-border-color: transparent;
+    -fx-min-height: 2.3077em;
+    -fx-background-color: -fx-gm-raised;
+    -fx-background-radius: 0.2308em;
+    -fx-border-color: -fx-gm-border;
+    -fx-border-radius: 0.2308em;
 }
 .main-toolbar #search-scope { -fx-min-width: 8em; -fx-pref-width: 11.5385em; }
 
-/* ---- Workspace cards ---- */
+/* ---- Workspace: flat split panes with thin Breeze dividers ---- */
 .mail-split-pane { -fx-padding: 0; }
-.mail-split-pane > .split-pane-divider { -fx-background-color: transparent; -fx-padding: 0 0.2308em; }
+.mail-split-pane > .split-pane-divider { -fx-background-color: -fx-gm-border; -fx-padding: 0 0.1538em; }
 .mail-split-pane > * { -fx-border-color: transparent; }
 
-/* ---- Navigation (Proton sidebar) ---- */
+/* ---- Folder pane (KMail flat tree on the window background) ---- */
 .navigation-pane {
-    -fx-min-width: 14.6154em;
-    -fx-pref-width: 19.2308em;
+    -fx-min-width: 13.4615em;
+    -fx-pref-width: 17.6923em;
     -fx-background-color: -fx-gm-sidebar;
-    -fx-background-radius: 0.9231em;
-    -fx-border-color: -fx-gm-border;
-    -fx-border-radius: 0.9231em;
-    -fx-padding: 0.6154em;
+    -fx-padding: 0.2308em;
 }
-.navigation-pane .tree-view { -fx-min-width: 13.4615em; }
-.proton-nav-header, .folder-pane-toolbar {
-    -fx-alignment: center-left;
-    -fx-spacing: 0.2308em;
-    -fx-padding: 0.3077em 0.4615em 0.6154em;
-    -fx-background-color: transparent;
-    -fx-border-color: transparent;
-}
-.nav-section-label { -fx-font-size: 0.8462em; -fx-font-weight: 700; -fx-text-fill: -fx-gm-muted; }
-.proton-nav-footer { -fx-padding: 0.6154em 0.2308em 0.2308em; }
-.proton-ghost-button {
-    -fx-background-color: transparent;
-    -fx-border-color: -fx-gm-border;
-    -fx-border-radius: 0.3077em;
-    -fx-background-radius: 0.3077em;
-    -fx-text-fill: -fx-gm-accent;
-    -fx-font-weight: 600;
-}
-.proton-ghost-button:hover { -fx-background-color: -fx-gm-accent-soft; }
-.mail-window .folder-pane-toolbar .button, .mail-window .folder-pane-toolbar .menu-button {
-    -fx-min-width: 2.3077em;
-    -fx-pref-width: 2.3077em;
-    -fx-max-width: 2.3077em;
-    -fx-min-height: 2.3077em;
-    -fx-pref-height: 2.3077em;
-    -fx-max-height: 2.3077em;
-    -fx-padding: 0.3846em;
-    -fx-background-color: transparent;
-    -fx-border-color: transparent;
-    -fx-graphic-text-gap: 0;
-}
-.mail-window .folder-pane-toolbar .button:hover,
-.mail-window .folder-pane-toolbar .menu-button:hover,
-.mail-window .folder-pane-toolbar .menu-button:showing { -fx-background-color: -fx-gm-toolbar-hover; }
+.navigation-pane .tree-view { -fx-min-width: 12.3077em; }
 .pane-heading { -fx-font-size: 0.9231em; -fx-font-weight: bold; -fx-text-fill: -fx-gm-secondary; }
-.tree-view { -fx-background-color: transparent; -fx-padding: 0.2308em; }
+.tree-view { -fx-background-color: transparent; -fx-padding: 0.1538em; }
 .tree-cell {
     -fx-background-color: transparent;
-    -fx-background-radius: 0.3077em;
-    -fx-padding: 0.4615em 0.6923em;
-    -fx-text-fill: -fx-gm-secondary;
+    -fx-padding: 0.3077em 0.4615em;
+    -fx-text-fill: -fx-gm-text;
 }
-.tree-cell:selected { -fx-background-color: -fx-gm-selected-muted; -fx-text-fill: -fx-gm-text; -fx-font-weight: 600; }
-.tree-cell:selected:focused { -fx-background-color: -fx-gm-selected; -fx-text-fill: -fx-gm-accent; -fx-font-weight: 700; }
-.dark-theme .tree-cell:selected { -fx-background-color: -fx-gm-selected-muted; -fx-text-fill: -fx-gm-text; }
-.dark-theme .tree-cell:selected:focused { -fx-background-color: -fx-gm-selected; -fx-text-fill: -fx-gm-accent-text; }
+.tree-cell:selected { -fx-background-color: -fx-gm-deep; -fx-text-fill: -fx-gm-text; }
+.tree-cell:selected:focused { -fx-background-color: -fx-gm-selected; -fx-text-fill: -fx-gm-accent-text; }
 .tree-cell:hover:filled { -fx-background-color: -fx-gm-hover; }
+.tree-cell:selected:hover:filled { -fx-background-color: -fx-gm-selected; }
+.mail-window .tree-cell:selected .label { -fx-text-fill: -fx-gm-text; }
+.mail-window .tree-cell:selected:focused .label { -fx-text-fill: -fx-gm-accent-text; }
+.mail-window .tree-cell:selected:focused .folder-unread-count { -fx-text-fill: -fx-gm-accent-text; }
 .tree-cell.account-row { -fx-font-weight: bold; -fx-text-fill: -fx-gm-text; }
-.tree-cell.folder-row { -fx-padding: 0.3846em 0.6154em; }
+.tree-cell.folder-row { -fx-padding: 0.2308em 0.4615em; }
+.tree-cell.folder-row-unread .folder-name { -fx-font-weight: 700; }
 .tree-cell.unified-inbox-row { -fx-font-weight: bold; -fx-text-fill: -fx-gm-accent; }
 /* Compact navigation: tighter rows for small screens. */
-.navigation-pane.nav-compact { -fx-padding: 0.3077em; }
+.navigation-pane.nav-compact { -fx-padding: 0.1538em; }
 .navigation-pane.nav-compact .tree-cell { -fx-padding: 0.1538em 0.4615em; -fx-font-size: 0.9231em; }
 .navigation-pane.nav-compact .tree-cell.folder-row { -fx-padding: 0.1538em 0.4615em; }
-.navigation-pane.nav-compact .folder-pane-toolbar { -fx-padding: 0.1538em 0.3077em 0.3077em; }
 
-/* ---- Message list (Proton rows) ---- */
+/* ---- Message list pane (flat, KMail style) ---- */
 .message-list-pane {
     -fx-min-width: 23.0769em;
     -fx-background-color: -fx-gm-pane;
-    -fx-background-radius: 0.9231em;
-    -fx-border-color: -fx-gm-border;
-    -fx-border-radius: 0.9231em;
-    -fx-padding: 0.6154em;
+    -fx-padding: 0.2308em 0.4615em;
 }
-.list-title-row, .proton-list-header {
+.list-title-row {
     -fx-alignment: center-left;
-    -fx-padding: 0.3077em 0.4615em 0.6154em;
+    -fx-padding: 0.3077em 0.2308em 0.4615em;
     -fx-background-color: transparent;
     -fx-border-color: transparent transparent -fx-gm-border transparent;
     -fx-spacing: 0.6154em;
 }
-.proton-list-titles { -fx-spacing: 0; }
-.proton-view-title { -fx-font-size: 1.3846em; -fx-font-weight: 700; -fx-text-fill: -fx-gm-text; }
-.proton-message-count { -fx-text-fill: -fx-gm-muted; -fx-font-size: 0.9231em; }
+.list-titles { -fx-spacing: 0; }
+.view-title { -fx-font-size: 1.0769em; -fx-font-weight: 700; -fx-text-fill: -fx-gm-text; }
+.list-message-count { -fx-text-fill: -fx-gm-muted; -fx-font-size: 0.8462em; }
 .list-title-row .button, .list-title-row .combo-box { -fx-min-height: 2.1538em; -fx-font-size: 0.9231em; }
 .filter-chip {
-    -fx-background-color: -fx-gm-subtle;
-    -fx-background-radius: 1.5385em;
+    -fx-background-color: transparent;
+    -fx-background-radius: 0.2308em;
     -fx-border-color: -fx-gm-border;
-    -fx-border-radius: 1.5385em;
-    -fx-padding: 0.3077em 0.9231em;
+    -fx-border-radius: 0.2308em;
+    -fx-padding: 0.2308em 0.7692em;
     -fx-text-fill: -fx-gm-secondary;
     -fx-font-size: 0.8462em;
     -fx-cursor: hand;
@@ -274,7 +216,7 @@
 .quick-filter-bar {
     -fx-hgap: 0.4615em;
     -fx-vgap: 0.4615em;
-    -fx-padding: 0.4615em 0.2308em;
+    -fx-padding: 0.3846em 0.2308em;
     -fx-background-color: transparent;
     -fx-border-color: transparent transparent -fx-gm-border transparent;
 }
@@ -282,18 +224,18 @@
 .message-list-pane .list-view, .message-list-pane .table-view { -fx-min-height: 12.3077em; }
 .list-cell {
     -fx-background-color: transparent;
-    -fx-background-radius: 0.3077em;
     -fx-border-color: transparent;
     -fx-padding: 0.1538em 0.2308em;
 }
 .list-cell:filled:hover { -fx-background-color: -fx-gm-hover; }
 .list-cell:filled:selected { -fx-background-color: -fx-gm-selected; }
-.list-cell:filled:selected:focused { -fx-background-color: -fx-gm-selected; -fx-border-color: -fx-gm-accent; -fx-border-width: 0 0 0 0.2308em; -fx-border-radius: 0.3077em; }
+.list-cell:filled:selected:focused { -fx-background-color: -fx-gm-selected; }
+.mail-window .list-cell:filled:selected .label { -fx-text-fill: -fx-gm-accent-text; }
 .dark-theme .list-cell:filled:hover { -fx-background-color: -fx-gm-hover; }
 .dark-theme .list-cell:filled:selected { -fx-background-color: -fx-gm-selected; }
 .list-cell.unread-row { -fx-border-color: transparent; }
-.message-cell-content { -fx-padding: 0.3077em 0.4615em; -fx-background-radius: 0.3077em; }
-.list-cell.unread-row .message-cell-content { -fx-background-color: -fx-gm-accent-soft; -fx-border-color: transparent transparent transparent -fx-gm-accent; -fx-border-width: 0 0 0 0.2308em; }
+.message-cell-content { -fx-padding: 0.3077em 0.4615em; }
+.list-cell.unread-row .message-cell-content { -fx-border-color: transparent transparent transparent -fx-gm-accent; -fx-border-width: 0 0 0 0.1538em; }
 .message-read-status { -fx-min-width: 0.9231em; -fx-pref-width: 0.9231em; -fx-max-width: 0.9231em; }
 .proton-avatar { -fx-background-radius: 999px; }
 .proton-avatar-label { -fx-text-fill: white; -fx-font-weight: 700; }
@@ -304,54 +246,42 @@
 .message-subject.unread { -fx-font-weight: 700; }
 .message-snippet { -fx-text-fill: -fx-gm-muted; -fx-font-size: 0.9231em; }
 .message-unread-pill {
-    -fx-background-color: -fx-gm-accent;
-    -fx-background-radius: 999px;
-    -fx-padding: 0.0769em 0.5385em;
+    -fx-background-color: -fx-gm-accent-soft;
+    -fx-background-radius: 0.2308em;
+    -fx-padding: 0.0769em 0.4615em;
     -fx-font-size: 0.7692em;
     -fx-font-weight: 700;
-    -fx-text-fill: -fx-gm-accent-text;
+    -fx-text-fill: -fx-gm-accent;
 }
-.selection-toolbar { -fx-alignment: center-left; -fx-hgap: 0.4615em; -fx-vgap: 0.4615em; -fx-padding: 0.4615em; -fx-background-color: -fx-gm-accent-soft; -fx-border-color: -fx-gm-accent; -fx-background-radius: 0.3077em; -fx-border-radius: 0.3077em; }
+.selection-toolbar { -fx-alignment: center-left; -fx-hgap: 0.4615em; -fx-vgap: 0.4615em; -fx-padding: 0.3846em 0.4615em; -fx-background-color: -fx-gm-accent-soft; -fx-border-color: transparent transparent -fx-gm-border transparent; }
 .selection-toolbar .label { -fx-font-weight: bold; -fx-text-fill: -fx-gm-accent; }
 
-/* ---- Reader (Proton card) ---- */
-.reader-pane, .proton-reader-card {
+/* ---- Reader pane (flat, KMail style) ---- */
+.reader-pane {
     -fx-min-width: 26.1538em;
     -fx-background-color: -fx-gm-pane;
-    -fx-background-radius: 0.9231em;
-    -fx-border-color: -fx-gm-border;
-    -fx-border-radius: 0.9231em;
-    -fx-padding: 0.6154em;
+    -fx-padding: 0;
 }
 .reader-pane .web-view { -fx-min-height: 15.3846em; -fx-background-color: -fx-gm-pane; }
-.reader-actions { -fx-padding: 0.2308em 0.2308em 0.6154em; -fx-background-color: transparent; -fx-border-color: transparent transparent -fx-gm-border transparent; }
-.reader-actions .button, .reader-pane > .button {
+.reader-pane > .button {
     -fx-min-height: 2.3077em;
     -fx-background-color: -fx-gm-subtle;
-    -fx-background-radius: 0.3077em;
+    -fx-background-radius: 0.2308em;
     -fx-border-color: -fx-gm-border;
-    -fx-border-radius: 0.3077em;
+    -fx-border-radius: 0.2308em;
     -fx-padding: 0.3846em 0.7692em;
     -fx-text-fill: -fx-gm-secondary;
     -fx-font-weight: 600;
     -fx-cursor: hand;
 }
-.reader-actions .button:hover, .reader-pane > .button:hover { -fx-background-color: -fx-gm-toolbar-hover; }
-.reader-actions .proton-reply {
-    -fx-background-color: -fx-gm-accent;
-    -fx-border-color: transparent;
-    -fx-text-fill: -fx-gm-accent-text;
-    -fx-font-weight: 700;
-}
-.reader-actions .proton-reply:hover { -fx-background-color: -fx-gm-accent-hover; }
-.reader-actions .icon-button { -fx-background-color: transparent; -fx-border-color: transparent; }
+.reader-pane > .button:hover { -fx-background-color: -fx-gm-toolbar-hover; }
 .reader-header {
     -fx-spacing: 0.4615em;
-    -fx-padding: 0.7692em 0.6154em;
-    -fx-background-color: transparent;
+    -fx-padding: 0.6154em 0.7692em;
+    -fx-background-color: -fx-gm-pane;
     -fx-border-color: transparent transparent -fx-gm-border transparent;
 }
-.reader-subject { -fx-font-size: 1.5385em; -fx-font-weight: 700; -fx-text-fill: -fx-gm-text; }
+.reader-subject { -fx-font-size: 1.2308em; -fx-font-weight: 700; -fx-text-fill: -fx-gm-text; }
 .reader-identity { -fx-alignment: center-left; -fx-spacing: 0.7692em; }
 .reader-sender { -fx-font-size: 1em; -fx-font-weight: 700; -fx-text-fill: -fx-gm-text; }
 .reader-date, .reader-recipients, .reader-indicators { -fx-text-fill: -fx-gm-muted; -fx-font-size: 0.8462em; }
@@ -364,11 +294,12 @@
 .form-status-ok { -fx-text-fill: -fx-gm-success; }
 .polymail-status, .polymail-indicator { -fx-text-fill: -fx-gm-accent; -fx-font-size: 0.9231em; }
 .reader-attachments { -fx-padding: 0.5385em 0 0; -fx-hgap: 0.6154em; -fx-vgap: 0.6154em; }
-.status-bar { -fx-background-color: transparent; -fx-border-color: transparent; -fx-alignment: center-left; -fx-padding: 0.4615em 0.6154em 0; }
-.status-bar .label { -fx-text-fill: -fx-gm-muted; }
+.status-bar { -fx-background-color: -fx-gm-pane; -fx-border-color: -fx-gm-border transparent transparent transparent; -fx-alignment: center-left; -fx-padding: 0.3846em 0.6154em; }
+.status-bar .label { -fx-text-fill: -fx-gm-secondary; }
 .status-bar .connection-indicator { -fx-text-fill: -fx-gm-success; -fx-font-size: 0.7692em; -fx-font-weight: 700; }
-.folder-unread-count, .message-indicator { -fx-background-color: -fx-gm-deep; -fx-background-radius: 999px; -fx-padding: 0.0769em 0.5385em; -fx-font-size: 0.8462em; -fx-text-fill: -fx-gm-secondary; -fx-font-weight: 600; }
-.folder-unread-count { -fx-background-color: -fx-gm-unread-badge; -fx-text-fill: white; -fx-font-weight: 700; }
+/* KMail-style inline unread count: bold accent text "(n)", no pill. */
+.folder-unread-count { -fx-text-fill: -fx-gm-accent; -fx-font-weight: 700; -fx-background-color: transparent; -fx-padding: 0; -fx-font-size: 0.9231em; }
+.message-indicator { -fx-text-fill: -fx-gm-muted; -fx-font-size: 0.8462em; }
 .folder-row-content { -fx-alignment: center-left; -fx-spacing: 0.6154em; }
 .account-name { -fx-font-weight: 700; -fx-font-size: 1em; }
 .account-email { -fx-font-size: 0.8462em; -fx-text-fill: -fx-gm-muted; }
@@ -390,9 +321,6 @@
 .mail-window .message-unread-dot { -fx-fill: -fx-gm-unread-dot; }
 .tree-cell.account-row .account-name { -fx-font-weight: 700; }
 .tree-cell.folder-row .folder-name { -fx-font-weight: normal; }
-.mail-window .tree-cell:selected .label { -fx-text-fill: -fx-gm-text; }
-.mail-window .tree-cell:selected:focused .folder-name { -fx-text-fill: -fx-gm-accent; }
-.dark-theme .mail-window .tree-cell:selected:focused .folder-name { -fx-text-fill: -fx-gm-accent-text; }
 .mail-window .mail-folder-icon.inbox .mail-icon-fill,
 .mail-window .mail-folder-icon.account .mail-icon-fill { -fx-fill: -fx-gm-folder-inbox; -fx-opacity: 0.2; }
 .mail-window .mail-folder-icon.inbox .mail-icon-stroke,
@@ -412,14 +340,17 @@
 .mail-window .mail-folder-icon.folder .mail-icon-fill { -fx-fill: -fx-gm-folder-custom; -fx-opacity: 0.2; }
 .mail-window .mail-folder-icon.folder .mail-icon-stroke { -fx-fill: -fx-gm-folder-custom; }
 
-.table-view { -fx-background-color: -fx-gm-pane; -fx-border-color: transparent; -fx-background-radius: 0.3077em; }
+.table-view { -fx-background-color: -fx-gm-pane; -fx-border-color: transparent; }
+.mail-window .table-view:focused, .mail-window .list-view:focused, .mail-window .tree-view:focused { -fx-border-color: transparent; -fx-effect: none; }
 .table-view .column-header-background, .table-view .column-header, .table-view .filler { -fx-background-color: -fx-gm-subtle; }
 .table-view .column-header, .table-view .filler { -fx-border-color: transparent transparent -fx-gm-border transparent; }
-.table-row-cell { -fx-cell-size: 2.3077em; -fx-background-color: transparent; }
+.table-view .column-header .label { -fx-font-weight: 600; -fx-text-fill: -fx-gm-secondary; }
+.table-row-cell { -fx-cell-size: 2.1538em; -fx-background-color: transparent; }
 .table-row-cell:filled:hover { -fx-background-color: -fx-gm-hover; }
 .table-row-cell:filled:selected { -fx-background-color: -fx-gm-selected; }
-.table-cell { -fx-text-fill: -fx-gm-secondary; -fx-padding: 0.3077em 0.5385em; }
-.table-row-cell:filled:selected .table-cell { -fx-text-fill: -fx-gm-text; }
+.table-row-cell:filled:selected:focused { -fx-background-color: -fx-gm-selected; }
+.table-cell { -fx-text-fill: -fx-gm-text; -fx-padding: 0.3077em 0.5385em; }
+.table-row-cell:filled:selected .table-cell { -fx-text-fill: -fx-gm-accent-text; }
 .button:focused, .text-field:focused, .tree-cell:focused, .list-cell:focused, .combo-box:focused {
     -fx-border-color: -fx-gm-accent;
     -fx-border-width: 0.1538em;
@@ -531,19 +462,15 @@
     -fx-text-fill: -fx-gm-text;
 }
 .main-toolbar .button:not(.primary-action), .main-toolbar .menu-button,
-.reader-actions .button, .reader-pane > .button,
-.mail-window .reader-details-toggle, .mail-window .filter-chip,
+.reader-pane > .button,
+.mail-window .reader-details-toggle,
 .selection-toolbar .button {
     -fx-background-color: transparent;
     -fx-border-color: transparent;
 }
-.reader-actions .button { -fx-background-color: -fx-gm-subtle; -fx-border-color: -fx-gm-border; }
-.reader-actions .proton-reply { -fx-background-color: -fx-gm-accent; -fx-border-color: transparent; }
 .main-toolbar .button:not(.primary-action):hover, .main-toolbar .menu-button:hover,
 .reader-pane > .button:hover,
 .mail-window .reader-details-toggle:hover { -fx-background-color: -fx-gm-toolbar-hover; }
-.reader-actions .button:hover { -fx-background-color: -fx-gm-toolbar-hover; }
-.reader-actions .proton-reply:hover { -fx-background-color: -fx-gm-accent-hover; }
 .mail-window .text-area, .compose-window .text-area, .account-setup .text-area,
 .diagnostics-window .text-area {
     -fx-background-color: -fx-gm-subtle;
@@ -609,7 +536,6 @@
 .mail-window .message-snippet { -fx-text-fill: -fx-gm-muted; }
 .mail-window .toolbar-search .thunderbird-icon .mail-icon-fill,
 .mail-window .toolbar-search .thunderbird-icon .mail-icon-stroke { -fx-fill: -fx-gm-muted; }
-.mail-window .toolbar-search .text-field:focused { -fx-border-color: transparent; -fx-effect: none; }
 .mail-window .filter-chip.active {
     -fx-background-color: -fx-gm-accent-soft;
     -fx-text-fill: -fx-gm-accent;
@@ -619,20 +545,6 @@
 .mail-window .reader-details-toggle { -fx-text-fill: -fx-gm-accent; }
 .mail-window .status-bar .connection-indicator { -fx-text-fill: -fx-gm-success; }
 .account-setup .settings-explanation { -fx-text-fill: -fx-gm-muted; }
-.main-toolbar .toolbar-search.search-focused { -fx-border-color: -fx-gm-accent; -fx-border-width: 0.1538em; }
-.mail-window .main-toolbar .toolbar-search .text-field {
-    -fx-background-color: transparent;
-    -fx-background-insets: 0;
-    -fx-border-color: transparent;
-    -fx-border-width: 0;
-    -fx-effect: none;
-    -fx-padding: 0.4615em 0.1538em;
-}
-.mail-window .main-toolbar .toolbar-search .text-field:focused {
-    -fx-border-color: transparent;
-    -fx-border-width: 0;
-    -fx-effect: none;
-}
 .dark-theme .tree-cell:hover:filled { -fx-background-color: -fx-gm-hover; }
 /* Legacy spaces rail: hidden in the Proton layout, rules kept for compatibility. */
 .spaces-toolbar {
@@ -671,21 +583,6 @@
     -fx-border-color: -fx-gm-accent;
     -fx-border-width: 0.1538em;
     -fx-effect: none;
-}
-.mail-window .filter-chip {
-    -fx-min-height: 2em;
-    -fx-background-color: -fx-gm-subtle;
-    -fx-background-radius: 999px;
-    -fx-border-color: -fx-gm-border;
-    -fx-padding: 0.3077em 0.9231em;
-    -fx-text-fill: -fx-gm-secondary;
-    -fx-font-size: 0.8462em;
-}
-.mail-window .filter-chip.active {
-    -fx-background-color: -fx-gm-accent-soft;
-    -fx-border-color: -fx-gm-accent;
-    -fx-text-fill: -fx-gm-accent;
-    -fx-font-weight: 700;
 }
 .compose-window .list-view { -fx-background-color: -fx-gm-subtle; -fx-background-radius: 0.3077em; }
 .compose-window .list-cell { -fx-background-color: transparent; }

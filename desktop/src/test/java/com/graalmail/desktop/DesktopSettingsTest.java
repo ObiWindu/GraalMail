@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.graalmail.storage.JdbcSqlDatabase;
 import com.graalmail.storage.SqlMailStore;
+import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -58,5 +59,33 @@ class DesktopSettingsTest {
         settings.pageSize(1);
         assertEquals(1, settings.syncIntervalMinutes());
         assertEquals(20, settings.pageSize());
+    }
+
+    @Test
+    void allColumnsAreVisibleByDefault() {
+        assertEquals(DesktopSettings.ALL_COLUMNS, settings.visibleColumns());
+    }
+
+    @Test
+    void columnVisibilityIsPersistedAndKeepsAtLeastOneColumn() {
+        settings.setColumnVisible("size", false);
+        settings.setColumnVisible("status", false);
+        DesktopSettings reopened = new DesktopSettings(store);
+        assertEquals(List.of("subject", "sender", "date"), reopened.visibleColumns());
+        // hiding every column is refused
+        for (String key : DesktopSettings.ALL_COLUMNS) {
+            reopened.setColumnVisible(key, false);
+        }
+        assertFalse(reopened.visibleColumns().isEmpty());
+        // re-showing a hidden column appends it in canonical order
+        reopened.setColumnVisible("size", true);
+        assertEquals(List.of("date", "size"), reopened.visibleColumns());
+    }
+
+    @Test
+    void signatureRoundTripsThroughTheDatabase() {
+        assertEquals("", settings.signature());
+        settings.signature("Jane Doe\njane@example.com");
+        assertEquals("Jane Doe\njane@example.com", new DesktopSettings(store).signature());
     }
 }
