@@ -499,12 +499,15 @@ public final class ComposeWindow {
         draftButton.setOnAction(event -> saveDraft());
         attachButton.setGraphic(ThunderbirdIcons.icon("attachment", "toolbar-icon"));
         attachButton.setOnAction(event -> pickAttachments());
+        Button templateButton = new Button("Template…");
+        templateButton.setTooltip(new javafx.scene.control.Tooltip("Insert a canned response"));
+        templateButton.setOnAction(event -> insertTemplate());
         accountButton.setAccessibleText("Sending account");
         accountButton.setTooltip(new javafx.scene.control.Tooltip("Account used to send this message"));
         javafx.scene.layout.Region toolbarSpacer = new javafx.scene.layout.Region();
         HBox.setHgrow(toolbarSpacer, Priority.ALWAYS);
         javafx.scene.control.ToolBar toolbar = new javafx.scene.control.ToolBar(
-                accountButton, toolbarSpacer, attachButton, draftButton, sendButton);
+                accountButton, toolbarSpacer, templateButton, attachButton, draftButton, sendButton);
         toolbar.getStyleClass().add("main-toolbar");
         toolbar.setId("compose-toolbar");
 
@@ -1120,6 +1123,50 @@ public final class ComposeWindow {
                 addAttachment(file.toPath());
             }
         }
+    }
+
+    private void insertTemplate() {
+        java.util.List<com.graalmail.core.filter.MessageTemplate> templates;
+        try {
+            templates = context.store().listTemplates();
+        } catch (RuntimeException e) {
+            status.setText("Could not load templates.");
+            return;
+        }
+        if (templates.isEmpty()) {
+            status.setText("No templates yet — create one in Tools ▸ Templates.");
+            return;
+        }
+        javafx.scene.control.ListView<String> listView = new javafx.scene.control.ListView<>();
+        for (com.graalmail.core.filter.MessageTemplate template : templates) {
+            listView.getItems().add(template.name()
+                    + (template.subject().isBlank() ? "" : " — " + template.subject()));
+        }
+        listView.getSelectionModel().select(0);
+        javafx.scene.control.Dialog<Integer> dialog = new javafx.scene.control.Dialog<>();
+        dialog.setTitle("Insert Template");
+        dialog.setHeaderText(null);
+        dialog.getDialogPane().setContent(listView);
+        dialog.getDialogPane().getButtonTypes().addAll(
+                javafx.scene.control.ButtonType.OK, javafx.scene.control.ButtonType.CANCEL);
+        dialog.setResultConverter(button ->
+                button == javafx.scene.control.ButtonType.OK
+                        ? listView.getSelectionModel().getSelectedIndex() : -1);
+        dialog.showAndWait().ifPresent(index -> {
+            if (index < 0 || index >= templates.size()) {
+                return;
+            }
+            com.graalmail.core.filter.MessageTemplate template = templates.get(index);
+            if (!template.subject().isBlank() && subjectField.getText().isBlank()) {
+                subjectField.setText(template.subject());
+            }
+            String current = bodyArea.getText() == null ? "" : bodyArea.getText();
+            String insert = template.bodyText();
+            int caret = Math.max(0, bodyArea.getCaretPosition());
+            bodyArea.setText(current.substring(0, Math.min(caret, current.length()))
+                    + insert + current.substring(Math.min(caret, current.length())));
+            status.setText("Template “" + template.name() + "” inserted.");
+        });
     }
 
     private void addAttachment(Path path) {

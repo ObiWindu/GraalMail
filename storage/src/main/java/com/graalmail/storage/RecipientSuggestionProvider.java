@@ -62,6 +62,8 @@ public final class RecipientSuggestionProvider {
 
     /**
      * Returns the addresses that were used in the recent conversations.
+     * Addresses seen three times or more are marked frequent so they rank
+     * above plain contacts.
      *
      * @return the recent recipients, most recent first
      */
@@ -69,17 +71,42 @@ public final class RecipientSuggestionProvider {
         List<RecipientSuggestion> recipients = new ArrayList<>();
         List<Message> messages = store.search(
                 SearchQuery.builder().limit(RECENT_MESSAGE_SCAN).build(), RECENT_MESSAGE_SCAN);
+        java.util.Map<String, Integer> counts = new java.util.LinkedHashMap<>();
+        java.util.Map<String, String> names = new java.util.LinkedHashMap<>();
+        java.util.List<String> order = new java.util.ArrayList<>();
         for (Message message : messages) {
             for (Address address : message.to()) {
                 if (address.hasEmail()) {
-                    recipients.add(RecipientSuggestion.recent(address.name(), address.email()));
+                    noteAddress(counts, names, order, address);
                 }
             }
             Address from = message.from();
             if (from.hasEmail()) {
-                recipients.add(RecipientSuggestion.recent(from.name(), from.email()));
+                noteAddress(counts, names, order, from);
             }
         }
+        for (String email : order) {
+            String name = names.getOrDefault(email, "");
+            int count = counts.getOrDefault(email, 1);
+            recipients.add(count >= 3
+                    ? RecipientSuggestion.frequent(name, email)
+                    : RecipientSuggestion.recent(name, email));
+        }
         return recipients;
+    }
+
+    private static void noteAddress(java.util.Map<String, Integer> counts,
+                                    java.util.Map<String, String> names,
+                                    java.util.List<String> order, Address address) {
+        String key = address.email().toLowerCase(java.util.Locale.ROOT);
+        counts.merge(key, 1, Integer::sum);
+        if (!names.containsKey(key) && !address.name().isBlank()) {
+            names.put(key, address.name());
+        } else {
+            names.putIfAbsent(key, "");
+        }
+        if (!order.contains(key)) {
+            order.add(key);
+        }
     }
 }

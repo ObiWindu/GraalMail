@@ -13,8 +13,9 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * Existing installs upgrading to schema v6 must keep their PolyMail rows and
- * gain the durable-delivery columns (envelope payload, receipt signatures).
+ * Existing installs upgrading to the current schema must keep their PolyMail rows and
+ * gain the durable-delivery columns (envelope payload, receipt signatures)
+ * plus the filters/templates/snooze tables.
  */
 class SqlSchemaMigrationTest {
 
@@ -56,7 +57,7 @@ class SqlSchemaMigrationTest {
         List<Map<String, Object>> version =
                 database.query("SELECT version FROM schema_version");
         assertEquals(1, version.size());
-        assertEquals(6, ((Number) version.get(0).get("version")).intValue());
+        assertEquals(SqlSchema.VERSION, ((Number) version.get(0).get("version")).intValue());
 
         List<Map<String, Object>> outgoing =
                 database.query("SELECT * FROM polymail_outgoing_queue WHERE operation_id='op-1'");
@@ -72,7 +73,7 @@ class SqlSchemaMigrationTest {
     }
 
     @Test
-    void freshInstallLandsOnV6() {
+    void freshInstallLandsOnCurrentVersion() {
         database = new JdbcSqlDatabase("jdbc:sqlite::memory:");
         SqlSchema.migrate(database);
         List<Map<String, Object>> version =

@@ -9,6 +9,8 @@ import com.graalmail.core.domain.Folder;
 import com.graalmail.core.domain.Message;
 import com.graalmail.core.domain.MessageListPage;
 import com.graalmail.core.domain.SearchQuery;
+import com.graalmail.core.search.SearchQueryParser;
+import com.graalmail.core.conversation.ConversationThreader;
 import com.graalmail.core.domain.Address;
 import com.graalmail.core.domain.Attachment;
 import com.graalmail.core.text.HtmlSanitizer;
@@ -445,17 +447,38 @@ public final class MainWindow {
         star.setOnAction(e -> toggleStarSelected());
         MenuItem junk = new MenuItem("Mark as Junk");
         junk.setOnAction(e -> junkSelected());
+        Menu snoozeMenu = new Menu("Snooze");
+        MenuItem snoozeLater = new MenuItem("Later today");
+        snoozeLater.setOnAction(e -> snoozeSelected(java.time.Duration.ofHours(4)));
+        MenuItem snoozeTomorrow = new MenuItem("Tomorrow");
+        snoozeTomorrow.setOnAction(e -> snoozeSelected(java.time.Duration.ofHours(24)));
+        MenuItem snoozeWeek = new MenuItem("Next week");
+        snoozeWeek.setOnAction(e -> snoozeSelected(java.time.Duration.ofDays(7)));
+        MenuItem unsnooze = new MenuItem("Unsnooze");
+        unsnooze.setOnAction(e -> unsnoozeSelected());
+        snoozeMenu.getItems().addAll(snoozeLater, snoozeTomorrow, snoozeWeek,
+                new SeparatorMenuItem(), unsnooze);
         MenuItem move = new MenuItem("Move to Folder…");
         move.setOnAction(e -> showMoveMenu());
+        MenuItem conversation = new MenuItem("Show Conversation");
+        conversation.setOnAction(e -> showConversation());
         message.getItems().addAll(reply, replyAll, forward, new SeparatorMenuItem(),
-                archive, del, junk, move, new SeparatorMenuItem(), markRead, star);
+                archive, del, junk, move, snoozeMenu, new SeparatorMenuItem(), markRead, star,
+                new SeparatorMenuItem(), conversation);
 
         Menu tools = new Menu("Tools");
         MenuItem addAccount = new MenuItem("Add Account…");
         addAccount.setOnAction(e -> addAccount());
+        MenuItem filters = new MenuItem("Message Filters…");
+        filters.setOnAction(e -> showFilters());
+        MenuItem templates = new MenuItem("Templates…");
+        templates.setOnAction(e -> showTemplates());
+        MenuItem snoozed = new MenuItem("Snoozed Messages");
+        snoozed.setOnAction(e -> showSnoozed());
         MenuItem diagnostics = new MenuItem("Diagnostics…");
         diagnostics.setOnAction(e -> showDiagnostics());
-        tools.getItems().addAll(addAccount, diagnostics);
+        tools.getItems().addAll(addAccount, new SeparatorMenuItem(), filters, templates, snoozed,
+                new SeparatorMenuItem(), diagnostics);
 
         Menu settingsMenu = new Menu("Settings");
         MenuItem settingsItem = new MenuItem("Configure GraalMail…");
@@ -2027,15 +2050,37 @@ public final class MainWindow {
         status.setText(serverSearch ? "Searching provider…" : "Searching local cache…");
         io.submit(() -> {
             try {
-                SearchQuery.Builder queryBuilder = SearchQuery.builder().text(query)
+                SearchQuery parsed = SearchQueryParser.parse(query);
+                SearchQuery.Builder queryBuilder = SearchQuery.builder()
+                        .text(parsed.text())
+                        .from(parsed.from())
+                        .to(parsed.to())
+                        .subject(parsed.subject())
+                        .unreadOnly(parsed.unreadOnly())
+                        .flaggedOnly(parsed.flaggedOnly())
+                        .withAttachmentsOnly(parsed.withAttachmentsOnly())
+                        .since(parsed.since())
+                        .until(parsed.until())
                         .limit(settings.pageSize() + 1).offset(offset);
                 String scope = searchScope.getValue();
-                if ("This account (local)".equals(scope) && account != null) {
+                if ("This account (local)".equals(scope) && account != null
+                        && parsed.accountIds().isEmpty()) {
                     queryBuilder.accountIds(List.of(account.id()));
                 } else if ("This folder (local)".equals(scope) && account != null
                         && folder != null) {
-                    queryBuilder.accountIds(List.of(account.id()))
-                            .folderIds(List.of(folder.id()));
+                    if (parsed.accountIds().isEmpty()) {
+                        queryBuilder.accountIds(List.of(account.id()));
+                    } else {
+                        queryBuilder.accountIds(parsed.accountIds());
+                    }
+                    if (parsed.folderIds().isEmpty()) {
+                        queryBuilder.folderIds(List.of(folder.id()));
+                    } else {
+                        queryBuilder.folderIds(parsed.folderIds());
+                    }
+                } else {
+                    queryBuilder.accountIds(parsed.accountIds());
+                    queryBuilder.folderIds(parsed.folderIds());
                 }
                 SearchQuery searchQuery = queryBuilder.build();
                 List<Message> results;
@@ -2084,7 +2129,15 @@ public final class MainWindow {
     }
 
     private List<Message> applyFilters(List<Message> source) {
+        java.util.Set<String> snoozed = new java.util.HashSet<>();
+        try {
+            for (com.graalmail.core.filter.SnoozedMessage s : context.store().listSnoozed()) {
+                snoozed.add(s.messageId());
+            }
+        } catch (RuntimeException ignored) {
+        }
         return source.stream()
+                .filter(m -> !snoozed.contains(m.id()))
                 .filter(m -> !unreadOnly || m.unread())
                 .filter(m -> !flaggedOnly || m.flagged())
                 .filter(m -> !attachmentsOnly || m.hasAttachments())
@@ -2569,6 +2622,129 @@ public final class MainWindow {
         // Modeless: restore on the next pulse if the window manager dropped
         // the maximized state while opening the dialog.
         javafx.application.Platform.runLater(() -> UiScale.restoreMaximized(owner, maximized));
+    }
+
+    private void showFilters() {
+        boolean maximized = UiScale.isMaximized(owner);
+        new MessageFiltersDialog(context.store(), owner, isDarkTheme()).show();
+        UiScale.restoreMaximized(owner, maximized);
+    }
+
+    private void showTemplates() {
+        boolean maximized = UiScale.isMaximized(owner);
+        new MessageTemplatesDialog(context.store(), owner, isDarkTheme()).show();
+        UiScale.restoreMaximized(owner, maximized);
+    }
+
+    private void showSnoozed() {
+        java.util.List<com.graalmail.core.filter.SnoozedMessage> snoozed;
+        try {
+            snoozed = context.store().listSnoozed();
+        } catch (RuntimeException e) {
+            showInfo("Could not load snoozed messages: " + e.getMessage());
+            return;
+        }
+        if (snoozed.isEmpty()) {
+            showInfo("No snoozed messages.");
+            return;
+        }
+        StringBuilder info = new StringBuilder(snoozed.size() + " snoozed:\n");
+        for (com.graalmail.core.filter.SnoozedMessage entry : snoozed) {
+            context.store().message(entry.messageId()).ifPresentOrElse(
+                    m -> info.append("• ").append(m.subject())
+                            .append(" — wakes ").append(entry.wakeAt()).append('\n'),
+                    () -> info.append("• ").append(entry.messageId())
+                            .append(" — wakes ").append(entry.wakeAt()).append('\n'));
+        }
+        showInfo(info.toString());
+    }
+
+    private void snoozeSelected(java.time.Duration delay) {
+        var selected = messageList.getSelectionModel().getSelectedItems();
+        if (selected == null || selected.isEmpty()) {
+            status.setText("Select a message to snooze.");
+            return;
+        }
+        java.time.Instant wake = java.time.Instant.now().plus(delay);
+        int count = 0;
+        for (Message message : selected) {
+            try {
+                context.store().snoozeMessage(message.id(), message.accountId(), wake);
+                count++;
+            } catch (RuntimeException e) {
+                LOG.warn("Could not snooze {}: {}", message.id(), e.getMessage());
+            }
+        }
+        messages.removeAll(selected);
+        messagesChanged("snoozed");
+        status.setText(count == 1 ? "Message snoozed." : count + " messages snoozed.");
+    }
+
+    private void unsnoozeSelected() {
+        var selected = messageList.getSelectionModel().getSelectedItems();
+        java.util.List<com.graalmail.core.filter.SnoozedMessage> snoozed;
+        try {
+            snoozed = context.store().listSnoozed();
+        } catch (RuntimeException e) {
+            status.setText("Could not load snoozed messages.");
+            return;
+        }
+        java.util.Set<String> ids = new java.util.HashSet<>();
+        for (com.graalmail.core.filter.SnoozedMessage entry : snoozed) {
+            ids.add(entry.messageId());
+        }
+        int count = 0;
+        if (selected != null && !selected.isEmpty()) {
+            for (Message message : List.copyOf(selected)) {
+                if (ids.contains(message.id())) {
+                    context.store().unsnoozeMessage(message.id());
+                    count++;
+                }
+            }
+        } else {
+            for (String id : ids) {
+                context.store().unsnoozeMessage(id);
+                count++;
+            }
+        }
+        reloadCurrentView();
+        status.setText(count == 0 ? "Nothing snoozed here." : "Unsnoozed " + count + ".");
+    }
+
+    private void showConversation() {
+        Message current = currentMessage != null ? currentMessage
+                : messageList.getSelectionModel().getSelectedItem();
+        if (current == null) {
+            status.setText("Select a message to see its conversation.");
+            return;
+        }
+        java.util.List<Message> candidates = new java.util.ArrayList<>(messages);
+        if (candidates.size() < 2) {
+            try {
+                candidates = context.store().search(
+                        com.graalmail.core.domain.SearchQuery.builder()
+                                .accountIds(List.of(current.accountId())).limit(200).build(),
+                        200);
+            } catch (RuntimeException e) {
+                status.setText("Could not load conversation.");
+                return;
+            }
+        }
+        if (!candidates.contains(current)) {
+            candidates = new java.util.ArrayList<>(candidates);
+            candidates.add(current);
+        }
+        var threads = ConversationThreader.group(candidates);
+        for (var thread : threads) {
+            boolean contains = thread.messages().stream().anyMatch(m -> m.id().equals(current.id()));
+            if (contains) {
+                messages.setAll(thread.messages());
+                messagesChanged("conversation");
+                status.setText(thread.size() + " messages in conversation: " + thread.subject());
+                return;
+            }
+        }
+        status.setText("No other messages in this conversation.");
     }
 
     private void showInfo(String message) {

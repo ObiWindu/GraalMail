@@ -75,6 +75,7 @@ public final class SyncEngine {
             return new SyncReport(accountId, 0, 0, 0, 0, List.of("Unknown account"),
                     Instant.now(), 0);
         }
+        wakeDueSnoozes();
         int foldersSynced = 0;
         int newMessages = 0;
         int applied = 0;
@@ -153,7 +154,9 @@ public final class SyncEngine {
                 try {
                     Message message = session.mailboxes().listMessagesByUidRange(folderId, uid, uid).messages().stream().findFirst().orElse(null);
                     if (message != null) {
-                        store.saveMessage(withAccount(message, account.id(), folderId));
+                        Message saved = withAccount(message, account.id(), folderId);
+                        store.saveMessage(saved);
+                        applyFilters(account, saved);
                     }
                 } catch (ProviderException e) {
                     // Log but continue with other messages
@@ -481,6 +484,58 @@ public final class SyncEngine {
         } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
             throw new ProviderException(ErrorCode.INVALID_RECIPIENT,
                     "Invalid draft payload: " + e.getMessage(), false, e);
+        }
+    }
+
+    /** Removes snooze entries whose wake time has passed so they return to the inbox. */
+    void wakeDueSnoozes() {
+        Instant now = Instant.now();
+        try {
+            for (com.graalmail.core.filter.SnoozedMessage snoozed : store.listSnoozed()) {
+                if (snoozed.isDue(now)) {
+                    store.unsnoozeMessage(snoozed.messageId());
+                }
+            }
+        } catch (RuntimeException e) {
+            LOG.debug("Could not wake snoozed messages: {}", e.getMessage());
+        }
+    }
+
+    /** Applies user filters to a freshly synced message, queuing server actions. */
+    void applyFilters(Account account, Message saved) {
+        List<com.graalmail.core.filter.MessageFilter> filters;
+        try {
+            filters = store.listFilters();
+        } catch (RuntimeException e) {
+            return;
+        }
+        if (filters.isEmpty()) {
+            return;
+        }
+        List<com.graalmail.core.filter.FilterAction> actions;
+        try {
+            actions = com.graalmail.core.filter.FilterEngine.actionsFor(saved, filters);
+        } catch (RuntimeException e) {
+            return;
+        }
+        for (com.graalmail.core.filter.FilterAction action : actions) {
+            try {
+                switch (action.type()) {
+                    case MARK_READ -> queue(account, PendingAction.Type.MARK_READ, saved.id(), "");
+                    case MARK_FLAGGED -> queue(account, PendingAction.Type.FLAG, saved.id(), "");
+                    case MARK_SPAM -> queue(account, PendingAction.Type.MARK_SPAM, saved.id(), "");
+                    case DELETE -> queue(account, PendingAction.Type.DELETE, saved.id(), "");
+                    case MOVE_TO_FOLDER -> {
+                        if (!action.targetFolderId().isBlank()
+                                && !action.targetFolderId().equals(saved.folderId())) {
+                            queue(account, PendingAction.Type.MOVE, saved.id(),
+                                    action.targetFolderId());
+                        }
+                    }
+                }
+            } catch (RuntimeException e) {
+                LOG.debug("Filter action failed for {}: {}", saved.id(), e.getMessage());
+            }
         }
     }
 

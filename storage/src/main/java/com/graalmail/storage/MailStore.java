@@ -13,10 +13,48 @@ import com.graalmail.core.domain.SearchQuery;
 import java.util.List;
 import java.util.Optional;
 
-/** Local persistence for accounts, folders, messages, contacts and pending actions. */
 public interface MailStore {
 
     void initialize();
+
+    /** Lists message filters, lowest priority first. */
+    default java.util.List<com.graalmail.core.filter.MessageFilter> listFilters() {
+        return java.util.List.of();
+    }
+
+    /** Saves a message filter (insert or replace). */
+    default void saveFilter(com.graalmail.core.filter.MessageFilter filter) {
+    }
+
+    /** Deletes a message filter. */
+    default void deleteFilter(String filterId) {
+    }
+
+    /** Lists compose templates. */
+    default java.util.List<com.graalmail.core.filter.MessageTemplate> listTemplates() {
+        return java.util.List.of();
+    }
+
+    /** Saves a compose template (insert or replace). */
+    default void saveTemplate(com.graalmail.core.filter.MessageTemplate template) {
+    }
+
+    /** Deletes a compose template. */
+    default void deleteTemplate(String templateId) {
+    }
+
+    /** Lists snoozed messages. */
+    default java.util.List<com.graalmail.core.filter.SnoozedMessage> listSnoozed() {
+        return java.util.List.of();
+    }
+
+    /** Snoozes a message until {@code wakeAt}. */
+    default void snoozeMessage(String messageId, String accountId, java.time.Instant wakeAt) {
+    }
+
+    /** Removes a snooze entry (message is back in the inbox). */
+    default void unsnoozeMessage(String messageId) {
+    }
 
     List<Account> listAccounts();
 

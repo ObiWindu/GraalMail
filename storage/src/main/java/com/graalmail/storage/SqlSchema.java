@@ -10,7 +10,7 @@ import java.util.Map;
 /** Creates and migrates the local database schema. */
 public final class SqlSchema {
 
-    public static final int VERSION = 6;
+    public static final int VERSION = 7;
 
     private SqlSchema() {
     }
@@ -51,6 +51,12 @@ public final class SqlSchema {
         }
         if (current < 6) {
             migrateToVersion6(db);
+            db.update("DELETE FROM schema_version");
+            db.update("INSERT INTO schema_version (version) VALUES (?)", 6);
+            current = 6;
+        }
+        if (current < 7) {
+            migrateToVersion7(db);
             db.update("DELETE FROM schema_version");
             db.update("INSERT INTO schema_version (version) VALUES (?)", VERSION);
         }
@@ -164,5 +170,30 @@ public final class SqlSchema {
         // Durable delivery state: envelope payload on outgoing ops, receipt signatures.
         try { db.execute("ALTER TABLE polymail_outgoing_queue ADD COLUMN payload BLOB"); } catch (RuntimeException ignored) {}
         try { db.execute("ALTER TABLE polymail_storage_receipts ADD COLUMN receipt_signature BLOB"); } catch (RuntimeException ignored) {}
+    }
+
+    private static void migrateToVersion7(SqlDatabase db) {
+        // Message filters, compose templates and snoozed messages.
+        try {
+            db.execute("CREATE TABLE IF NOT EXISTS message_filters ("
+                    + "id TEXT PRIMARY KEY, account_id TEXT NOT NULL DEFAULT '', "
+                    + "name TEXT NOT NULL DEFAULT '', enabled INTEGER NOT NULL DEFAULT 1, "
+                    + "match_all INTEGER NOT NULL DEFAULT 1, priority INTEGER NOT NULL DEFAULT 0, "
+                    + "conditions_json TEXT NOT NULL DEFAULT '[]', actions_json TEXT NOT NULL DEFAULT '[]', "
+                    + "updated_at INTEGER NOT NULL DEFAULT 0)");
+            db.execute("CREATE INDEX IF NOT EXISTS idx_filters_account ON message_filters (account_id, priority)");
+        } catch (RuntimeException ignored) {}
+        try {
+            db.execute("CREATE TABLE IF NOT EXISTS message_templates ("
+                    + "id TEXT PRIMARY KEY, account_id TEXT NOT NULL DEFAULT '', "
+                    + "name TEXT NOT NULL DEFAULT '', subject TEXT NOT NULL DEFAULT '', "
+                    + "body_text TEXT NOT NULL DEFAULT '', updated_at INTEGER NOT NULL DEFAULT 0)");
+        } catch (RuntimeException ignored) {}
+        try {
+            db.execute("CREATE TABLE IF NOT EXISTS snoozed_messages ("
+                    + "message_id TEXT PRIMARY KEY, account_id TEXT NOT NULL DEFAULT '', "
+                    + "wake_at INTEGER NOT NULL, created_at INTEGER NOT NULL)");
+            db.execute("CREATE INDEX IF NOT EXISTS idx_snoozed_wake ON snoozed_messages (wake_at)");
+        } catch (RuntimeException ignored) {}
     }
 }

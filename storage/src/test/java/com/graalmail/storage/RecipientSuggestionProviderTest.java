@@ -78,4 +78,22 @@ class RecipientSuggestionProviderTest {
 
         assertTrue(provider.suggest("zzz", 10).isEmpty());
     }
+
+    @Test
+    void frequentAddressesOutrankContacts() {
+        store.saveContact(new Contact("c1", "Bob Contact", "bob@example.com", "", Instant.now()));
+        store.saveAccount(Account.builder("a1", "gmail").email("me@example.com").build());
+        for (int i = 0; i < 3; i++) {
+            store.saveMessage(Message.builder("m" + i).accountId("a1").folderId("inbox")
+                    .subject("Hello " + i)
+                    .to(List.of(new Address("Bobby", "bob@example.com")))
+                    .date(Instant.now())
+                    .build());
+        }
+
+        List<RecipientSuggestion> result = provider.suggest("", 10);
+
+        assertEquals("bob@example.com", result.get(0).email());
+        assertEquals(RecipientSuggestion.Source.FREQUENT, result.get(0).source());
+    }
 }

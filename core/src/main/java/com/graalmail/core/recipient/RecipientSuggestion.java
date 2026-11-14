@@ -22,6 +22,8 @@ public final class RecipientSuggestion {
         CONTACT,
         /** An address that was used recently in a conversation. */
         RECENT,
+        /** An address seen repeatedly — ranked above plain contacts. */
+        FREQUENT,
         /** The address of a configured account. */
         ACCOUNT
     }
@@ -44,6 +46,10 @@ public final class RecipientSuggestion {
 
     public static RecipientSuggestion recent(String name, String email) {
         return new RecipientSuggestion(name, email, Source.RECENT, 0);
+    }
+
+    public static RecipientSuggestion frequent(String name, String email) {
+        return new RecipientSuggestion(name, email, Source.FREQUENT, 0);
     }
 
     public static RecipientSuggestion account(String name, String email) {
@@ -124,6 +130,7 @@ public final class RecipientSuggestion {
     /** The weight of the source alone, used as a tie breaker. */
     public int baseScore() {
         return switch (source) {
+            case FREQUENT -> 50;
             case CONTACT -> 30;
             case RECENT -> 20;
             case ACCOUNT -> 10;

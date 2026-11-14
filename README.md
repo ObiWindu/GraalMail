@@ -64,8 +64,12 @@ flowchart LR
 - **Proton Mail** with direct username + password login (SRP), mailbox keys
   unlocked and messages PGP-decrypted **locally** — no Bridge required
 - **Any IMAP/SMTP server** with auto-deduced settings from your email domain
-- Unified inbox, server-side + local search, flags, attachments, drafts,
+- Unified inbox, server-side + local search with Gmail-style operators
+  (`from:`, `to:`, `subject:`, `in:`, `before:`, `has:attachment`,
+  `is:unread|starred`), flags, attachments, drafts,
   Thunderbird-style Android UI and a Proton-style desktop with dark theme
+- Conversation threads, message filters that file mail on sync, snooze,
+  reusable templates, and contacts that learn frequent recipients
 
 ### PolyMail — email without the mail server
 

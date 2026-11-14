@@ -28,6 +28,7 @@ import com.graalmail.android.AppContext;
 import com.graalmail.android.R;
 import com.graalmail.core.domain.Message;
 import com.graalmail.core.domain.SearchQuery;
+import com.graalmail.core.search.SearchQueryParser;
 import com.graalmail.core.domain.Folder;
 import com.graalmail.core.domain.FolderType;
 import com.graalmail.core.text.TextTools;
@@ -256,12 +257,31 @@ public final class MessageListActivity extends AppCompatActivity {
     }
 
     private SearchQuery.Builder queryBuilder(int limit, int offset) {
-        return SearchQuery.builder().text(activeQuery).accountIds(List.of(accountId))
-                .folderIds(folderId == null ? List.of() : List.of(folderId))
-                .unreadOnly(((com.google.android.material.chip.Chip) findViewById(R.id.filter_unread)).isChecked())
-                .flaggedOnly(((com.google.android.material.chip.Chip) findViewById(R.id.filter_starred)).isChecked())
-                .withAttachmentsOnly(((com.google.android.material.chip.Chip) findViewById(R.id.filter_attachments)).isChecked())
-                .limit(limit).offset(offset);
+        SearchQuery parsed = SearchQueryParser.parse(activeQuery);
+        SearchQuery.Builder builder = SearchQuery.builder()
+                .text(parsed.text())
+                .from(parsed.from())
+                .to(parsed.to())
+                .subject(parsed.subject())
+                .since(parsed.since())
+                .until(parsed.until())
+                .unreadOnly(parsed.unreadOnly()
+                        || ((com.google.android.material.chip.Chip) findViewById(R.id.filter_unread)).isChecked())
+                .flaggedOnly(parsed.flaggedOnly()
+                        || ((com.google.android.material.chip.Chip) findViewById(R.id.filter_starred)).isChecked())
+                .withAttachmentsOnly(parsed.withAttachmentsOnly()
+                        || ((com.google.android.material.chip.Chip) findViewById(R.id.filter_attachments)).isChecked());
+        if (!parsed.accountIds().isEmpty()) {
+            builder.accountIds(parsed.accountIds());
+        } else {
+            builder.accountIds(List.of(accountId));
+        }
+        if (!parsed.folderIds().isEmpty()) {
+            builder.folderIds(parsed.folderIds());
+        } else {
+            builder.folderIds(folderId == null ? List.of() : List.of(folderId));
+        }
+        return builder.limit(limit).offset(offset);
     }
 
     private void loadFiltered() {
@@ -287,6 +307,7 @@ public final class MessageListActivity extends AppCompatActivity {
                 messages = !useSearch
                         ? new ArrayList<>(context.store().listMessages(accountId, folderId, limit, 0).messages())
                         : context.store().search(querySpec, limit);
+                messages = withoutSnoozed(messages);
             } catch (RuntimeException e) {
                 messages = List.of();
                 failure = e.getMessage();
@@ -322,6 +343,27 @@ public final class MessageListActivity extends AppCompatActivity {
                 }
             });
         });
+    }
+
+    private List<Message> withoutSnoozed(List<Message> messages) {
+        java.util.Set<String> snoozed = new java.util.HashSet<>();
+        try {
+            for (com.graalmail.core.filter.SnoozedMessage entry : context.store().listSnoozed()) {
+                snoozed.add(entry.messageId());
+            }
+        } catch (RuntimeException ignored) {
+            return messages;
+        }
+        if (snoozed.isEmpty()) {
+            return messages;
+        }
+        List<Message> visible = new ArrayList<>(messages.size());
+        for (Message message : messages) {
+            if (!snoozed.contains(message.id())) {
+                visible.add(message);
+            }
+        }
+        return visible;
     }
 
     private boolean isOnline() {

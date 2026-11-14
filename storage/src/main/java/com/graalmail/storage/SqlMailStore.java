@@ -386,6 +386,192 @@ public final class SqlMailStore implements MailStore {
         db.close();
     }
 
+    @Override
+    public List<com.graalmail.core.filter.MessageFilter> listFilters() {
+        List<Map<String, Object>> rows;
+        try {
+            rows = db.query("SELECT * FROM message_filters ORDER BY priority, name");
+        } catch (RuntimeException e) {
+            return List.of();
+        }
+        List<com.graalmail.core.filter.MessageFilter> filters = new ArrayList<>();
+        for (Map<String, Object> row : rows) {
+            filters.add(toFilter(row));
+        }
+        return filters;
+    }
+
+    @Override
+    public void saveFilter(com.graalmail.core.filter.MessageFilter filter) {
+        db.update("INSERT INTO message_filters (id, account_id, name, enabled, match_all, priority, "
+                        + "conditions_json, actions_json, updated_at) VALUES (?,?,?,?,?,?,?,?,?) "
+                        + "ON CONFLICT(id) DO UPDATE SET account_id=excluded.account_id, name=excluded.name, "
+                        + "enabled=excluded.enabled, match_all=excluded.match_all, priority=excluded.priority, "
+                        + "conditions_json=excluded.conditions_json, actions_json=excluded.actions_json, "
+                        + "updated_at=excluded.updated_at",
+                filter.id(), filter.accountId(), filter.name(), flag(filter.enabled()),
+                flag(filter.matchAll()), filter.priority(),
+                conditionsJson(filter.conditions()), actionsJson(filter.actions()),
+                filter.updatedAt().toEpochMilli());
+    }
+
+    @Override
+    public void deleteFilter(String filterId) {
+        try {
+            db.update("DELETE FROM message_filters WHERE id = ?", filterId);
+        } catch (RuntimeException ignored) {
+        }
+    }
+
+    @Override
+    public List<com.graalmail.core.filter.MessageTemplate> listTemplates() {
+        List<Map<String, Object>> rows;
+        try {
+            rows = db.query("SELECT * FROM message_templates ORDER BY name");
+        } catch (RuntimeException e) {
+            return List.of();
+        }
+        List<com.graalmail.core.filter.MessageTemplate> templates = new ArrayList<>();
+        for (Map<String, Object> row : rows) {
+            templates.add(new com.graalmail.core.filter.MessageTemplate(
+                    str(row, "id"), str(row, "account_id"), str(row, "name"),
+                    str(row, "subject"), str(row, "body_text"),
+                    Instant.ofEpochMilli(number(row, "updated_at"))));
+        }
+        return templates;
+    }
+
+    @Override
+    public void saveTemplate(com.graalmail.core.filter.MessageTemplate template) {
+        db.update("INSERT INTO message_templates (id, account_id, name, subject, body_text, updated_at) "
+                        + "VALUES (?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET account_id=excluded.account_id, "
+                        + "name=excluded.name, subject=excluded.subject, body_text=excluded.body_text, "
+                        + "updated_at=excluded.updated_at",
+                template.id(), template.accountId(), template.name(), template.subject(),
+                template.bodyText(), template.updatedAt().toEpochMilli());
+    }
+
+    @Override
+    public void deleteTemplate(String templateId) {
+        try {
+            db.update("DELETE FROM message_templates WHERE id = ?", templateId);
+        } catch (RuntimeException ignored) {
+        }
+    }
+
+    @Override
+    public List<com.graalmail.core.filter.SnoozedMessage> listSnoozed() {
+        List<Map<String, Object>> rows;
+        try {
+            rows = db.query("SELECT * FROM snoozed_messages ORDER BY wake_at");
+        } catch (RuntimeException e) {
+            return List.of();
+        }
+        List<com.graalmail.core.filter.SnoozedMessage> snoozed = new ArrayList<>();
+        for (Map<String, Object> row : rows) {
+            snoozed.add(new com.graalmail.core.filter.SnoozedMessage(
+                    str(row, "message_id"), str(row, "account_id"),
+                    Instant.ofEpochMilli(number(row, "wake_at")),
+                    Instant.ofEpochMilli(number(row, "created_at"))));
+        }
+        return snoozed;
+    }
+
+    @Override
+    public void snoozeMessage(String messageId, String accountId, Instant wakeAt) {
+        db.update("INSERT INTO snoozed_messages (message_id, account_id, wake_at, created_at) "
+                        + "VALUES (?,?,?,?) ON CONFLICT(message_id) DO UPDATE SET account_id=excluded.account_id, "
+                        + "wake_at=excluded.wake_at",
+                messageId, accountId == null ? "" : accountId,
+                wakeAt.toEpochMilli(), Instant.now().toEpochMilli());
+    }
+
+    @Override
+    public void unsnoozeMessage(String messageId) {
+        try {
+            db.update("DELETE FROM snoozed_messages WHERE message_id = ?", messageId);
+        } catch (RuntimeException ignored) {
+        }
+    }
+
+    private com.graalmail.core.filter.MessageFilter toFilter(Map<String, Object> row) {
+        return new com.graalmail.core.filter.MessageFilter(
+                str(row, "id"), str(row, "account_id"), str(row, "name"),
+                number(row, "enabled") != 0, number(row, "match_all") != 0,
+                (int) number(row, "priority"),
+                readConditions(str(row, "conditions_json")),
+                readActions(str(row, "actions_json")),
+                Instant.ofEpochMilli(number(row, "updated_at")));
+    }
+
+    private static String conditionsJson(List<com.graalmail.core.filter.FilterCondition> conditions) {
+        List<Map<String, String>> raw = new ArrayList<>();
+        for (com.graalmail.core.filter.FilterCondition condition : conditions) {
+            Map<String, String> map = new LinkedHashMap<>();
+            map.put("field", condition.field().name());
+            map.put("operator", condition.operator().name());
+            map.put("value", condition.value());
+            raw.add(map);
+        }
+        return json(raw);
+    }
+
+    private static String actionsJson(List<com.graalmail.core.filter.FilterAction> actions) {
+        List<Map<String, String>> raw = new ArrayList<>();
+        for (com.graalmail.core.filter.FilterAction action : actions) {
+            Map<String, String> map = new LinkedHashMap<>();
+            map.put("type", action.type().name());
+            map.put("target", action.targetFolderId());
+            raw.add(map);
+        }
+        return json(raw);
+    }
+
+    private static List<com.graalmail.core.filter.FilterCondition> readConditions(String jsonValue) {
+        List<com.graalmail.core.filter.FilterCondition> conditions = new ArrayList<>();
+        if (jsonValue == null || jsonValue.isBlank()) {
+            return conditions;
+        }
+        try {
+            List<Map<String, String>> raw = MAPPER.readValue(jsonValue,
+                    new TypeReference<List<Map<String, String>>>() {
+                    });
+            for (Map<String, String> map : raw) {
+                try {
+                    conditions.add(new com.graalmail.core.filter.FilterCondition(
+                            com.graalmail.core.filter.FilterCondition.Field.valueOf(map.get("field")),
+                            com.graalmail.core.filter.FilterCondition.Operator.valueOf(map.get("operator")),
+                            map.getOrDefault("value", "")));
+                } catch (IllegalArgumentException ignored) {
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return conditions;
+    }
+
+    private static List<com.graalmail.core.filter.FilterAction> readActions(String jsonValue) {
+        List<com.graalmail.core.filter.FilterAction> actions = new ArrayList<>();
+        if (jsonValue == null || jsonValue.isBlank()) {
+            return actions;
+        }
+        try {
+            List<Map<String, String>> raw = MAPPER.readValue(jsonValue,
+                    new TypeReference<List<Map<String, String>>>() {
+                    });
+            for (Map<String, String> map : raw) {
+                try {
+                    actions.add(new com.graalmail.core.filter.FilterAction(
+                            com.graalmail.core.filter.FilterAction.Type.valueOf(map.get("type")),
+                            map.getOrDefault("target", "")));
+                } catch (IllegalArgumentException ignored) {
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return actions;
+    }
+
     private String encryptIfNeeded(String table, String column, String value) {
         if (db instanceof EncryptedSqlDatabase encryptedDb) {
             Object result = encryptedDb.encryptForColumn(table, column, value);
